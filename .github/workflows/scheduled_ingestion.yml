@@ -1,0 +1,96 @@
+name: Daily Ingestion & Deadline Digest
+
+on:
+  schedule:
+    # Every day at 03:00 UTC
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+    inputs:
+      category:
+        description: "Optional: single category to scrape (e.g. national_association). Leave empty for all."
+        required: false
+        default: ""
+      limit:
+        description: "Optional: max number of sources per category"
+        required: false
+        default: "10"
+      dry_run:
+        description: "Dry run (no emails sent, no DB writes from digest)"
+        required: false
+        default: "false"
+
+env:
+  PYTHON_VERSION: "3.12"
+
+jobs:
+  ingest:
+    name: Scrape, Repair URLs & Send Digests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install backend dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Install Playwright Chromium
+        run: playwright install --with-deps chromium
+
+      - name: Run scraper batch
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: |
+          CATEGORY="${{ github.event.inputs.category }}"
+          LIMIT="${{ github.event.inputs.limit }}"
+          LIMIT_ARG=""
+          if [ -n "$LIMIT" ]; then
+            LIMIT_ARG="--limit=$LIMIT"
+          fi
+          if [ -n "$CATEGORY" ]; then
+            echo "=== Scraping category: $CATEGORY ==="
+            python -m scrapers.runner --category="$CATEGORY" $LIMIT_ARG
+          else
+            echo "=== Scraping all high-yield categories ==="
+            python -m scrapers.runner --category=national_association $LIMIT_ARG
+            python -m scrapers.runner --category=corporate_unrestricted $LIMIT_ARG
+            python -m scrapers.runner --category=diversity_affinity $LIMIT_ARG
+            python -m scrapers.runner --category=hospital_system $LIMIT_ARG
+          fi
+
+      - name: Run link & deadline maintenance sweep
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          python -m scripts.repair_urls
+
+      - name: Send deadline digest emails
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          DIGEST_FROM_EMAIL: ${{ vars.DIGEST_FROM_EMAIL }}
+        run: |
+          DRY_RUN="${{ github.event.inputs.dry_run }}"
+          if [ "$DRY_RUN" = "true" ]; then
+            echo "=== Dry run: printing digests to stdout ==="
+            python -m app.workers.deadline_digest --dry-run
+          else
+            echo "=== Sending deadline digest emails ==="
+            python -m app.workers.deadline_digest
+          fi

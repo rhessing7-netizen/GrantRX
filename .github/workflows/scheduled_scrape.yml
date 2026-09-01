@@ -1,0 +1,100 @@
+name: Scheduled Scholarship Scrape
+
+on:
+  schedule:
+    # Every Sunday at 02:00 UTC
+    - cron: "0 2 * * 0"
+  workflow_dispatch:
+    inputs:
+      category:
+        description: "Optional: single category to scrape (e.g. national_association). Leave empty for all high-yield categories."
+        required: false
+        default: ""
+      limit:
+        description: "Optional: max number of sources per category"
+        required: false
+        default: ""
+
+env:
+  PYTHON_VERSION: "3.11"
+
+jobs:
+  scrape:
+    name: Scrape & Ingest Scholarships
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install backend dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Install Playwright browsers
+        run: playwright install --with-deps chromium
+
+      - name: Prepare environment
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: |
+          echo "DATABASE_URL and OPENAI_API_KEY are set via secrets"
+          echo "Secrets are available in subsequent steps via env"
+
+      - name: Run scraper batch (single category from workflow_dispatch)
+        if: ${{ github.event.inputs.category != '' }}
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: |
+          LIMIT_ARG=""
+          if [ -n "${{ github.event.inputs.limit }}" ]; then
+            LIMIT_ARG="--limit=${{ github.event.inputs.limit }}"
+          fi
+          python -m scrapers.runner --category=${{ github.event.inputs.category }} $LIMIT_ARG
+
+      - name: Run scraper batch (all high-yield categories)
+        if: ${{ github.event.inputs.category == '' }}
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: |
+          LIMIT_ARG=""
+          if [ -n "${{ github.event.inputs.limit }}" ]; then
+            LIMIT_ARG="--limit=${{ github.event.inputs.limit }}"
+          fi
+          echo "=== Scraping national_association ==="
+          python -m scrapers.runner --category=national_association $LIMIT_ARG
+          echo "=== Scraping corporate_unrestricted ==="
+          python -m scrapers.runner --category=corporate_unrestricted $LIMIT_ARG
+          echo "=== Scraping diversity_affinity ==="
+          python -m scrapers.runner --category=diversity_affinity $LIMIT_ARG
+          echo "=== Scraping hospital_system ==="
+          python -m scrapers.runner --category=hospital_system $LIMIT_ARG
+
+      - name: Run link & deadline maintenance sweep
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: |
+          python -m scripts.repair_urls

@@ -1,0 +1,122 @@
+[
+  {
+    "url": "https://www.clevelandfoundation.org/scholarships/",
+    "name": "The Cleveland Foundation",
+    "region": "OH",
+    "category": "community_foundation"
+  },
+  {
+    "url": "https://www.akroncf.org/students-scholarships/",
+    "name": "Akron Community Foundation",
+    "region": "OH",
+    "category": "community_foundation"
+  },
+  {
+    "url": "https://www.waynecountycommunityfoundation.org/scholarships",
+    "name": "Wayne County Community Foundation",
+    "region": "OH",
+    "category": "community_foundation"
+  },
+  {
+    "url": "https://www.starkcf.org/for-students/scholarships",
+    "name": "Stark Community Foundation",
+    "region": "OH",
+    "category": "community_foundation"
+  },
+  {
+    "url": "https://www.columbusfoundation.org/students/scholarships",
+    "name": "The Columbus Foundation",
+    "region": "OH",
+    "category": "community_foundation"
+  },
+  {
+    "url": "https://www.cincinnatistatemedical.org/scholarships",
+    "name": "Greater Cincinnati Foundation Scholarships",
+    "region": "OH",
+    "category": "community_foundation"
+  },
+  {
+    "url": "https://odh.ohio.gov/know-our-programs/primary-care-office/loan-repayment-programs",
+    "name": "Ohio Department of Health (ODH) Loan Repayments",
+    "region": "OH",
+    "category": "state_agency"
+  },
+  {
+    "url": "https://highered.ohio.gov/initiatives/affordability/nealp",
+    "name": "Ohio Nurse Education Assistance Loan Program (NEALP)",
+    "region": "OH",
+    "category": "state_agency"
+  },
+  {
+    "url": "https://my.clevelandclinic.org/departments/nursing/nursing-education/aspire",
+    "name": "Cleveland Clinic ASPIRE Nurse Scholars",
+    "region": "OH",
+    "category": "health_system"
+  },
+  {
+    "url": "https://www.metrohealth.org/foundation/scholarships",
+    "name": "MetroHealth System Foundation Grants",
+    "region": "OH",
+    "category": "health_system"
+  },
+  {
+    "url": "https://www.neomed.edu/financialaid/scholarships/external/",
+    "name": "Northeast Ohio Medical University (NEOMED) External Awards",
+    "region": "OH",
+    "category": "academic_institution"
+  },
+  {
+    "url": "https://pittsburghfoundation.org/scholarships",
+    "name": "The Pittsburgh Foundation",
+    "region": "PA",
+    "category": "community_foundation"
+  },
+  {
+    "url": "https://www.philafound.org/students/scholarships/",
+    "name": "The Philadelphia Foundation",
+    "region": "PA",
+    "category": "community_foundation"
+  },
+  {
+    "url": "https://www.eriecommunityfoundation.org/scholarships",
+    "name": "The Erie Community Foundation",
+    "region": "PA",
+    "category": "community_foundation"
+  },
+  {
+    "url": "https://www.health.pa.gov/topics/Health-Planning/Pages/Primary-Care-Loan-Repayment-Program.aspx",
+    "name": "Pennsylvania Primary Care Loan Repayment Program (PCLRP)",
+    "region": "PA",
+    "category": "state_agency"
+  },
+  {
+    "url": "https://www.pheaa.org/funding-opportunities/index.shtml",
+    "name": "PHEAA Health Professions Grants",
+    "region": "PA",
+    "category": "state_agency"
+  },
+  {
+    "url": "https://www.geisinger.org/education/scholarships-and-fellowships",
+    "name": "Geisinger Primary Care Scholars Program",
+    "region": "PA",
+    "category": "health_system"
+  },
+  {
+    "url": "https://www.upmc.com/careers/students-and-trainees/nursing-programs",
+    "name": "UPMC Schools of Nursing Tuition Assistance",
+    "region": "PA",
+    "category": "health_system"
+  },
+  {
+    "url": "https://www.duq.edu/admissions-and-aid/tuition-and-financial-aid/types-of-aid/scholarships/external-scholarships.php",
+    "name": "Duquesne University External Health Scholarships",
+    "region": "PA",
+    "category": "academic_institution"
+  },
+  {
+    "url": "https://www.pharmacy.pitt.edu/admissions-and-aid/scholarships-and-financial-aid",
+    "name": "University of Pittsburgh School of Pharmacy Awards",
+    "region": "PA",
+    "category": "academic_institution"
+  }
+]
