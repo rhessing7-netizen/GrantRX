@@ -1,5 +1,5 @@
-'use client';
-export const dynamic = 'force-dynamic';
+
+
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Shell } from "@/components/Shell";
 import { LeftPanel } from "@/components/LeftPanel";
