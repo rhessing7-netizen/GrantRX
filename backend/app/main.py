@@ -58,6 +58,8 @@ _default_origins = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
     "http://127.0.0.1:60201",
+    "https://grant-rx.vercel.app",
+    "https://*.vercel.app",
 ]
 _allowed_origins_env = os.getenv("ALLOWED_ORIGINS", "")
 if _allowed_origins_env.strip():
