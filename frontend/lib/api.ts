@@ -56,9 +56,20 @@ async function request<T>(
   path: string,
   options: RequestInit = {},
 ): Promise<T> {
+  const url = `${API_BASE}${path}`;
+
+  // Guard against invalid URLs that would cause "Failed to execute 'fetch'"
+  if (!url || !/^https?:\/\/.+/i.test(url)) {
+    const e = new Error(
+      "API endpoint is not configured. Please set NEXT_PUBLIC_API_URL.",
+    ) as Error & { status?: number; body?: unknown };
+    e.status = 0;
+    throw e;
+  }
+
   let resp: Response;
   try {
-    resp = await fetch(`${API_BASE}${path}`, {
+    resp = await fetch(url, {
       ...options,
       headers: { ...authHeaders(), ...(options.headers ?? {}) },
       signal: AbortSignal.timeout(15000),

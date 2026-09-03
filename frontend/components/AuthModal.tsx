@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
-import { setAuthToken, api } from "@/lib/api";
+import { setAuthToken } from "@/lib/api";
 import type { Profile } from "@/lib/types";
 
 export type AuthModalProps = {
@@ -53,12 +53,7 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
     if (!supabase) {
       // Dev mode without Supabase configured — simulate auth
       setAuthToken("grantrx-dev-demo");
-      try {
-        const p = await api.getProfile();
-        onAuthSuccess(p);
-      } catch {
-        onAuthSuccess(null);
-      }
+      onAuthSuccess(null);
       return;
     }
 
@@ -111,76 +106,62 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
       if (!supabase) {
         // Dev mode without Supabase configured — simulate auth
         setAuthToken("grantrx-dev-demo");
-        try {
-          const p = await api.getProfile();
-          onAuthSuccess(p);
-        } catch {
-          onAuthSuccess(null);
-        }
+        onAuthSuccess(null);
         return;
       }
 
       if (mode === "signup") {
-        const { data, error: sbError } = await supabase.auth.signUp({
+        const { data, error: authError } = await supabase.auth.signUp({
           email,
           password,
           options: { data: { full_name: fullName } },
         });
-        if (sbError) throw sbError;
+        if (authError) {
+          setError(authError.message);
+          setSubmitting(false);
+          return;
+        }
 
+        // Set the auth token for API calls if a session was returned
         if (data.session?.access_token) {
           setAuthToken(data.session.access_token);
         }
 
-        // Save name, email, and consent to backend profile
-        try {
-          const profile = await api.createProfile({
-            primary_discipline: "pharmacy",
-            gpa: 0.0,
-            state_residence: "CA",
-            full_name: fullName,
-            email,
-            terms_accepted: termsAccepted,
-            privacy_accepted: termsAccepted,
-            marketing_opt_in: marketingOptIn,
-          });
-          onAuthSuccess(profile);
-        } catch (err) {
-          // Profile creation may fail if backend is unreachable
-          const msg = err instanceof Error ? err.message : "Unknown error";
-          if (msg.includes("Failed to fetch") || msg.includes("Network error")) {
-            setError(
-              "Could not reach the GrantRx server. Please check your connection and try again.",
-            );
-            setSubmitting(false);
-            return;
+        // Attempt direct profile initialization via Supabase
+        if (data?.user) {
+          try {
+            await supabase.from("profiles").upsert({
+              id: data.user.id,
+              user_id: data.user.id,
+              full_name: fullName,
+              email: email,
+              terms_accepted_at: new Date().toISOString(),
+              privacy_accepted_at: new Date().toISOString(),
+              marketing_opt_in: marketingOptIn,
+              marketing_opt_in_at: marketingOptIn ? new Date().toISOString() : null,
+            });
+          } catch (profileErr) {
+            console.warn("Direct profile upsert error:", profileErr);
           }
-          // Non-network errors are OK — onboarding wizard will handle it
-          onAuthSuccess(null);
         }
+
+        // Advance user to the app — onboarding wizard will handle the rest
+        onAuthSuccess(null);
       } else {
-        const { data, error: sbError } =
+        const { data, error: authError } =
           await supabase.auth.signInWithPassword({ email, password });
-        if (sbError) throw sbError;
+        if (authError) {
+          setError(authError.message);
+          setSubmitting(false);
+          return;
+        }
 
         if (data.session?.access_token) {
           setAuthToken(data.session.access_token);
         }
 
-        try {
-          const p = await api.getProfile();
-          onAuthSuccess(p);
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : "Unknown error";
-          if (msg.includes("Failed to fetch") || msg.includes("Network error")) {
-            setError(
-              "Could not reach the GrantRx server. Please check your connection and try again.",
-            );
-            setSubmitting(false);
-            return;
-          }
-          onAuthSuccess(null);
-        }
+        // Advance user — profile will be loaded from Supabase or localStorage
+        onAuthSuccess(null);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Authentication failed");
