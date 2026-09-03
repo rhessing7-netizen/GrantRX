@@ -10,6 +10,7 @@ import {
 import { getMetrosForState } from "@/lib/constants/metros";
 import { MAJOR_CATEGORIES, mapMajorToClinicalDiscipline } from "@/lib/constants/disciplines";
 import { api } from "@/lib/api";
+import { supabase } from "@/lib/supabase";
 import { MultiSelect } from "./MultiSelect";
 import { GroupedMultiSelect } from "./GroupedMultiSelect";
 
@@ -88,11 +89,105 @@ export function OnboardingWizard({ onComplete, onCancel, existingProfile }: Onbo
     return payload;
   };
 
+  /**
+   * Persist the profile via Supabase directly (primary), then fall back to
+   * the backend API, then fall back to localStorage so the user is never
+   * blocked from reaching the discovery feed.
+   */
+  const persistProfile = async (
+    payload: ProfileCreate,
+  ): Promise<Profile> => {
+    // --- Attempt 1: Direct Supabase upsert ---
+    if (supabase) {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const sbPayload = {
+            id: user.id,
+            user_id: user.id,
+            disciplines: payload.disciplines ?? [],
+            target_credentials: payload.target_credentials ?? [],
+            primary_discipline: payload.primary_discipline ?? null,
+            target_credential: payload.target_credential ?? null,
+            clinical_phase: payload.clinical_phase ?? null,
+            gpa: payload.gpa ?? null,
+            state_residence: payload.state_residence ?? null,
+            metro_area: payload.metro_area ?? null,
+            sai_score: payload.sai_score ?? null,
+            first_gen: payload.first_gen ?? false,
+            minority_flag: payload.minority_flag ?? false,
+            professional_affiliations: payload.professional_affiliations ?? [],
+            hobbies: payload.hobbies ?? [],
+            updated_at: new Date().toISOString(),
+          };
+
+          const { data, error } = await supabase
+            .from("profiles")
+            .upsert(sbPayload)
+            .select()
+            .single();
+
+          if (!error && data) {
+            return data as unknown as Profile;
+          }
+          // RLS or table issue — fall through to API attempt
+        }
+      } catch {
+        // Supabase call failed — fall through to API attempt
+      }
+    }
+
+    // --- Attempt 2: Backend API ---
+    try {
+      const profile = await api.createProfile(payload);
+      return profile;
+    } catch {
+      // API unreachable — fall through to localStorage
+    }
+
+    // --- Attempt 3: localStorage fallback ---
+    const localProfile: Profile = {
+      id: "local-profile",
+      disciplines: payload.disciplines ?? [],
+      target_credentials: payload.target_credentials ?? [],
+      primary_discipline: payload.primary_discipline ?? null,
+      target_credential: payload.target_credential ?? null,
+      clinical_phase: payload.clinical_phase ?? null,
+      gpa: payload.gpa ?? null,
+      state_residence: payload.state_residence ?? null,
+      metro_area: payload.metro_area ?? null,
+      sai_score: payload.sai_score ?? null,
+      first_gen: payload.first_gen ?? false,
+      minority_flag: payload.minority_flag ?? false,
+      professional_affiliations: payload.professional_affiliations ?? [],
+      hobbies: payload.hobbies ?? [],
+      subscription_tier: "free",
+      full_name: null,
+      email: null,
+      terms_accepted_at: null,
+      privacy_accepted_at: null,
+      marketing_opt_in: false,
+      marketing_opt_in_at: null,
+      searches_used_this_week: 0,
+      search_cycle_reset_at: null,
+      feed_token: null,
+      stripe_subscription_status: null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    try {
+      localStorage.setItem("grantrx_profile", JSON.stringify(localProfile));
+    } catch {
+      // localStorage may be unavailable (private mode) — proceed anyway
+    }
+    return localProfile;
+  };
+
   const handleSubmit = async () => {
     setSubmitting(true);
     setError(null);
     try {
-      const profile = await api.createProfile(buildPayload());
+      const profile = await persistProfile(buildPayload());
       onComplete(profile);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save profile");
@@ -114,7 +209,7 @@ export function OnboardingWizard({ onComplete, onCancel, existingProfile }: Onbo
         professional_affiliations: [],
         hobbies: [],
       };
-      const profile = await api.createProfile(payload);
+      const profile = await persistProfile(payload);
       onComplete(profile);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save profile");
