@@ -31,9 +31,22 @@ export async function GET(request: Request) {
     );
   }
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const rawSupabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+
+  // Validate the URL is a proper HTTP/HTTPS URL (not just truthy)
+  let supabaseUrl: string | null = null;
+  if (rawSupabaseUrl) {
+    try {
+      const parsed = new URL(rawSupabaseUrl);
+      if (parsed.protocol === "http:" || parsed.protocol === "https:") {
+        supabaseUrl = rawSupabaseUrl;
+      }
+    } catch {
+      // invalid URL — leave as null
+    }
+  }
 
   if (!supabaseUrl || !supabaseAnonKey) {
     return NextResponse.redirect(
