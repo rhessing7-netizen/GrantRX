@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import type { Profile, Usage } from "@/lib/types";
 import { DISCIPLINE_LABELS } from "@/lib/types";
 import { TOP_20_METROS } from "@/lib/constants/metros";
@@ -338,6 +339,22 @@ export function LeftPanel({
           </button>
         </section>
       )}
+
+      {/* Legal footer */}
+      <footer className="pt-2 text-center">
+        <p className="text-xs text-textSecondary/60">
+          © 2026 GrantRx. All rights reserved.
+        </p>
+        <p className="mt-1 text-xs">
+          <Link href="/terms" className="text-textSecondary/60 hover:text-crayolaBlue hover:underline">
+            Terms of Service
+          </Link>
+          {" · "}
+          <Link href="/privacy" className="text-textSecondary/60 hover:text-crayolaBlue hover:underline">
+            Privacy Policy
+          </Link>
+        </p>
+      </footer>
     </div>
   );
 }

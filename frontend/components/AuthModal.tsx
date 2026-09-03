@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { setAuthToken, api } from "@/lib/api";
 import type { Profile } from "@/lib/types";
@@ -360,13 +361,23 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
                 />
                 <span>
                   I agree to the{" "}
-                  <a href="/terms" className="text-crayolaBlue underline">
+                  <Link
+                    href="/terms"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-crayolaBlue underline"
+                  >
                     Terms of Service
-                  </a>{" "}
+                  </Link>{" "}
                   and{" "}
-                  <a href="/privacy" className="text-crayolaBlue underline">
+                  <Link
+                    href="/privacy"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-crayolaBlue underline"
+                  >
                     Privacy Policy
-                  </a>
+                  </Link>
                 </span>
               </label>
 
