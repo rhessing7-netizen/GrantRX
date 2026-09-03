@@ -2,8 +2,7 @@
 
 import { useState } from "react";
 import { supabase } from "@/lib/supabase";
-import { setAuthToken } from "@/lib/api";
-import { api } from "@/lib/api";
+import { setAuthToken, api } from "@/lib/api";
 import type { Profile } from "@/lib/types";
 
 export type AuthModalProps = {
@@ -62,20 +61,38 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
       return;
     }
 
-    const redirectTo = `${window.location.origin}/auth/callback`;
-    const { error: sbError } = await supabase.auth.signInWithOAuth({
-      provider,
-      options: {
-        redirectTo,
-        queryParams: {
-          marketing_opt_in: marketingOptIn ? "true" : "false",
-          terms_accepted: "true",
-          privacy_accepted: "true",
+    try {
+      const redirectTo = `${window.location.origin}/auth/callback`;
+      const { error: sbError } = await supabase.auth.signInWithOAuth({
+        provider,
+        options: {
+          redirectTo,
+          queryParams: {
+            marketing_opt_in: marketingOptIn ? "true" : "false",
+            terms_accepted: "true",
+            privacy_accepted: "true",
+          },
         },
-      },
-    });
-    if (sbError) {
-      setError(sbError.message);
+      });
+      if (sbError) {
+        // Provider not enabled in Supabase dashboard
+        if (
+          sbError.message.includes("provider") ||
+          sbError.message.includes("not enabled") ||
+          sbError.message.includes("not supported") ||
+          sbError.message.includes("OAuth")
+        ) {
+          setError(
+            "OAuth provider is not yet enabled in Supabase. Please sign up using email and password.",
+          );
+        } else {
+          setError(sbError.message);
+        }
+      }
+    } catch {
+      setError(
+        "OAuth provider is not yet enabled in Supabase. Please sign up using email and password.",
+      );
     }
   };
 
@@ -93,7 +110,6 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
       if (!supabase) {
         // Dev mode without Supabase configured — simulate auth
         setAuthToken("grantrx-dev-demo");
-        // Try to load existing profile
         try {
           const p = await api.getProfile();
           onAuthSuccess(p);
@@ -111,16 +127,14 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
         });
         if (sbError) throw sbError;
 
-        // Set the auth token for API calls
         if (data.session?.access_token) {
           setAuthToken(data.session.access_token);
         }
 
         // Save name, email, and consent to backend profile
-        // (Profile may not exist yet — onboarding will handle the rest)
         try {
           const profile = await api.createProfile({
-            primary_discipline: "pharmacy", // placeholder — user completes in onboarding
+            primary_discipline: "pharmacy",
             gpa: 0.0,
             state_residence: "CA",
             full_name: fullName,
@@ -130,9 +144,17 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
             marketing_opt_in: marketingOptIn,
           });
           onAuthSuccess(profile);
-        } catch {
-          // Profile creation may fail if user hasn't completed onboarding
-          // That's OK — the onboarding wizard will handle it
+        } catch (err) {
+          // Profile creation may fail if backend is unreachable
+          const msg = err instanceof Error ? err.message : "Unknown error";
+          if (msg.includes("Failed to fetch") || msg.includes("Network error")) {
+            setError(
+              "Could not reach the GrantRx server. Please check your connection and try again.",
+            );
+            setSubmitting(false);
+            return;
+          }
+          // Non-network errors are OK — onboarding wizard will handle it
           onAuthSuccess(null);
         }
       } else {
@@ -144,11 +166,18 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
           setAuthToken(data.session.access_token);
         }
 
-        // Load existing profile
         try {
           const p = await api.getProfile();
           onAuthSuccess(p);
-        } catch {
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : "Unknown error";
+          if (msg.includes("Failed to fetch") || msg.includes("Network error")) {
+            setError(
+              "Could not reach the GrantRx server. Please check your connection and try again.",
+            );
+            setSubmitting(false);
+            return;
+          }
           onAuthSuccess(null);
         }
       }
@@ -160,11 +189,28 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-textPrimary/40 backdrop-blur-sm">
-      <div className="w-full max-w-md rounded-3xl bg-surfaceBg p-8 shadow-2xl">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-textPrimary/40 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        className="max-w-md w-full max-h-[90vh] overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl relative"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Close button */}
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 transition"
+          aria-label="Close"
+        >
+          <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+
         {/* Header */}
-        <div className="mb-6 text-center">
-          <h2 className="font-serif text-2xl font-bold text-textPrimary">
+        <div className="mb-4 text-center pr-6">
+          <h2 className="font-serif text-xl font-bold text-textPrimary">
             {mode === "signup" ? "Create your account" : "Welcome back"}
           </h2>
           <p className="mt-1 text-sm text-textSecondary">
@@ -175,11 +221,11 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
         </div>
 
         {/* Mode toggle */}
-        <div className="mb-6 flex rounded-full bg-textSecondary/10 p-1">
+        <div className="mb-4 flex rounded-full bg-textSecondary/10 p-1">
           <button
             type="button"
             onClick={() => setMode("signup")}
-            className={`flex-1 rounded-full px-4 py-2 text-sm font-medium transition ${
+            className={`flex-1 rounded-full px-4 py-1.5 text-sm font-medium transition ${
               mode === "signup"
                 ? "bg-crayolaBlue text-surfaceBg"
                 : "text-textSecondary"
@@ -190,7 +236,7 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
           <button
             type="button"
             onClick={() => setMode("signin")}
-            className={`flex-1 rounded-full px-4 py-2 text-sm font-medium transition ${
+            className={`flex-1 rounded-full px-4 py-1.5 text-sm font-medium transition ${
               mode === "signin"
                 ? "bg-crayolaBlue text-surfaceBg"
                 : "text-textSecondary"
@@ -201,17 +247,17 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
         </div>
 
         {error && (
-          <div className="mb-4 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">
+          <div className="mb-3 rounded-xl bg-red-50 px-4 py-2.5 text-sm text-red-700">
             {error}
           </div>
         )}
 
         {/* OAuth provider buttons */}
-        <div className="space-y-2.5">
+        <div className="space-y-2">
           <button
             type="button"
             onClick={() => handleOAuth("google")}
-            className="flex w-full items-center justify-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-textPrimary shadow-sm transition hover:bg-slate-50 hover:border-slate-300"
+            className="flex w-full items-center justify-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-textPrimary shadow-sm transition hover:bg-slate-50 hover:border-slate-300"
           >
             <svg className="h-5 w-5" viewBox="0 0 24 24" aria-hidden="true">
               <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
@@ -225,7 +271,7 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
           <button
             type="button"
             onClick={() => handleOAuth("linkedin")}
-            className="flex w-full items-center justify-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-textPrimary shadow-sm transition hover:bg-slate-50 hover:border-slate-300"
+            className="flex w-full items-center justify-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-textPrimary shadow-sm transition hover:bg-slate-50 hover:border-slate-300"
           >
             <svg className="h-5 w-5" viewBox="0 0 24 24" fill="#0A66C2" aria-hidden="true">
               <path d="M20.45 20.45h-3.56v-5.57c0-1.33-.02-3.04-1.85-3.04-1.85 0-2.14 1.45-2.14 2.94v5.67H9.34V9h3.41v1.56h.05c.48-.9 1.64-1.85 3.37-1.85 3.6 0 4.27 2.37 4.27 5.46v6.28zM5.34 7.43a2.06 2.06 0 1 1 0-4.12 2.06 2.06 0 0 1 0 4.12zM7.12 20.45H3.56V9h3.56v11.45zM22.22 0H1.77C.79 0 0 .77 0 1.72v20.56C0 23.23.79 24 1.77 24h20.45c.98 0 1.78-.77 1.78-1.72V1.72C24 .77 23.2 0 22.22 0z" />
@@ -235,14 +281,14 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
         </div>
 
         {/* Divider */}
-        <div className="my-5 flex items-center gap-3">
+        <div className="my-4 flex items-center gap-3">
           <div className="h-px flex-1 bg-slate-200" />
           <span className="text-xs font-medium text-textSecondary">or</span>
           <div className="h-px flex-1 bg-slate-200" />
         </div>
 
         {/* Form */}
-        <div className="space-y-4">
+        <div className="space-y-3">
           {mode === "signup" && (
             <div>
               <label className="block text-sm font-medium text-textSecondary">
@@ -252,7 +298,7 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
                 placeholder="Jane Doe"
-                className="mt-1.5 w-full rounded-xl border border-textSecondary/20 bg-surfaceBg px-4 py-2.5 text-textPrimary"
+                className="mt-1 w-full rounded-xl border border-textSecondary/20 bg-surfaceBg px-4 py-2 text-textPrimary"
               />
             </div>
           )}
@@ -267,7 +313,7 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
               onBlur={() => setTouched((t) => ({ ...t, email: true }))}
               type="email"
               placeholder="jane@example.com"
-              className={`mt-1.5 w-full rounded-xl border bg-surfaceBg px-4 py-2.5 text-textPrimary transition ${
+              className={`mt-1 w-full rounded-xl border bg-surfaceBg px-4 py-2 text-textPrimary transition ${
                 showEmailError
                   ? "border-red-400 ring-1 ring-red-200"
                   : "border-textSecondary/20 focus:border-crayolaBlue"
@@ -288,7 +334,7 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
               onBlur={() => setTouched((t) => ({ ...t, password: true }))}
               type="password"
               placeholder="At least 6 characters"
-              className={`mt-1.5 w-full rounded-xl border bg-surfaceBg px-4 py-2.5 text-textPrimary transition ${
+              className={`mt-1 w-full rounded-xl border bg-surfaceBg px-4 py-2 text-textPrimary transition ${
                 showPasswordError
                   ? "border-red-400 ring-1 ring-red-200"
                   : "border-textSecondary/20 focus:border-crayolaBlue"
@@ -300,7 +346,7 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
           </div>
 
           {mode === "signup" && (
-            <div className="space-y-3 pt-2">
+            <div className="space-y-2.5 pt-1">
               {/* Terms & Privacy — mandatory */}
               <label
                 className={`flex items-start gap-2.5 text-sm text-textPrimary ${termsShake ? "animate-shake" : ""}`}
@@ -343,7 +389,7 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
         </div>
 
         {/* Actions */}
-        <div className="mt-6 flex items-center justify-between">
+        <div className="mt-4 flex items-center justify-between">
           <button
             onClick={onClose}
             className="text-sm text-textSecondary hover:text-textPrimary"
@@ -353,7 +399,7 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
           <button
             onClick={handleSubmit}
             disabled={!canSubmit || submitting}
-            className="rounded-full bg-crayolaBlue px-6 py-2.5 text-sm font-medium text-surfaceBg disabled:opacity-40"
+            className="rounded-full bg-crayolaBlue px-6 py-2 text-sm font-medium text-surfaceBg disabled:opacity-40"
           >
             {submitting
               ? "Please wait…"
