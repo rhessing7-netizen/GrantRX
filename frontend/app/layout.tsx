@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { Fraunces, Sora } from "next/font/google";
 import "./globals.css";
 
+export const dynamic = 'force-dynamic';
+
 const fraunces = Fraunces({
   variable: "--font-fraunces",
   subsets: ["latin"],
