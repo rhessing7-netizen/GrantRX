@@ -36,6 +36,13 @@ export function LeftPanel({
 }: LeftPanelProps) {
   const [portalLoading, setPortalLoading] = useState(false);
   const [portalError, setPortalError] = useState<string | null>(null);
+
+  // Exit survey state
+  const [exitSurveyOpen, setExitSurveyOpen] = useState(false);
+  const [exitReason, setExitReason] = useState<string>("");
+  const [exitAwardAmount, setExitAwardAmount] = useState<string>("");
+  const [exitComments, setExitComments] = useState<string>("");
+  const [exitSubmitting, setExitSubmitting] = useState(false);
   const hasText = search.trim().length > 0;
   const quotaExhausted =
     !!usage && !usage.is_premium && usage.remaining !== null && usage.remaining <= 0;
@@ -119,7 +126,41 @@ export function LeftPanel({
     return "Add remaining profile details to boost match accuracy.";
   })();
 
-  const handleManageSubscription = async () => {
+  const handleManageSubscription = () => {
+    setExitSurveyOpen(true);
+  };
+
+  const handleSkipSurvey = async () => {
+    setExitSurveyOpen(false);
+    setPortalLoading(true);
+    setPortalError(null);
+    try {
+      const { url } = await api.createBillingPortalSession();
+      window.location.href = url;
+    } catch (err) {
+      setPortalError(
+        err instanceof Error ? err.message : "Failed to open billing portal",
+      );
+    } finally {
+      setPortalLoading(false);
+    }
+  };
+
+  const handleExitSurveySubmit = async () => {
+    if (!exitReason) return;
+    setExitSubmitting(true);
+    try {
+      await api.submitCancellationFeedback(
+        exitReason,
+        exitAwardAmount ? parseInt(exitAwardAmount, 10) : undefined,
+        exitComments || undefined,
+      );
+    } catch {
+      // Best-effort — proceed to portal regardless
+    } finally {
+      setExitSubmitting(false);
+    }
+    setExitSurveyOpen(false);
     setPortalLoading(true);
     setPortalError(null);
     try {
@@ -436,6 +477,105 @@ export function LeftPanel({
           </Link>
         </p>
       </footer>
+
+      {/* Exit Survey modal — shown before redirecting to Stripe Billing Portal */}
+      {exitSurveyOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-textPrimary/40 backdrop-blur-sm"
+          onClick={() => !exitSubmitting && setExitSurveyOpen(false)}
+        >
+          <div
+            className="w-full max-w-md rounded-3xl bg-surfaceBg p-6 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="font-serif text-lg font-bold text-textPrimary">
+              Before you go
+            </h2>
+            <p className="mt-1 text-sm text-textSecondary">
+              Help us improve GrantRx — why are you managing your billing?
+            </p>
+
+            <div className="mt-4 space-y-2">
+              {[
+                { value: "won_scholarship", label: "I won a scholarship!" },
+                { value: "too_expensive", label: "Too expensive / Tight student budget" },
+                { value: "not_enough_opportunities", label: "Not enough opportunities in my clinical discipline" },
+                { value: "finished_cycle", label: "Finished applying for this academic cycle" },
+                { value: "other", label: "Other" },
+              ].map((opt) => (
+                <label
+                  key={opt.value}
+                  className={`flex items-center gap-2.5 rounded-xl border px-3 py-2.5 text-sm cursor-pointer transition ${
+                    exitReason === opt.value
+                      ? "border-crayolaBlue bg-crayolaBlue/5 text-textPrimary"
+                      : "border-textSecondary/15 text-textSecondary hover:border-crayolaBlue/30"
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="exit-reason"
+                    value={opt.value}
+                    checked={exitReason === opt.value}
+                    onChange={(e) => setExitReason(e.target.value)}
+                    className="h-4 w-4 accent-crayolaBlue"
+                  />
+                  {opt.label}
+                </label>
+              ))}
+            </div>
+
+            {/* Conditional award amount field */}
+            {exitReason === "won_scholarship" && (
+              <div className="mt-3">
+                <label className="block text-xs font-medium text-textSecondary">
+                  Award amount (optional)
+                </label>
+                <div className="relative mt-1">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-textSecondary">$</span>
+                  <input
+                    type="number"
+                    value={exitAwardAmount}
+                    onChange={(e) => setExitAwardAmount(e.target.value)}
+                    placeholder="5000"
+                    className="w-full rounded-xl border border-textSecondary/20 bg-surfaceBg pl-7 pr-3 py-2 text-sm text-textPrimary"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Optional comments */}
+            <div className="mt-3">
+              <label className="block text-xs font-medium text-textSecondary">
+                Additional comments (optional)
+              </label>
+              <textarea
+                value={exitComments}
+                onChange={(e) => setExitComments(e.target.value)}
+                placeholder="Anything else you'd like to share?"
+                rows={2}
+                className="mt-1 w-full rounded-xl border border-textSecondary/20 bg-surfaceBg px-3 py-2 text-sm text-textPrimary"
+              />
+            </div>
+
+            <div className="mt-5 flex items-center justify-end gap-3">
+              <button
+                onClick={handleSkipSurvey}
+                disabled={exitSubmitting}
+                className="text-sm text-textSecondary hover:text-textPrimary disabled:opacity-50"
+              >
+                Skip & continue
+              </button>
+              <button
+                onClick={handleExitSurveySubmit}
+                disabled={!exitReason || exitSubmitting}
+                className="rounded-full bg-crayolaBlue px-5 py-2 text-sm font-medium text-surfaceBg disabled:opacity-50"
+              >
+                {exitSubmitting ? "Submitting…" : "Submit & continue"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

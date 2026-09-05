@@ -170,3 +170,14 @@ class ScholarshipReport(Base):
     updated_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
 
     scholarship = relationship("Scholarship", backref="reports")
+
+
+class CancellationFeedback(Base):
+    __tablename__ = "cancellation_feedback"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("profiles.id", ondelete="SET NULL"), nullable=True)
+    reason = Column(Text, nullable=False)  # won_scholarship | too_expensive | not_enough_opportunities | finished_cycle | other
+    award_amount = Column(Integer, nullable=True)
+    comments = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)

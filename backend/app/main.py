@@ -17,10 +17,19 @@ from .middleware.tier_guard import (
     consume_search,
     get_usage,
 )
-from .models.models import Profile, Scholarship, ScholarshipReport, StudentCollegeBudget, UserScholarship
+from .models.models import (
+    CancellationFeedback,
+    Profile,
+    Scholarship,
+    ScholarshipReport,
+    StudentCollegeBudget,
+    UserScholarship,
+)
 from .schemas.schemas import (
     CalendarEventOut,
     CalendarFeedOut,
+    CancellationFeedbackCreate,
+    CancellationFeedbackOut,
     CheckoutRequest,
     CheckoutResponse,
     FinancialPlannerOut,
@@ -654,6 +663,33 @@ def create_billing_portal(
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=f"Stripe error: {exc}") from exc
 
     return PortalUrlResponse(url=session.url)
+
+
+@app.post(
+    "/api/v1/billing/cancellation-feedback",
+    response_model=CancellationFeedbackOut,
+    status_code=201,
+)
+def submit_cancellation_feedback(
+    payload: CancellationFeedbackCreate,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Collect exit-survey feedback when a user initiates cancellation.
+
+    Stored for churn analysis and product improvement. The user is then
+    redirected to the Stripe Billing Portal by the frontend.
+    """
+    feedback = CancellationFeedback(
+        user_id=user.id,
+        reason=payload.reason,
+        award_amount=payload.award_amount,
+        comments=payload.comments,
+    )
+    db.add(feedback)
+    db.commit()
+    db.refresh(feedback)
+    return feedback
 
 
 # ---------------------------------------------------------------------------

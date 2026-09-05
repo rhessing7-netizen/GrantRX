@@ -277,6 +277,22 @@ class ScholarshipReportOut(BaseModel):
     created_at: Optional[datetime] = None
 
 
+class CancellationFeedbackCreate(BaseModel):
+    reason: str = Field(..., pattern="^(won_scholarship|too_expensive|not_enough_opportunities|finished_cycle|other)$")
+    award_amount: Optional[int] = None
+    comments: Optional[str] = None
+
+
+class CancellationFeedbackOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    reason: str
+    award_amount: Optional[int] = None
+    comments: Optional[str] = None
+    created_at: Optional[datetime] = None
+
+
 # ---------------------------------------------------------------------------
 # Financial Planner
 # ---------------------------------------------------------------------------

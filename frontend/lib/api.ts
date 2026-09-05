@@ -191,6 +191,22 @@ export const api = {
     }),
   createBillingPortalSession: () =>
     request<{ url: string }>("/api/v1/billing/portal", { method: "POST" }),
+  submitCancellationFeedback: (
+    reason: string,
+    awardAmount?: number,
+    comments?: string,
+  ) =>
+    request<{ id: string; reason: string }>(
+      "/api/v1/billing/cancellation-feedback",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          reason,
+          award_amount: awardAmount,
+          comments,
+        }),
+      },
+    ),
   deleteAccount: () =>
     request<{ status: string; message: string }>("/api/v1/profile/me", {
       method: "DELETE",

@@ -45,6 +45,15 @@ export function KanbanBoard({ items, isPremium, onChanged, onPaywall }: KanbanBo
   const [undoToast, setUndoToast] = useState<{ itemId: string; prevStatus: AppStatus; title: string } | null>(null);
   const [drawerItem, setDrawerItem] = useState<UserScholarship | null>(null);
 
+  // Milestone celebration toast
+  const [milestone, setMilestone] = useState<{
+    type: "submitted" | "awarded";
+    title: string;
+    itemId: string;
+  } | null>(null);
+  const [awardInput, setAwardInput] = useState<string>("");
+  const [awardSubmitted, setAwardSubmitted] = useState(false);
+
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
   );
@@ -105,6 +114,15 @@ export function KanbanBoard({ items, isPremium, onChanged, onPaywall }: KanbanBo
     try {
       await api.updateTracking(item.id, { status: newStatus });
       onChanged?.();
+      // Milestone celebration toasts
+      if (newStatus === "submitted") {
+        setMilestone({ type: "submitted", title: item.scholarship?.title ?? "scholarship", itemId: item.id });
+        setTimeout(() => setMilestone(null), 6000);
+      } else if (newStatus === "awarded") {
+        setMilestone({ type: "awarded", title: item.scholarship?.title ?? "scholarship", itemId: item.id });
+        setAwardInput("");
+        setAwardSubmitted(false);
+      }
     } catch (err) {
       console.error("Failed to update tracking", err);
     }
@@ -166,6 +184,76 @@ export function KanbanBoard({ items, isPremium, onChanged, onPaywall }: KanbanBo
               Dismiss
             </button>
           </div>
+        </div>
+      )}
+
+      {/* Milestone celebration toast — Submitted */}
+      {milestone?.type === "submitted" && (
+        <div className="mb-4 flex items-center justify-between rounded-xl bg-gradient-to-r from-aquamarine to-neonIce px-5 py-4 shadow-md">
+          <div>
+            <p className="text-sm font-bold text-textPrimary">
+              🎉 Application Submitted!
+            </p>
+            <p className="mt-0.5 text-xs text-textPrimary/80">
+              Great work taking action on your clinical education debt.
+            </p>
+          </div>
+          <button
+            onClick={() => setMilestone(null)}
+            className="text-sm text-textPrimary/70 hover:text-textPrimary"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
+      {/* Milestone celebration toast — Awarded with award amount prompt */}
+      {milestone?.type === "awarded" && (
+        <div className="mb-4 rounded-xl bg-gradient-to-r from-aquamarine via-neonIce to-blueEnergy px-5 py-4 shadow-lg">
+          <div className="flex items-start justify-between">
+            <div>
+              <p className="text-sm font-bold text-textPrimary">
+                🏆 Awarded! Congratulations on winning scholarship funding!
+              </p>
+              <p className="mt-0.5 text-xs text-textPrimary/80">
+                Did this help? Let us know the award amount!
+              </p>
+            </div>
+            <button
+              onClick={() => setMilestone(null)}
+              className="ml-3 shrink-0 text-sm text-textPrimary/70 hover:text-textPrimary"
+            >
+              Dismiss
+            </button>
+          </div>
+          {!awardSubmitted ? (
+            <div className="mt-3 flex items-center gap-2">
+              <div className="relative flex-1 max-w-xs">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium text-textPrimary/60">$</span>
+                <input
+                  type="number"
+                  value={awardInput}
+                  onChange={(e) => setAwardInput(e.target.value)}
+                  placeholder="Amount"
+                  className="w-full rounded-full border border-textPrimary/20 bg-surfaceBg pl-7 pr-3 py-1.5 text-sm text-textPrimary"
+                />
+              </div>
+              <button
+                onClick={() => {
+                  setAwardSubmitted(true);
+                  setTimeout(() => setMilestone(null), 3000);
+                }}
+                disabled={!awardInput.trim()}
+                className="rounded-full bg-textPrimary px-4 py-1.5 text-sm font-semibold text-surfaceBg disabled:opacity-40"
+              >
+                Submit
+              </button>
+            </div>
+          ) : (
+            <p className="mt-2 text-xs font-medium text-textPrimary">
+              ✓ Thank you for sharing your win!
+            </p>
+          )}
         </div>
       )}
 
