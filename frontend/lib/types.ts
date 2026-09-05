@@ -171,6 +171,11 @@ export interface ScholarshipOut {
   matching_tags: string[];
   is_archived: boolean;
   estimated_next_cycle: string | null;
+  provider_type: string | null;
+  provider_mission: string | null;
+  provider_core_values: string[];
+  is_local: boolean;
+  target_community: string | null;
   created_at: string | null;
   updated_at: string | null;
 }
@@ -359,4 +364,39 @@ export interface FinancialPlanner {
   three_x_cushion: number;
   five_x_safety_buffer: number;
   cushion_progress_pct: number;
+}
+
+// ---------------------------------------------------------------------------
+// AI Statement Coach — Essay Outline
+// ---------------------------------------------------------------------------
+
+export interface EssayNarrativeSection {
+  title: string;
+  estimated_word_count: number;
+  talking_points: string[];
+  coaching_tips: string[];
+}
+
+export interface EssayOutlineRequest {
+  scholarship_title: string;
+  provider: string;
+  prompt: string;
+  word_limit: number;
+  provider_mission: string | null;
+  provider_core_values: string[];
+  user_discipline: string | null;
+  user_credential: string | null;
+  lived_experience_notes: string | null;
+  work_volunteer_experience: string | null;
+  academic_topics_of_interest: string | null;
+}
+
+export interface EssayOutlineResponse {
+  suggested_theme: string;
+  mission_alignment_angle: string;
+  part_1_personal_story: EssayNarrativeSection;
+  part_2_work_experience: EssayNarrativeSection;
+  part_3_academic_citation: EssayNarrativeSection;
+  part_4_future_service: EssayNarrativeSection;
+  checklist: string[];
 }

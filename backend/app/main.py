@@ -6,6 +6,7 @@ from uuid import UUID
 
 from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Header, Request, Response, status
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 from sqlalchemy.orm import Session, joinedload
 
 from .database import get_db, SessionLocal
@@ -50,6 +51,11 @@ from .services.export_service import (
     generate_asana_csv,
     generate_gcal_url,
     generate_ics_feed,
+)
+from .services.outline_service import (
+    EssayOutlineRequest,
+    EssayOutlineResponse,
+    generate_essay_outline,
 )
 
 logger = logging.getLogger(__name__)
@@ -962,3 +968,65 @@ def export_ics_calendar(
             "Content-Disposition": 'attachment; filename="grantrx_deadlines.ics"',
         },
     )
+
+
+# ---------------------------------------------------------------------------
+# AI Statement Coach — 4-Part Essay Outliner
+# ---------------------------------------------------------------------------
+
+
+class OutlineRequestBody(BaseModel):
+    """Request body for the essay outline endpoint."""
+    prompt: str = ""
+    word_limit: Optional[int] = 500
+    user_discipline: Optional[str] = None
+    user_credential: Optional[str] = None
+    lived_experience_notes: Optional[str] = None
+    work_volunteer_experience: Optional[str] = None
+    academic_topics_of_interest: Optional[str] = None
+
+
+@app.post("/api/v1/scholarships/{scholarship_id}/outline", response_model=EssayOutlineResponse)
+async def generate_outline(
+    scholarship_id: UUID,
+    body: OutlineRequestBody,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Generate a 4-part essay outline tailored to the scholarship provider's mission."""
+    scholarship = (
+        db.query(Scholarship)
+        .filter(Scholarship.id == scholarship_id)
+        .first()
+    )
+    if not scholarship:
+        raise HTTPException(status_code=404, detail="Scholarship not found")
+
+    # Pull profile for discipline/credential if not provided in body
+    profile = db.query(Profile).filter(Profile.id == user.id).first()
+
+    request = EssayOutlineRequest(
+        scholarship_title=scholarship.title,
+        provider=scholarship.provider,
+        prompt=body.prompt,
+        word_limit=body.word_limit,
+        provider_mission=scholarship.provider_mission,
+        provider_core_values=scholarship.provider_core_values or [],
+        user_discipline=body.user_discipline or (
+            profile.disciplines[0] if profile and profile.disciplines else None
+        ),
+        user_credential=body.user_credential or (
+            profile.target_credentials[0] if profile and profile.target_credentials else None
+        ),
+        lived_experience_notes=body.lived_experience_notes,
+        work_volunteer_experience=body.work_volunteer_experience,
+        academic_topics_of_interest=body.academic_topics_of_interest,
+    )
+
+    outline = await generate_essay_outline(request)
+    if outline is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Essay outline service unavailable. Please try again later.",
+        )
+    return outline

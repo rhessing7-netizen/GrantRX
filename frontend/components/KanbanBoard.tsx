@@ -15,7 +15,7 @@ import {
 import {
   useDraggable,
 } from "@dnd-kit/core";
-import type { AppStatus, ChecklistItem, UserScholarship, VaultDocument } from "@/lib/types";
+import type { AppStatus, ChecklistItem, EssayOutlineResponse, UserScholarship, VaultDocument } from "@/lib/types";
 import { api } from "@/lib/api";
 
 const COLUMNS: { id: AppStatus; label: string; accent: string; emptyHint: string }[] = [
@@ -524,6 +524,16 @@ function ApplicationDrawer({
   // New checklist item state
   const [newChecklistText, setNewChecklistText] = useState("");
 
+  // AI Statement Coach state
+  const [coachOpen, setCoachOpen] = useState(false);
+  const [outlineLoading, setOutlineLoading] = useState(false);
+  const [outline, setOutline] = useState<EssayOutlineResponse | null>(null);
+  const [outlineError, setOutlineError] = useState<string | null>(null);
+  const [essayPrompt, setEssayPrompt] = useState("");
+  const [livedExperience, setLivedExperience] = useState("");
+  const [workExperience, setWorkExperience] = useState("");
+  const [academicTopics, setAcademicTopics] = useState("");
+
   const scholarship = item.scholarship;
   const title = scholarship?.title ?? "Scholarship";
   const provider = scholarship?.provider ?? "";
@@ -580,6 +590,40 @@ function ApplicationDrawer({
       setTimeout(() => setSavedAt(null), 2000);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleGenerateOutline = async () => {
+    if (!scholarship) return;
+    setOutlineLoading(true);
+    setOutlineError(null);
+    try {
+      const result = await api.generateEssayOutline(scholarship.id, {
+        prompt: essayPrompt || undefined,
+        lived_experience_notes: livedExperience || undefined,
+        work_volunteer_experience: workExperience || undefined,
+        academic_topics_of_interest: academicTopics || undefined,
+      });
+      setOutline(result);
+    } catch (err) {
+      setOutlineError(err instanceof Error ? err.message : "Failed to generate outline");
+    } finally {
+      setOutlineLoading(false);
+    }
+  };
+
+  const handleAppendOutline = async () => {
+    if (!outline) return;
+    const md = formatOutlineAsMarkdown(outline);
+    const newNotes = appNotes ? `${appNotes}\n\n---\n\n${md}` : md;
+    setAppNotes(newNotes);
+    try {
+      await api.updateTracking(item.id, {
+        application_notes: newNotes,
+      });
+      onChanged();
+    } catch {
+      // Notes still updated locally
     }
   };
 
@@ -800,6 +844,170 @@ function ApplicationDrawer({
             </div>
           </section>
 
+          {/* AI Statement Coach */}
+          <section>
+            <button
+              onClick={() => setCoachOpen((v) => !v)}
+              className="flex w-full items-center justify-between py-2"
+            >
+              <div className="flex items-center gap-2">
+                <svg className="h-4 w-4 text-crayolaBlue" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.5.8a2 2 0 11-3.473 0l.5-.8z" />
+                </svg>
+                <h3 className="font-serif text-sm font-semibold text-textPrimary">
+                  AI Statement Coach
+                </h3>
+              </div>
+              <svg className={`h-4 w-4 text-textSecondary transition-transform ${coachOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+
+            {coachOpen && (
+              <div className="mt-3 space-y-4">
+                {/* Provider mission & core values */}
+                {scholarship?.provider_mission && (
+                  <div className="rounded-xl bg-blueEnergy/5 border border-blueEnergy/15 px-3 py-2">
+                    <p className="text-xs font-medium text-blueEnergy">Provider Mission</p>
+                    <p className="mt-1 text-xs text-textSecondary">{scholarship.provider_mission}</p>
+                  </div>
+                )}
+                {scholarship?.provider_core_values && scholarship.provider_core_values.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {scholarship.provider_core_values.map((v) => (
+                      <span key={v} className="rounded-full bg-aquamarine/15 border border-aquamarine/30 px-2 py-0.5 text-xs text-textPrimary">
+                        {v}
+                      </span>
+                    ))}
+                  </div>
+                )}
+
+                {/* Input fields */}
+                <div className="space-y-2">
+                  <input
+                    type="text"
+                    value={essayPrompt}
+                    onChange={(e) => setEssayPrompt(e.target.value)}
+                    placeholder="Essay prompt / topic (optional)"
+                    className="w-full rounded-lg border border-textSecondary/20 px-2.5 py-1.5 text-xs text-textPrimary"
+                  />
+                  <textarea
+                    value={livedExperience}
+                    onChange={(e) => setLivedExperience(e.target.value)}
+                    placeholder="Personal upbringing & lived experience notes…"
+                    rows={2}
+                    className="w-full rounded-lg border border-textSecondary/20 px-2.5 py-1.5 text-xs text-textPrimary"
+                  />
+                  <textarea
+                    value={workExperience}
+                    onChange={(e) => setWorkExperience(e.target.value)}
+                    placeholder="Work / clinical / volunteer experience…"
+                    rows={2}
+                    className="w-full rounded-lg border border-textSecondary/20 px-2.5 py-1.5 text-xs text-textPrimary"
+                  />
+                  <textarea
+                    value={academicTopics}
+                    onChange={(e) => setAcademicTopics(e.target.value)}
+                    placeholder="Academic / research topics of interest…"
+                    rows={2}
+                    className="w-full rounded-lg border border-textSecondary/20 px-2.5 py-1.5 text-xs text-textPrimary"
+                  />
+                </div>
+
+                {/* Generate button */}
+                <button
+                  onClick={handleGenerateOutline}
+                  disabled={outlineLoading}
+                  className="flex w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-crayolaBlue to-blueEnergy px-4 py-2 text-xs font-semibold text-surfaceBg transition hover:opacity-90 disabled:opacity-50"
+                >
+                  {outlineLoading ? (
+                    <>
+                      <svg className="h-3.5 w-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                      </svg>
+                      Generating Outline…
+                    </>
+                  ) : (
+                    "Generate 4-Part Outline"
+                  )}
+                </button>
+
+                {outlineError && (
+                  <p className="text-xs text-red-600">{outlineError}</p>
+                )}
+
+                {/* Generated outline */}
+                {outline && (
+                  <div className="space-y-3">
+                    {/* Theme & mission alignment */}
+                    <div className="rounded-xl bg-surfaceBg px-3 py-2">
+                      <p className="text-xs font-semibold text-textPrimary">Suggested Theme</p>
+                      <p className="mt-0.5 text-xs text-textSecondary">{outline.suggested_theme}</p>
+                    </div>
+                    <div className="rounded-xl bg-blueEnergy/5 border border-blueEnergy/15 px-3 py-2">
+                      <p className="text-xs font-semibold text-blueEnergy">Mission Alignment</p>
+                      <p className="mt-0.5 text-xs text-textSecondary">{outline.mission_alignment_angle}</p>
+                    </div>
+
+                    {/* 4 narrative sections */}
+                    {[
+                      { label: "1. Personal Story", section: outline.part_1_personal_story },
+                      { label: "2. Work & Volunteer", section: outline.part_2_work_experience },
+                      { label: "3. Academic Foundation", section: outline.part_3_academic_citation },
+                      { label: "4. Future Service", section: outline.part_4_future_service },
+                    ].map(({ label, section }) => (
+                      <div key={label} className="rounded-xl border border-textSecondary/10 px-3 py-2">
+                        <div className="flex items-center justify-between">
+                          <p className="text-xs font-semibold text-textPrimary">{label}</p>
+                          <span className="text-xs text-textSecondary">~{section.estimated_word_count} words</span>
+                        </div>
+                        {section.talking_points.length > 0 && (
+                          <ul className="mt-1.5 space-y-0.5">
+                            {section.talking_points.map((tp, i) => (
+                              <li key={i} className="text-xs text-textSecondary">
+                                • {tp}
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                        {section.coaching_tips.length > 0 && (
+                          <div className="mt-1.5 space-y-0.5">
+                            {section.coaching_tips.map((tip, i) => (
+                              <p key={i} className="text-xs italic text-blueEnergy/70">
+                                💡 {tip}
+                              </p>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+
+                    {/* Checklist */}
+                    {outline.checklist.length > 0 && (
+                      <div className="rounded-xl bg-aquamarine/5 border border-aquamarine/20 px-3 py-2">
+                        <p className="text-xs font-semibold text-textPrimary">Pre-Submission Checklist</p>
+                        <ul className="mt-1 space-y-0.5">
+                          {outline.checklist.map((c, i) => (
+                            <li key={i} className="text-xs text-textSecondary">☐ {c}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    {/* Append to notes */}
+                    <button
+                      onClick={handleAppendOutline}
+                      className="w-full rounded-full border border-crayolaBlue px-4 py-2 text-xs font-medium text-crayolaBlue hover:bg-crayolaBlue/5"
+                    >
+                      Append Outline to Notes
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </section>
+
           {/* Save bar */}
           <div className="sticky bottom-0 -mx-6 flex items-center justify-end gap-3 border-t border-textSecondary/10 bg-surfaceBg/95 px-6 py-3 backdrop-blur">
             {savedAt && (
@@ -833,4 +1041,48 @@ function ApplicationDrawer({
       </div>
     </div>
   );
+}
+
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function formatOutlineAsMarkdown(outline: EssayOutlineResponse): string {
+  const sections = [
+    { label: "Part 1: Personal Story & Upbringing", section: outline.part_1_personal_story },
+    { label: "Part 2: Work & Volunteer Track Record", section: outline.part_2_work_experience },
+    { label: "Part 3: Academic Foundation & Citations", section: outline.part_3_academic_citation },
+    { label: "Part 4: Future Service & Community Impact", section: outline.part_4_future_service },
+  ];
+
+  let md = `## AI Essay Outline\n\n`;
+  md += `**Suggested Theme:** ${outline.suggested_theme}\n\n`;
+  md += `**Mission Alignment:** ${outline.mission_alignment_angle}\n\n`;
+
+  for (const { label, section } of sections) {
+    md += `### ${label} (~${section.estimated_word_count} words)\n`;
+    if (section.talking_points.length > 0) {
+      md += `**Talking Points:**\n`;
+      for (const tp of section.talking_points) {
+        md += `- ${tp}\n`;
+      }
+    }
+    if (section.coaching_tips.length > 0) {
+      md += `**Coaching Tips:**\n`;
+      for (const tip of section.coaching_tips) {
+        md += `- ${tip}\n`;
+      }
+    }
+    md += `\n`;
+  }
+
+  if (outline.checklist.length > 0) {
+    md += `### Pre-Submission Checklist\n`;
+    for (const c of outline.checklist) {
+      md += `- [ ] ${c}\n`;
+    }
+  }
+
+  return md;
 }

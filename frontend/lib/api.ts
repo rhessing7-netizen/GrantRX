@@ -3,6 +3,7 @@ import type {
   CalendarEvent,
   CalendarFeedInfo,
   CheckoutResponse,
+  EssayOutlineResponse,
   FinancialPlanner,
   MatchedFeed,
   Profile,
@@ -231,4 +232,25 @@ export const api = {
     const blob = await resp.blob();
     triggerDownload(blob, "grantrx_deadlines.ics");
   },
+
+  // AI Statement Coach — Essay Outline
+  generateEssayOutline: (
+    scholarshipId: string,
+    payload: {
+      prompt?: string;
+      word_limit?: number;
+      user_discipline?: string;
+      user_credential?: string;
+      lived_experience_notes?: string;
+      work_volunteer_experience?: string;
+      academic_topics_of_interest?: string;
+    },
+  ) =>
+    request<EssayOutlineResponse>(
+      `/api/v1/scholarships/${scholarshipId}/outline`,
+      {
+        method: "POST",
+        body: JSON.stringify(payload),
+      },
+    ),
 };
