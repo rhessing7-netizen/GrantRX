@@ -70,6 +70,20 @@ export default function Home() {
     }
   }, []);
 
+  // Strip stale ?auth_error=... from the URL so it doesn't trigger
+  // persistent error banners after the OAuth redirect lands.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.has("auth_error")) {
+      params.delete("auth_error");
+      const cleanUrl = params.toString()
+        ? `${window.location.pathname}?${params.toString()}`
+        : window.location.pathname;
+      window.history.replaceState({}, "", cleanUrl);
+    }
+  }, []);
+
   // Load profile + usage on mount
   const loadProfileAndUsage = useCallback(async () => {
     try {

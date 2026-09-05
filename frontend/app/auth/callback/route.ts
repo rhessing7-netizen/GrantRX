@@ -144,12 +144,13 @@ export async function GET(request: Request) {
       // Profile already exists (e.g. returning user) — they've onboarded
       profileExists = true;
     }
-  } catch {
+  } catch (err) {
     // Profile upsert failed (network error, header rejection, timeout, etc.)
-    // Do NOT block the user with an auth_error redirect — fall through to
-    // the appropriate redirect based on profileExists (which is false here,
-    // so the user lands on /?onboarding=open where the client-side app will
-    // retry profile initialization).
+    // Do NOT block the user with an auth_error redirect — the Supabase session
+    // cookies are already established, so fall through to the normal redirect
+    // flow. The client-side app will retry profile initialization on the
+    // onboarding screen if needed.
+    console.warn("Backend profile upsert skipped during callback:", err);
   }
 
   // Clear the consent cookie now that it's been consumed
