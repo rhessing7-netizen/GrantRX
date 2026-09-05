@@ -6,6 +6,7 @@ import { LeftPanel } from "@/components/LeftPanel";
 import { OnboardingWizard } from "@/components/OnboardingWizard";
 import { ProfileEditModal } from "@/components/ProfileEditModal";
 import { AuthModal } from "@/components/AuthModal";
+import { AccountSettingsModal } from "@/components/AccountSettingsModal";
 import { ScholarshipFeed } from "@/components/ScholarshipFeed";
 import { KanbanBoard } from "@/components/KanbanBoard";
 import { DeadlineCalendar } from "@/components/DeadlineCalendar";
@@ -29,6 +30,7 @@ export default function Home() {
   const [showAuth, setShowAuth] = useState(false);
   const [showUpgrade, setShowUpgrade] = useState(false);
   const [showProfileEdit, setShowProfileEdit] = useState(false);
+  const [showAccountSettings, setShowAccountSettings] = useState(false);
   const [upgradeReason, setUpgradeReason] = useState<string | undefined>(undefined);
 
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -412,6 +414,7 @@ export default function Home() {
             onUpgrade={() => openUpgrade()}
             onOpenAuth={() => setShowAuth(true)}
             onSignOut={handleSignOut}
+            onOpenAccountSettings={() => setShowAccountSettings(true)}
           />
         }
         right={
@@ -580,6 +583,23 @@ export default function Home() {
         open={showUpgrade}
         onClose={() => setShowUpgrade(false)}
         reason={upgradeReason}
+      />
+
+      <AccountSettingsModal
+        open={showAccountSettings}
+        onClose={() => setShowAccountSettings(false)}
+        profile={profile}
+        onProfileUpdated={(p) => setProfile(p)}
+        onDeleted={() => {
+          setProfile(null);
+          setUsage(null);
+          setKanbanItems([]);
+          setFeed(null);
+          setShowAccountSettings(false);
+          setShowOnboarding(false);
+          setAuthToken(null);
+          setError("Your account has been permanently deleted.");
+        }}
       />
     </>
   );

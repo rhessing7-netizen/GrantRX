@@ -9,10 +9,12 @@ import {
 } from "@/lib/types";
 import { getMetrosForState } from "@/lib/constants/metros";
 import { MAJOR_CATEGORIES, mapMajorToClinicalDiscipline } from "@/lib/constants/disciplines";
+import { type DegreeLevel } from "@/lib/constants/credentials";
 import { api } from "@/lib/api";
 import { supabase } from "@/lib/supabase";
 import { MultiSelect } from "./MultiSelect";
 import { GroupedMultiSelect } from "./GroupedMultiSelect";
+import { CascadingCredentialSelect } from "./CascadingCredentialSelect";
 
 const STEPS = ["Fields of Study", "Academic Details", "Background & Interests"];
 
@@ -27,12 +29,18 @@ export function OnboardingWizard({ onComplete, onCancel, existingProfile }: Onbo
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Step 1 — multi-select disciplines and credentials (all optional)
+  // Step 1 — multi-select disciplines and cascading credentials (all optional)
   const [disciplines, setDisciplines] = useState<string[]>(
     existingProfile?.disciplines ?? [],
   );
   const [credentials, setCredentials] = useState<string[]>(
     existingProfile?.target_credentials ?? [],
+  );
+
+  // Cascading credential selection
+  const [degreeLevel, setDegreeLevel] = useState<DegreeLevel | "">("");
+  const [selectedCredential, setSelectedCredential] = useState(
+    existingProfile?.target_credential ?? "",
   );
 
   // Step 2 — academic details (all optional)
@@ -66,9 +74,12 @@ export function OnboardingWizard({ onComplete, onCancel, existingProfile }: Onbo
   };
 
   const buildPayload = (): ProfileCreate => {
+    const allCredentials = selectedCredential
+      ? [...credentials, selectedCredential]
+      : credentials;
     const payload: ProfileCreate = {
       disciplines,
-      target_credentials: credentials,
+      target_credentials: allCredentials,
       first_gen: firstGen,
       minority_flag: minorityFlag,
       professional_affiliations: affiliations,
@@ -81,6 +92,8 @@ export function OnboardingWizard({ onComplete, onCancel, existingProfile }: Onbo
     if (disciplines.length > 0) {
       payload.primary_discipline = mapMajorToClinicalDiscipline(disciplines[0]);
     }
+    // Set target_credential from the cascading selection
+    if (selectedCredential) payload.target_credential = selectedCredential;
     if (clinicalPhase) payload.clinical_phase = clinicalPhase;
     if (gpa) payload.gpa = parseFloat(gpa);
     if (stateResidence) payload.state_residence = stateResidence.toUpperCase();
@@ -274,12 +287,23 @@ export function OnboardingWizard({ onComplete, onCancel, existingProfile }: Onbo
             </div>
 
             <div>
+              <CascadingCredentialSelect
+                label="Degree Level & Credential (optional)"
+                selectedLevel={degreeLevel}
+                selectedCredential={selectedCredential}
+                onLevelChange={setDegreeLevel}
+                onCredentialChange={setSelectedCredential}
+              />
+            </div>
+
+            {/* Additional multi-select credentials for users with multiple degrees */}
+            <div>
               <MultiSelect
-                label="Target Credentials (optional — select all that apply)"
+                label="Additional Credentials (optional — select all that apply)"
                 options={CREDENTIAL_OPTIONS}
                 selected={credentials}
                 onChange={setCredentials}
-                placeholder="Select credentials…"
+                placeholder="Select additional credentials…"
                 maxHeight={200}
               />
             </div>

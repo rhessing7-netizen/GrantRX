@@ -20,6 +20,7 @@ export type LeftPanelProps = {
   onUpgrade?: () => void;
   onOpenAuth?: () => void;
   onSignOut?: () => void;
+  onOpenAccountSettings?: () => void;
 };
 
 export function LeftPanel({
@@ -35,6 +36,7 @@ export function LeftPanel({
   onUpgrade,
   onOpenAuth,
   onSignOut,
+  onOpenAccountSettings,
 }: LeftPanelProps) {
   const [portalLoading, setPortalLoading] = useState(false);
   const [portalError, setPortalError] = useState<string | null>(null);
@@ -213,15 +215,25 @@ export function LeftPanel({
               {profile.subscription_tier === "premium" ? "Premium" : "Free"} tier
             </p>
 
-            {/* Sign Out button — makes login state immediately clear */}
-            {onSignOut && (
-              <button
-                onClick={onSignOut}
-                className="mt-2 w-full rounded-lg bg-slate-100 hover:bg-slate-200/80 text-slate-700 font-medium border border-slate-200/70 px-4 py-2 text-xs transition"
-              >
-                Sign Out
-              </button>
-            )}
+            {/* Account Settings + Sign Out buttons */}
+            <div className="mt-2 flex gap-2">
+              {onOpenAccountSettings && (
+                <button
+                  onClick={onOpenAccountSettings}
+                  className="flex-1 rounded-lg bg-slate-100 hover:bg-slate-200/80 text-slate-700 font-medium border border-slate-200/70 px-3 py-2 text-xs transition"
+                >
+                  Account Settings
+                </button>
+              )}
+              {onSignOut && (
+                <button
+                  onClick={onSignOut}
+                  className="flex-1 rounded-lg bg-slate-100 hover:bg-slate-200/80 text-slate-700 font-medium border border-slate-200/70 px-3 py-2 text-xs transition"
+                >
+                  Sign Out
+                </button>
+              )}
+            </div>
 
             {/* Manage Subscription & Invoices — premium users only */}
             {profile.subscription_tier === "premium" && (

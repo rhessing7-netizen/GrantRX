@@ -24,6 +24,11 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
   const [touched, setTouched] = useState<{ email: boolean; password: boolean }>({ email: false, password: false });
   const [termsShake, setTermsShake] = useState(false);
 
+  // OTP verification state
+  const [verifyScreen, setVerifyScreen] = useState(false);
+  const [otpCode, setOtpCode] = useState("");
+  const [pendingEmail, setPendingEmail] = useState("");
+
   if (!open) return null;
 
   const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
@@ -131,22 +136,35 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
 
       if (mode === "signup") {
         console.log("[AuthModal] Key length:", process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.length);
-        let signUpData: { user?: { id?: string } | null; session?: { access_token?: string } | null } | null = null;
+        let signUpData: { user?: { id?: string; email_confirmed_at?: string | null } | null; session?: { access_token?: string } | null } | null = null;
+        let signUpError: Error | null = null;
         try {
           const { data, error: authError } = await supabase.auth.signUp({
             email: email.trim(),
             password,
-            options: { data: { full_name: fullName.trim() } },
+            options: {
+              data: { full_name: fullName.trim() },
+              emailRedirectTo: `${window.location.origin}/auth/callback`,
+            },
           });
           if (authError) {
             console.error("[AuthModal] signUp returned error:", authError);
-            // Don't abort — fall through to fallback profile so user can proceed
+            signUpError = authError;
           } else {
             signUpData = data;
           }
         } catch (signUpErr) {
           console.error("[AuthModal] signUp threw:", signUpErr);
-          // Don't abort — fall through to fallback profile so user can proceed
+          signUpError = signUpErr as Error;
+        }
+
+        // If signUp succeeded but no session was returned, Supabase requires
+        // email confirmation — transition to the OTP verification screen.
+        if (!signUpError && signUpData?.user && !signUpData.session && !signUpData.user.email_confirmed_at) {
+          setPendingEmail(email.trim());
+          setVerifyScreen(true);
+          setSubmitting(false);
+          return;
         }
 
         // Set the auth token for API calls if a session was returned
@@ -156,7 +174,6 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
         }
 
         // Construct default base profile so the session never resets to null.
-        // Uses signUpData.user.id if available, otherwise a local fallback ID.
         const studentProfile = {
           id: signUpData?.user?.id || "usr_" + Date.now(),
           user_id: signUpData?.user?.id || "usr_" + Date.now(),
@@ -170,8 +187,7 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
           updated_at: new Date().toISOString(),
         };
 
-        // Store in localStorage immediately so the LeftPanel and feed
-        // recognize the user is logged in without waiting for backend sync.
+        // Store in localStorage immediately
         try {
           localStorage.setItem("grantrx_profile", JSON.stringify(studentProfile));
         } catch {
@@ -228,6 +244,78 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
     }
   };
 
+  const handleVerifyOtp = async () => {
+    if (otpCode.trim().length !== 6) {
+      setError("Please enter the 6-digit verification code.");
+      return;
+    }
+    setSubmitting(true);
+    setError(null);
+    try {
+      const { data, error: verifyError } = await supabase.auth.verifyOtp({
+        email: pendingEmail,
+        token: otpCode.trim(),
+        type: "signup",
+      });
+      if (verifyError) {
+        setError(verifyError.message);
+        setSubmitting(false);
+        return;
+      }
+
+      // Set the auth token if a session was created
+      if (data.session?.access_token) {
+        setAuthToken(data.session.access_token);
+      }
+
+      // Construct the student profile after successful verification
+      const studentProfile = {
+        id: data.user?.id || "usr_" + Date.now(),
+        user_id: data.user?.id || "usr_" + Date.now(),
+        full_name: fullName.trim(),
+        email: pendingEmail,
+        primary_discipline: "pharmacy",
+        target_credential: "PharmD",
+        clinical_phase: "Professional (P1-P4)",
+        gpa: 3.5,
+        state_residence: "OH",
+        updated_at: new Date().toISOString(),
+      };
+
+      try {
+        localStorage.setItem("grantrx_profile", JSON.stringify(studentProfile));
+      } catch {
+        // localStorage may be unavailable — proceed anyway
+      }
+
+      // Best-effort profile upsert
+      try {
+        if (data.user?.id) {
+          await supabase.from("profiles").upsert({
+            id: data.user.id,
+            user_id: data.user.id,
+            full_name: fullName.trim(),
+            email: pendingEmail,
+            terms_accepted_at: new Date().toISOString(),
+            privacy_accepted_at: new Date().toISOString(),
+            marketing_opt_in: marketingOptIn,
+            marketing_opt_in_at: marketingOptIn ? new Date().toISOString() : null,
+          });
+        }
+      } catch (dbErr) {
+        console.warn("Profile table upsert skipped:", dbErr);
+      }
+
+      setVerifyScreen(false);
+      onAuthSuccess(studentProfile as unknown as Profile);
+    } catch (err: any) {
+      console.error("[AuthModal] OTP verification error:", err);
+      setError(err?.message || "Verification failed. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-textPrimary/40 backdrop-blur-sm"
@@ -248,6 +336,58 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
           </svg>
         </button>
 
+        {/* OTP Verification Screen */}
+        {verifyScreen ? (
+          <div className="text-center">
+            <div className="mb-4 pr-6">
+              <h2 className="font-serif text-xl font-bold text-textPrimary">
+                Verify Your Email
+              </h2>
+              <p className="mt-1 text-sm text-textSecondary">
+                We sent a 6-digit code to{" "}
+                <span className="font-medium text-textPrimary">{pendingEmail}</span>.
+                Enter it below to complete your registration.
+              </p>
+            </div>
+
+            {error && (
+              <div className="mb-3 rounded-xl bg-red-50 px-4 py-2.5 text-sm text-red-700">
+                {error}
+              </div>
+            )}
+
+            <div className="space-y-4">
+              <input
+                type="text"
+                value={otpCode}
+                onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                placeholder="123456"
+                maxLength={6}
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                className="w-full rounded-xl border border-textSecondary/20 bg-surfaceBg px-4 py-3 text-center text-2xl font-bold tracking-[0.5em] text-textPrimary focus:border-crayolaBlue"
+              />
+              <button
+                onClick={handleVerifyOtp}
+                disabled={submitting || otpCode.length !== 6}
+                className="w-full rounded-full bg-crayolaBlue px-6 py-2.5 text-sm font-medium text-surfaceBg disabled:opacity-40"
+              >
+                {submitting ? "Verifying…" : "Verify Code"}
+              </button>
+              <button
+                onClick={() => {
+                  setVerifyScreen(false);
+                  setOtpCode("");
+                  setError(null);
+                }}
+                className="text-xs text-textSecondary hover:text-textPrimary"
+              >
+                Back to sign up
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div>
         {/* Header */}
         <div className="mb-4 text-center pr-6">
           <h2 className="font-serif text-xl font-bold text-textPrimary">
@@ -389,14 +529,14 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
             <div className="space-y-2.5 pt-1">
               {/* Terms & Privacy — mandatory */}
               <label
-                className={`flex items-start gap-2.5 text-sm text-textPrimary ${termsShake ? "animate-shake" : ""}`}
+                className={`flex items-start gap-2 text-xs text-slate-600 leading-normal ${termsShake ? "animate-shake" : ""}`}
                 style={termsShake ? { animation: "shake 0.4s ease-in-out" } : undefined}
               >
                 <input
                   type="checkbox"
                   checked={termsAccepted}
                   onChange={(e) => setTermsAccepted(e.target.checked)}
-                  className={`mt-0.5 h-4 w-4 accent-crayolaBlue ${termsShake ? "ring-2 ring-red-300 rounded" : ""}`}
+                  className={`h-4 w-4 shrink-0 rounded border-slate-300 text-blueEnergy focus:ring-blueEnergy/30 focus:ring-offset-0 ${termsShake ? "ring-2 ring-red-300" : ""}`}
                 />
                 <span>
                   I agree to the{" "}
@@ -421,12 +561,12 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
               </label>
 
               {/* Marketing opt-in — optional */}
-              <label className="flex items-start gap-2.5 text-sm text-textSecondary">
+              <label className="flex items-start gap-2 text-xs text-slate-600 leading-normal">
                 <input
                   type="checkbox"
                   checked={marketingOptIn}
                   onChange={(e) => setMarketingOptIn(e.target.checked)}
-                  className="mt-0.5 h-4 w-4 accent-crayolaBlue"
+                  className="h-4 w-4 shrink-0 rounded border-slate-300 text-blueEnergy focus:ring-blueEnergy/30 focus:ring-offset-0"
                 />
                 <span>
                   I opt in to receive scholarship alerts, updates, and email
@@ -458,6 +598,8 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
                 : "Sign In"}
           </button>
         </div>
+          </div>
+        )}
       </div>
     </div>
   );

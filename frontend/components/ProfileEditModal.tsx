@@ -9,10 +9,12 @@ import {
 } from "@/lib/types";
 import { getMetrosForState } from "@/lib/constants/metros";
 import { MAJOR_CATEGORIES, mapMajorToClinicalDiscipline } from "@/lib/constants/disciplines";
+import { type DegreeLevel } from "@/lib/constants/credentials";
 import { api } from "@/lib/api";
 import { supabase } from "@/lib/supabase";
 import { MultiSelect } from "./MultiSelect";
 import { GroupedMultiSelect } from "./GroupedMultiSelect";
+import { CascadingCredentialSelect } from "./CascadingCredentialSelect";
 
 export type ProfileEditModalProps = {
   open: boolean;
@@ -25,6 +27,10 @@ export type ProfileEditModalProps = {
 export function ProfileEditModal({ open, onClose, profile, onSaved, onDeleted }: ProfileEditModalProps) {
   const [disciplines, setDisciplines] = useState<string[]>(profile.disciplines ?? []);
   const [credentials, setCredentials] = useState<string[]>(profile.target_credentials ?? []);
+
+  // Cascading credential selection
+  const [degreeLevel, setDegreeLevel] = useState<DegreeLevel | "">("");
+  const [selectedCredential, setSelectedCredential] = useState(profile.target_credential ?? "");
   const [clinicalPhase, setClinicalPhase] = useState(profile.clinical_phase ?? "");
   const [gpa, setGpa] = useState(profile.gpa != null ? String(profile.gpa) : "");
   const [stateResidence, setStateResidence] = useState(profile.state_residence ?? "");
@@ -54,9 +60,12 @@ export function ProfileEditModal({ open, onClose, profile, onSaved, onDeleted }:
     setSaving(true);
     setError(null);
     try {
+      const allCredentials = selectedCredential
+        ? [...credentials, selectedCredential]
+        : credentials;
       const payload: ProfileUpdate = {
         disciplines,
-        target_credentials: credentials,
+        target_credentials: allCredentials,
         first_gen: firstGen,
         minority_flag: minorityFlag,
         professional_affiliations: affiliations,
@@ -69,6 +78,8 @@ export function ProfileEditModal({ open, onClose, profile, onSaved, onDeleted }:
       if (disciplines.length > 0) {
         payload.primary_discipline = mapMajorToClinicalDiscipline(disciplines[0]);
       }
+      // Set target_credential from the cascading selection
+      if (selectedCredential) payload.target_credential = selectedCredential;
       if (clinicalPhase) payload.clinical_phase = clinicalPhase;
       if (gpa) payload.gpa = parseFloat(gpa);
       if (stateResidence) payload.state_residence = stateResidence.toUpperCase();
@@ -123,13 +134,22 @@ export function ProfileEditModal({ open, onClose, profile, onSaved, onDeleted }:
             maxHeight={320}
           />
 
-          {/* Multi-select credentials */}
+          {/* Cascading credential selection */}
+          <CascadingCredentialSelect
+            label="Degree Level & Credential"
+            selectedLevel={degreeLevel}
+            selectedCredential={selectedCredential}
+            onLevelChange={setDegreeLevel}
+            onCredentialChange={setSelectedCredential}
+          />
+
+          {/* Additional multi-select credentials */}
           <MultiSelect
-            label="Target Credentials"
+            label="Additional Credentials"
             options={CREDENTIAL_OPTIONS}
             selected={credentials}
             onChange={setCredentials}
-            placeholder="Select credentials…"
+            placeholder="Select additional credentials…"
             maxHeight={200}
           />
 
