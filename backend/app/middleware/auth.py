@@ -11,6 +11,7 @@ from starlette.responses import JSONResponse
 logger = logging.getLogger(__name__)
 
 PUBLIC_PATHS = {
+    "/",
     "/health",
     "/docs",
     "/openapi.json",

@@ -93,6 +93,12 @@ def run_startup_archival():
         logger.warning("Startup archival skipped: %s", exc)
 
 
+@app.get("/")
+@app.head("/")
+async def root():
+    return {"status": "healthy", "service": "GrantRx API"}
+
+
 @app.get("/health")
 def health():
     return {"status": "ok"}
