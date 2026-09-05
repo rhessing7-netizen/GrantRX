@@ -118,5 +118,12 @@
     "name": "University of Pittsburgh School of Pharmacy Awards",
     "region": "PA",
     "category": "academic_institution"
+  },
+  {
+    "url": "https://cof.org/page/community-foundation-locator",
+    "name": "Council on Foundations — Community Foundation Locator",
+    "region": "National",
+    "category": "regional_foundation",
+    "scraper_type": "playwright"
   }
 ]

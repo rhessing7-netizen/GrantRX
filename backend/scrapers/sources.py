@@ -31,6 +31,10 @@ CATEGORIES = {
     "corporate_healthcare",
     "regional_foundation",
     "honor_society",
+    "chamber_of_commerce",
+    "faith_based_community",
+    "local_business",
+    "institutional_department",
 }
 
 SCRAPER_TYPES = {"deterministic", "playwright", "llm_fallback"}

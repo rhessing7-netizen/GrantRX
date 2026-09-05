@@ -78,6 +78,45 @@ class LLMScholarship(BaseModel):
             "Empty if no metro-level restriction."
         ),
     )
+    provider_type: Optional[str] = Field(
+        None,
+        description=(
+            "Type of sponsoring organization, e.g. 'community_foundation', "
+            "'hospital_system', 'national_association', 'state_agency', "
+            "'corporate', 'faith_based', 'local_business', 'academic_department'. "
+            "Null if not determinable."
+        ),
+    )
+    provider_mission: Optional[str] = Field(
+        None,
+        description=(
+            "Brief summary of the sponsoring organization's mission statement "
+            "or purpose, if available on the page. Null if not found."
+        ),
+    )
+    provider_core_values: List[str] = Field(
+        default_factory=list,
+        description=(
+            "Core values or guiding principles of the sponsoring organization "
+            "(e.g. ['equity', 'service', 'compassion']). Empty if not found."
+        ),
+    )
+    is_local: bool = Field(
+        False,
+        description=(
+            "True if the scholarship is specifically local to a city, county, "
+            "parish, or university community (not a national award). "
+            "False if national or if locality is unclear."
+        ),
+    )
+    target_community: Optional[str] = Field(
+        None,
+        description=(
+            "The specific municipality, county, parish, or university name "
+            "the award is local to (e.g. 'Cleveland, OH', 'Cuyahoga County', "
+            "'University of Michigan'). Null if not local or not specified."
+        ),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -103,6 +142,20 @@ SYSTEM_PROMPT = (
     "  If no explicit apply button or link is found in the page text, default "
     "  directly to the source's exact input URL rather than guessing or "
     "  constructing a link.\n"
+    "- Provider type: Classify the sponsoring organization type (e.g. "
+    "  'community_foundation', 'hospital_system', 'national_association', "
+    "  'state_agency', 'corporate', 'faith_based', 'local_business', "
+    "  'academic_department'). Null if not determinable.\n"
+    "- Provider mission: If the page includes a mission statement or purpose "
+    "  for the sponsoring organization, summarize it briefly. Null if not found.\n"
+    "- Provider core values: Extract any stated core values or guiding principles "
+    "  of the organization (e.g. 'equity', 'service', 'compassion'). Empty if none.\n"
+    "- Is local: Set to true if the award is specifically targeted at residents "
+    "  of a particular city, county, parish, or university community. Set to false "
+    "  for national awards or when locality is unclear.\n"
+    "- Target community: If is_local is true, specify the municipality, county, "
+    "  parish, or university name (e.g. 'Cleveland, OH', 'Cuyahoga County', "
+    "  'University of Michigan'). Null if not local or not specified.\n"
     "Only include disciplines from this controlled vocabulary: "
     "pharmacy, medicine, nursing, therapeutics_rehab, diagnostic_imaging, "
     "public_health_emergency. If a field is not present, return null or an empty "
@@ -254,4 +307,9 @@ async def extract_with_llm(html: str, url: str) -> Optional[ScholarshipExtract]:
         required_affiliations=result.required_affiliations,
         matching_tags=result.matching_tags,
         source="llm",
+        provider_type=result.provider_type,
+        provider_mission=result.provider_mission,
+        provider_core_values=result.provider_core_values or [],
+        is_local=result.is_local,
+        target_community=result.target_community,
     )

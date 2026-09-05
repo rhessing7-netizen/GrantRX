@@ -315,6 +315,11 @@ def _to_db_dict(extract: ScholarshipExtract) -> dict:
         "matching_tags": extract.matching_tags or [],
         "is_archived": is_archived,
         "estimated_next_cycle": estimated_next_cycle,
+        "provider_type": extract.provider_type,
+        "provider_mission": extract.provider_mission,
+        "provider_core_values": extract.provider_core_values or [],
+        "is_local": extract.is_local,
+        "target_community": extract.target_community,
         "updated_at": datetime.utcnow(),
     }
 

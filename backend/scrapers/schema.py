@@ -33,6 +33,12 @@ class ScholarshipExtract(BaseModel):
     # Source metadata (populated by the runner from SourceConfig)
     source_category: str = ""
     source_name: str = ""
+    # Provider alignment & local discovery fields
+    provider_type: Optional[str] = None
+    provider_mission: Optional[str] = None
+    provider_core_values: List[str] = []
+    is_local: bool = False
+    target_community: Optional[str] = None
 
     def is_critical_complete(self) -> bool:
         """Return True if all critical fields are populated and parseable."""

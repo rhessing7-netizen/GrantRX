@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, Column, Date, DateTime, Float, ForeignKey, Integer, Text
+from sqlalchemy import Boolean, Column, Date, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import ARRAY, ENUM, JSONB, UUID
 from sqlalchemy.orm import relationship
 
@@ -94,6 +94,12 @@ class Scholarship(Base):
     matching_tags = Column(ARRAY(Text), default=list)
     is_archived = Column(Boolean, default=False)
     estimated_next_cycle = Column(Date, nullable=True)
+    # Provider alignment & local discovery fields
+    provider_type = Column(String, nullable=True)
+    provider_mission = Column(Text, nullable=True)
+    provider_core_values = Column(ARRAY(Text), default=list)
+    is_local = Column(Boolean, default=False, index=True)
+    target_community = Column(String, nullable=True)
     created_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
 
