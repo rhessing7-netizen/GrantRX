@@ -180,7 +180,12 @@ def send_via_resend(payloads: List[DigestPayload]) -> int:
         logger.warning("resend package not installed — skipping send")
         return 0
 
-    resend.api_key = api_key
+    try:
+        resend.api_key = api_key
+    except Exception as exc:  # noqa: BLE001
+        logger.error("Failed to configure Resend API key: %s", exc)
+        return 0
+
     from_email = os.getenv("DIGEST_FROM_EMAIL", "digest@grantrx.app")
     sent = 0
     for p in payloads:
@@ -269,6 +274,9 @@ def main(argv: Optional[List[str]] = None) -> int:
     db = SessionLocal()
     try:
         digests = build_digests(db)
+    except Exception as exc:  # noqa: BLE001
+        logger.error("Failed to build digests: %s", exc)
+        return 1
     finally:
         db.close()
 
@@ -292,8 +300,12 @@ def main(argv: Optional[List[str]] = None) -> int:
         print(f"[dry-run] {len(digests)} digest(s) would be sent.")
         return 0
 
-    sent = send_digests(digests)
-    logger.info("Sent %d/%d digest emails", sent, len(digests))
+    try:
+        sent = send_digests(digests)
+        logger.info("Sent %d/%d digest emails", sent, len(digests))
+    except Exception as exc:  # noqa: BLE001
+        logger.error("Failed to send digests: %s", exc)
+        return 1
     return 0
 
 

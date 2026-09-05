@@ -169,6 +169,7 @@ function ScholarshipCard({
   tracking: boolean;
   fading: boolean;
 }) {
+  const [imgLoaded, setImgLoaded] = useState(false);
   const locked = scholarship.is_locked && !isPremium;
   const badge = scoreColor(scholarship.score);
   const bannerUrl = getBannerUrl(scholarship.eligible_disciplines);
@@ -180,18 +181,27 @@ function ScholarshipCard({
         locked ? "ring-1 ring-textSecondary/10" : ""
       } ${fading ? "opacity-0 scale-95 max-h-0 pointer-events-none" : "opacity-100"}`}
     >
-      {/* Discipline banner image — explicit height + bg to prevent collapse */}
+      {/* Discipline banner image — explicit height + shimmer placeholder to prevent CLS */}
       <div className="relative h-24 w-full overflow-hidden rounded-t-2xl bg-slate-100">
+        {/* Shimmer placeholder — visible until image loads */}
+        {!imgLoaded && (
+          <div className="absolute inset-0 animate-pulse bg-gradient-to-r from-slate-100 via-slate-200 to-slate-100" />
+        )}
         {/* eslint-disable-next-line @next/next/no-img-element -- external CDN image */}
         <img
           src={bannerUrl}
           alt=""
-          className="object-cover w-full h-full"
+          className={`object-cover w-full h-full transition-opacity duration-300 ${
+            imgLoaded ? "opacity-100" : "opacity-0"
+          }`}
           loading="lazy"
+          onLoad={() => setImgLoaded(true)}
           onError={(e) => {
             const img = e.currentTarget;
             if (img.src !== FALLBACK_BANNER) {
               img.src = FALLBACK_BANNER;
+            } else {
+              setImgLoaded(true);
             }
           }}
         />

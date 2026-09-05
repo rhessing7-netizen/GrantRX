@@ -66,11 +66,8 @@ jobs:
             echo "=== Scraping category: $CATEGORY ==="
             python -m scrapers.runner --category="$CATEGORY" $LIMIT_ARG
           else
-            echo "=== Scraping all high-yield categories ==="
-            python -m scrapers.runner --category=national_association $LIMIT_ARG
-            python -m scrapers.runner --category=corporate_unrestricted $LIMIT_ARG
-            python -m scrapers.runner --category=diversity_affinity $LIMIT_ARG
-            python -m scrapers.runner --category=hospital_system $LIMIT_ARG
+            echo "=== Scraping all categories ==="
+            python -m scrapers.runner --category=all $LIMIT_ARG
           fi
 
       - name: Run link & deadline maintenance sweep
@@ -84,6 +81,8 @@ jobs:
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
           DIGEST_FROM_EMAIL: ${{ vars.DIGEST_FROM_EMAIL }}
         run: |
           DRY_RUN="${{ github.event.inputs.dry_run }}"

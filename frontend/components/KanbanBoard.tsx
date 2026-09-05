@@ -19,10 +19,10 @@ import type { AppStatus, ChecklistItem, UserScholarship, VaultDocument } from "@
 import { api } from "@/lib/api";
 
 const COLUMNS: { id: AppStatus; label: string; accent: string; emptyHint: string }[] = [
-  { id: "saved", label: "Saved", accent: "border-textSecondary/20", emptyHint: "No applications saved yet — bookmark grants from the Discovery feed." },
-  { id: "in_progress", label: "In Progress", accent: "border-skyAqua", emptyHint: "Drag saved grants here when you start applying." },
-  { id: "submitted", label: "Submitted", accent: "border-blueEnergy", emptyHint: "Applications you've submitted will appear here." },
-  { id: "awarded", label: "Awarded", accent: "border-aquamarine", emptyHint: "Celebrate your wins — awarded grants land here." },
+  { id: "saved", label: "Saved", accent: "border-textSecondary/20", emptyHint: "Bookmark grants from the Discovery Feed and they'll show up here for tracking." },
+  { id: "in_progress", label: "In Progress", accent: "border-skyAqua", emptyHint: "Drag a saved grant here when you start working on your application." },
+  { id: "submitted", label: "Submitted", accent: "border-blueEnergy", emptyHint: "Once you've submitted an application, drag it here to track the outcome." },
+  { id: "awarded", label: "Awarded", accent: "border-aquamarine", emptyHint: "Your wins will land here. Keep applying — every award counts!" },
 ];
 
 const FREE_ACTIVE_LIMIT = 3;
@@ -312,16 +312,16 @@ function KanbanColumn({
 
       <div className="space-y-3">
         {items.length === 0 && (
-          <div className="rounded-xl border border-dashed border-textSecondary/15 py-8 px-4 text-center">
-            <div className="mx-auto mb-3 h-13 w-13 bg-skyAqua/10 border border-skyAqua/20 flex items-center justify-center rounded-2xl text-blueEnergy">
+          <div className="rounded-xl border border-dashed border-textSecondary/15 py-8 px-4 text-center bg-white/50">
+            <div className="mx-auto mb-3 h-12 w-12 bg-skyAqua/10 border border-skyAqua/20 flex items-center justify-center rounded-2xl text-blueEnergy">
               <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
               </svg>
             </div>
             <p className="text-sm font-medium text-textSecondary">
-              No applications here yet
+              Nothing here yet
             </p>
-            <p className="mt-1 text-xs text-textSecondary/60">
+            <p className="mt-1 text-xs leading-relaxed text-textSecondary/60">
               {emptyHint}
             </p>
           </div>

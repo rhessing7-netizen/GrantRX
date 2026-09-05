@@ -71,6 +71,23 @@ export function LeftPanel({
     : 0;
 
   // Dynamic recommendation based on the highest-impact missing fields
+  // Dynamic unlock guidance: list specific missing profile vectors
+  const unlockGuidance = (() => {
+    if (!profile) return null;
+    if (profileStrength >= 100) return null;
+    const missing: string[] = [];
+    if (!profile.disciplines?.length && !profile.primary_discipline) missing.push("Field of Study");
+    if (!profile.target_credentials?.length && !profile.target_credential) missing.push("Target Credential");
+    if (!profile.clinical_phase) missing.push("Clinical Phase");
+    if (profile.gpa == null) missing.push("GPA");
+    if (!profile.state_residence) missing.push("State of Residence");
+    if (!profile.metro_area) missing.push("Metro Area");
+    if (profile.sai_score == null) missing.push("SAI Score");
+    if (!profile.first_gen && !profile.minority_flag) missing.push("Demographics");
+    if (!profile.professional_affiliations?.length) missing.push("Affiliations");
+    return missing;
+  })();
+
   const strengthPrompt = (() => {
     if (!profile) return null;
     if (profileStrength > 70) {
@@ -101,7 +118,7 @@ export function LeftPanel({
   return (
     <div className="space-y-6">
       {/* Profile summary — frosted glass */}
-      <section className="bg-white/85 backdrop-blur-md rounded-2xl border border-slate-200/80 shadow-sm p-6">
+      <section className="bg-white/95 backdrop-blur-md rounded-2xl border border-slate-200 shadow-xs p-6">
         <div className="flex items-center justify-between">
           <h2 className="font-serif text-xl font-semibold text-textPrimary">
             Student Profile
@@ -156,6 +173,33 @@ export function LeftPanel({
                   {"\u26A1"} {strengthPrompt}
                 </p>
               )}
+
+              {/* Dynamic unlock guidance — missing profile vectors */}
+              {unlockGuidance && unlockGuidance.length > 0 && (
+                <div className="mt-3 space-y-1.5">
+                  <p className="text-xs font-medium text-textSecondary/70">
+                    Unlock more matches by adding:
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {unlockGuidance.slice(0, 5).map((field) => (
+                      <span
+                        key={field}
+                        className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 text-xs text-textSecondary border border-slate-200"
+                      >
+                        <svg className="h-3 w-3 text-textSecondary/50" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                        </svg>
+                        {field}
+                      </span>
+                    ))}
+                    {unlockGuidance.length > 5 && (
+                      <span className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-1 text-xs text-textSecondary border border-slate-200">
+                        +{unlockGuidance.length - 5} more
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         ) : (
@@ -176,7 +220,7 @@ export function LeftPanel({
       </section>
 
       {/* Search — frosted glass */}
-      <section className="bg-white/85 backdrop-blur-md rounded-2xl border border-slate-200/80 shadow-sm p-6">
+      <section className="bg-white/95 backdrop-blur-md rounded-2xl border border-slate-200 shadow-xs p-6">
         <label className="text-sm font-medium text-textSecondary">
           Keyword Search
         </label>
@@ -250,7 +294,7 @@ export function LeftPanel({
       </section>
 
       {/* Metro Area filter — frosted glass */}
-      <section className="bg-white/85 backdrop-blur-md rounded-2xl border border-slate-200/80 shadow-sm p-6">
+      <section className="bg-white/95 backdrop-blur-md rounded-2xl border border-slate-200 shadow-xs p-6">
         <label className="text-sm font-medium text-textSecondary">
           Metro Area Filter
         </label>
@@ -278,7 +322,7 @@ export function LeftPanel({
 
       {/* Usage tracker — frosted glass */}
       {usage && (
-        <section className="bg-white/85 backdrop-blur-md rounded-2xl border border-slate-200/80 shadow-sm p-6">
+        <section className="bg-white/95 backdrop-blur-md rounded-2xl border border-slate-200 shadow-xs p-6">
           <h3 className="font-serif text-lg font-semibold text-textPrimary">
             Keyword Search Quota
           </h3>
