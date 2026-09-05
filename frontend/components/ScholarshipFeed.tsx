@@ -31,13 +31,6 @@ function getBannerUrl(disciplines: string[] | undefined): string {
   return DISCIPLINE_BANNERS[first] ?? FALLBACK_BANNER;
 }
 
-function scoreColor(score: number) {
-  if (score >= 80) return { bg: "#73FBD3", text: "#0F172A" }; // Aquamarine w/ dark text
-  if (score >= 60) return { bg: "#59D2FE", text: "#0F172A" }; // Sky Aqua w/ dark text
-  if (score >= 40) return { bg: "#4A8FE7", text: "#FFFFFF" }; // Blue Energy w/ white text
-  return { bg: "rgba(100,116,139,0.2)", text: "#64748B" }; // muted slate
-}
-
 export const ScholarshipFeed = ({ results, isPremium, onTrack, onUnlock }: ScholarshipFeedProps) => {
   const [tracking, setTracking] = useState<string | null>(null);
   // Feed curation: ids animating out, ids fully hidden, and undo toast state
@@ -174,7 +167,6 @@ function ScholarshipCard({
   const [reportReason, setReportReason] = useState<"broken_link" | "inaccurate_deadline" | "expired">("broken_link");
   const [reportSubmitted, setReportSubmitted] = useState(false);
   const locked = scholarship.is_locked && !isPremium;
-  const badge = scoreColor(scholarship.score);
   const bannerUrl = getBannerUrl(scholarship.eligible_disciplines);
   const providerInitial = (scholarship.provider?.trim()?.charAt(0) || "G").toUpperCase();
 
@@ -190,7 +182,7 @@ function ScholarshipCard({
 
   return (
     <article
-      className={`bg-white rounded-2xl border border-slate-150 shadow-sm hover:shadow-xl hover:shadow-blueEnergy/10 hover:-translate-y-1 transition-all duration-300 overflow-hidden flex flex-col ${
+      className={`bg-white rounded-2xl border border-slate-200 shadow-xs hover:shadow-md hover:border-slate-300 transition-all duration-200 overflow-hidden flex flex-col ${
         locked ? "ring-1 ring-textSecondary/10" : ""
       } ${fading ? "opacity-0 scale-95 max-h-0 pointer-events-none" : "opacity-100"}`}
     >
@@ -218,13 +210,13 @@ function ScholarshipCard({
             }
           }}
         />
-        {/* Soft gradient overlay fading to white at bottom */}
-        <div className="absolute inset-0 bg-gradient-to-t from-white via-white/50 to-transparent" />
+        {/* Darkened gradient overlay anchored to bottom for text contrast */}
+        <div className="absolute inset-0 bg-gradient-to-t from-slate-950/60 via-transparent to-transparent" />
       </div>
 
       {/* Provider avatar — overlaps banner bottom-left and card body */}
       <div className="relative z-10 -mt-6 ml-5">
-        <div className="h-11 w-11 flex items-center justify-center font-bold text-white text-sm rounded-xl border-2 border-white shadow-md bg-gradient-to-br from-crayolaBlue to-blueEnergy">
+        <div className="h-11 w-11 flex items-center justify-center font-bold text-white text-sm rounded-xl ring-2 ring-white shadow-md bg-gradient-to-br from-crayolaBlue to-blueEnergy">
           {providerInitial}
         </div>
       </div>
@@ -245,10 +237,10 @@ function ScholarshipCard({
               </>
             ) : (
               <>
-                <h3 className="font-serif text-lg font-semibold text-textPrimary">
+                <h3 className="font-serif text-slate-900 font-bold text-lg leading-snug">
                   {scholarship.title}
                 </h3>
-                <p className="mt-0.5 text-sm text-textSecondary">
+                <p className="mt-0.5 text-slate-600 font-medium text-xs tracking-wide uppercase">
                   {scholarship.provider}
                 </p>
                 {/* Metro restriction badges — soft glowing pills */}
@@ -273,8 +265,11 @@ function ScholarshipCard({
           </div>
           <div className="flex shrink-0 items-start gap-2">
             <span
-              className="rounded-full px-3 py-1 text-xs font-bold"
-              style={{ backgroundColor: badge.bg, color: badge.text }}
+              className={
+                scholarship.score >= 80
+                  ? "bg-aquamarine text-slate-950 font-bold px-2.5 py-1 rounded-full text-xs shadow-xs"
+                  : "bg-slate-100 text-slate-800 border border-slate-200 font-semibold px-2.5 py-1 rounded-full text-xs"
+              }
             >
               {scholarship.score}% Match
             </span>
@@ -342,13 +337,13 @@ function ScholarshipCard({
               </span>
             </div>
 
-            {/* Missing criteria — soft glowing pills */}
+            {/* Missing criteria — warm warning chips */}
             {scholarship.missing_criteria.length > 0 && (
               <div className="mt-3 flex flex-wrap gap-2">
                 {scholarship.missing_criteria.map((c) => (
                   <span
                     key={c}
-                    className="bg-aquamarine/25 text-slate-900 border border-aquamarine/50 font-semibold px-2.5 py-1 rounded-full text-xs flex items-center gap-1.5"
+                    className="bg-amber-50 text-amber-900 border border-amber-200/80 font-medium px-2 py-0.5 rounded-md text-xs flex items-center gap-1.5"
                   >
                     {c}
                   </span>
