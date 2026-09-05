@@ -60,18 +60,8 @@ export default function Home() {
     }
   }, []);
 
-  // Check for existing Supabase session on mount.
-  // If the user is unauthenticated (guest visitor), do NOT throw or set an
-  // error state — simply load the public/fallback scholarships.
-  // (Feed loading is deferred to after loadFeed is defined below.)
-  useEffect(() => {
-    if (!supabase) return;
-    supabase.auth.getSession().then(({ data }) => {
-      if (data.session?.access_token) {
-        setAuthToken(data.session.access_token);
-      }
-    });
-  }, []);
+  // Session check and auth state listener are defined after loadFeed below
+  // because they depend on loadFeed for immediate feed hydration after OAuth.
 
   // Detect ?onboarding=open from OAuth callback redirect
   useEffect(() => {
@@ -171,6 +161,85 @@ export default function Home() {
   // unauthenticated users without throwing or setting an error banner.
   useEffect(() => {
     loadFeed();
+  }, [loadFeed]);
+
+  // Check for existing Supabase session on mount and listen for auth state
+  // changes (covers Google/LinkedIn OAuth redirects that arrive after mount).
+  // Hydrates the profile from localStorage, Supabase, or OAuth user_metadata
+  // so the LeftPanel and feed recognize the user immediately.
+  useEffect(() => {
+    if (!supabase) return;
+
+    // Helper: hydrate profile from session
+    const hydrateProfile = async (session: { user?: { id?: string; email?: string; user_metadata?: Record<string, unknown> } | null; access_token?: string } | null) => {
+      if (!session?.user) return;
+      if (session.access_token) setAuthToken(session.access_token);
+
+      // 1. Check localStorage for a cached profile
+      try {
+        const cached = localStorage.getItem("grantrx_profile");
+        if (cached) {
+          setProfile(JSON.parse(cached));
+        }
+      } catch {
+        // localStorage may be unavailable or contain invalid JSON — ignore
+      }
+
+      // 2. Query Supabase directly for the user's profile row
+      try {
+        const { data: sbProfile } = await supabase
+          .from("profiles")
+          .select("*")
+          .eq("id", session.user.id)
+          .maybeSingle();
+
+        if (sbProfile && sbProfile.primary_discipline) {
+          setProfile(sbProfile);
+          localStorage.setItem("grantrx_profile", JSON.stringify(sbProfile));
+          loadFeed();
+        } else {
+          // New OAuth user: seed profile from OAuth user_metadata
+          const metaName =
+            (session.user.user_metadata?.full_name as string) ||
+            (session.user.user_metadata?.name as string) ||
+            "Student";
+          const metaEmail = session.user.email || "";
+          const newOAuthProfile = {
+            id: session.user.id,
+            user_id: session.user.id,
+            full_name: metaName,
+            email: metaEmail,
+            primary_discipline: sbProfile?.primary_discipline || "pharmacy",
+            target_credential: sbProfile?.target_credential || "PharmD",
+            clinical_phase: sbProfile?.clinical_phase || "Professional (P1-P4)",
+            gpa: sbProfile?.gpa || 3.5,
+            state_residence: sbProfile?.state_residence || "OH",
+            updated_at: new Date().toISOString(),
+          };
+          setProfile(newOAuthProfile as unknown as Profile);
+          localStorage.setItem("grantrx_profile", JSON.stringify(newOAuthProfile));
+          loadFeed();
+        }
+      } catch {
+        // Supabase query failed — the localStorage profile (if any) is enough
+      }
+    };
+
+    // Initial session check
+    supabase.auth.getSession().then(({ data }) => {
+      hydrateProfile(data.session as Parameters<typeof hydrateProfile>[0]);
+    });
+
+    // Listen for auth state changes (OAuth redirects, token refreshes, etc.)
+    const { data: authListener } = supabase.auth.onAuthStateChange(
+      async (_event, session) => {
+        hydrateProfile(session as Parameters<typeof hydrateProfile>[0]);
+      },
+    );
+
+    return () => {
+      authListener?.subscription?.unsubscribe();
+    };
   }, [loadFeed]);
 
   // Explicit keyword search (consumes a search quota for free users).
