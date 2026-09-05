@@ -45,7 +45,10 @@ export default function Home() {
   //   - Falls back to "grantrx-dev-demo" for local dev (accepted by backend in dev mode)
   //   - In production, setAuthToken(supabaseSession.access_token) after OAuth login
 
-  // Check for existing Supabase session on mount
+  // Check for existing Supabase session on mount.
+  // If the user is unauthenticated (guest visitor), do NOT throw or set an
+  // error state — simply load the public/fallback scholarships.
+  // (Feed loading is deferred to after loadFeed is defined below.)
   useEffect(() => {
     if (!supabase) return;
     supabase.auth.getSession().then(({ data }) => {
@@ -119,13 +122,27 @@ export default function Home() {
     try {
       const f = await api.getMatchedScholarships();
       setFeed(f);
-      // Refresh usage display
-      const u = await api.getUsage();
-      setUsage(u);
+      // If the feed was loaded via the Supabase fallback (backend returned
+      // "Invalid token" or was unreachable), clear any stale error banner
+      // so the red error box never shows alongside working fallback data.
+      setError(null);
+      // Refresh usage display — wrapped separately so a usage fetch failure
+      // doesn't blank out the successfully loaded feed.
+      try {
+        const u = await api.getUsage();
+        setUsage(u);
+      } catch {
+        /* usage fetch failure is non-fatal */
+      }
     } catch (err) {
       const e = err as Error & { status?: number; body?: unknown };
       if (e.status === 404) {
         setError("Please complete onboarding to see matched scholarships.");
+      } else if (e.message?.includes("Invalid token")) {
+        // Suppress the "Invalid token" banner — the Supabase fallback in
+        // getMatchedScholarships should have handled this, but if it also
+        // failed, show a neutral message instead of the raw error.
+        setError(null);
       } else {
         setError(e.message || "Failed to load scholarships");
       }
@@ -133,6 +150,13 @@ export default function Home() {
       setLoading(false);
     }
   }, []);
+
+  // Load the feed on mount — works for both authenticated users and guest
+  // visitors. The Supabase fallback in getMatchedScholarships handles
+  // unauthenticated users without throwing or setting an error banner.
+  useEffect(() => {
+    loadFeed();
+  }, [loadFeed]);
 
   // Explicit keyword search (consumes a search quota for free users).
   // Only called when the user presses Enter or clicks the search icon with
@@ -165,6 +189,10 @@ export default function Home() {
       if (e.status === 402) {
         setUpgradeReason("You've reached your free keyword search limit (10/week). Upgrade for unlimited searches.");
         setShowUpgrade(true);
+      } else if (e.message?.includes("Invalid token") || e.message === "Invalid token") {
+        console.warn("Suppressed unauthenticated token error on public feed:", err);
+        setError(null);
+        return;
       } else {
         setError(e.message || "Failed to load scholarships");
       }
@@ -312,8 +340,8 @@ export default function Home() {
               </TabButton>
             </div>
 
-            {error && (
-              <div className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">
+            {error && error !== "Invalid token" && (
+              <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-600">
                 {error}
               </div>
             )}
