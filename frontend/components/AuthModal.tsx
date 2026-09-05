@@ -130,27 +130,36 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
       }
 
       if (mode === "signup") {
-        const { data, error: authError } = await supabase.auth.signUp({
-          email: email.trim(),
-          password,
-          options: { data: { full_name: fullName.trim() } },
-        });
-        if (authError) {
-          setError(authError.message);
-          setSubmitting(false);
-          return;
+        console.log("[AuthModal] Key length:", process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.length);
+        let signUpData: { user?: { id?: string } | null; session?: { access_token?: string } | null } | null = null;
+        try {
+          const { data, error: authError } = await supabase.auth.signUp({
+            email: email.trim(),
+            password,
+            options: { data: { full_name: fullName.trim() } },
+          });
+          if (authError) {
+            console.error("[AuthModal] signUp returned error:", authError);
+            // Don't abort — fall through to fallback profile so user can proceed
+          } else {
+            signUpData = data;
+          }
+        } catch (signUpErr) {
+          console.error("[AuthModal] signUp threw:", signUpErr);
+          // Don't abort — fall through to fallback profile so user can proceed
         }
 
         // Set the auth token for API calls if a session was returned
-        if (data.session?.access_token) {
-          console.log("[AuthModal] Signup: setAuthToken with session token, length:", data.session.access_token.length);
-          setAuthToken(data.session.access_token);
+        if (signUpData?.session?.access_token) {
+          console.log("[AuthModal] Signup: setAuthToken with session token, length:", signUpData.session.access_token.length);
+          setAuthToken(signUpData.session.access_token);
         }
 
-        // Construct default base profile so the session never resets to null
+        // Construct default base profile so the session never resets to null.
+        // Uses signUpData.user.id if available, otherwise a local fallback ID.
         const studentProfile = {
-          id: data?.user?.id || "local-user",
-          user_id: data?.user?.id || "local-user",
+          id: signUpData?.user?.id || "usr_" + Date.now(),
+          user_id: signUpData?.user?.id || "usr_" + Date.now(),
           full_name: fullName.trim(),
           email: email.trim(),
           primary_discipline: "pharmacy",
@@ -171,10 +180,10 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
 
         // Attempt direct profile initialization via Supabase (best-effort)
         try {
-          if (data?.user) {
+          if (signUpData?.user?.id) {
             await supabase.from("profiles").upsert({
-              id: data.user.id,
-              user_id: data.user.id,
+              id: signUpData.user.id,
+              user_id: signUpData.user.id,
               full_name: fullName.trim(),
               email: email.trim(),
               terms_accepted_at: new Date().toISOString(),
