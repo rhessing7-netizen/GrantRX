@@ -55,6 +55,21 @@ export default function Home() {
     });
   }, []);
 
+  // Detect ?onboarding=open from OAuth callback redirect
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("onboarding") === "open") {
+      setShowOnboarding(true);
+      // Clean up the URL param
+      params.delete("onboarding");
+      const cleanUrl = params.toString()
+        ? `${window.location.pathname}?${params.toString()}`
+        : window.location.pathname;
+      window.history.replaceState({}, "", cleanUrl);
+    }
+  }, []);
+
   // Load profile + usage on mount
   const loadProfileAndUsage = useCallback(async () => {
     try {
@@ -203,6 +218,12 @@ export default function Home() {
 
   const handleAuthSuccess = (p: Profile | null) => {
     setShowAuth(false);
+    // Clean up OAuth consent data from localStorage now that auth is complete
+    try {
+      localStorage.removeItem("grantrx_oauth_consent");
+    } catch {
+      // localStorage may be unavailable — ignore
+    }
     if (p) {
       setProfile(p);
       // Profile already complete — show discovery feed (initial load, no search consumed)

@@ -91,10 +91,27 @@ export async function GET(request: Request) {
     (user.user_metadata?.name as string | undefined) ??
     null;
   const email = user.email ?? null;
-  const marketingOptIn =
-    (user.user_metadata?.marketing_opt_in as boolean | undefined) ?? false;
+
+  // Read consent flags from the cookie set by AuthModal before OAuth redirect.
+  // These survive the OAuth round-trip (queryParams to the provider do not).
+  let marketingOptIn = false;
+  let consentFullName: string | null = null;
+  const consentCookie = cookieStore.get("grantrx_consent");
+  if (consentCookie?.value) {
+    try {
+      const consent = JSON.parse(consentCookie.value);
+      marketingOptIn = consent.marketing_opt_in === true;
+      consentFullName = consent.full_name ?? null;
+    } catch {
+      // Malformed cookie — fall back to defaults
+    }
+  }
+
+  // Use the consent-stored full_name if the OAuth payload didn't provide one
+  const effectiveFullName = fullName ?? consentFullName;
 
   // Upsert the backend profile with consent timestamps
+  let profileExists = false;
   try {
     const resp = await fetch(`${apiUrl}/profiles`, {
       method: "POST",
@@ -103,7 +120,7 @@ export async function GET(request: Request) {
         Authorization: `Bearer ${session.access_token}`,
       },
       body: JSON.stringify({
-        full_name: fullName,
+        full_name: effectiveFullName,
         email,
         terms_accepted: true,
         privacy_accepted: true,
@@ -115,13 +132,22 @@ export async function GET(request: Request) {
       const profile = await resp.json();
       // If the user has a primary_discipline set, they've completed onboarding
       if (profile.primary_discipline) {
-        return NextResponse.redirect(`${requestUrl.origin}/`);
+        profileExists = true;
       }
+    } else if (resp.status === 409) {
+      // Profile already exists (e.g. returning user) — they've onboarded
+      profileExists = true;
     }
   } catch {
     // Profile upsert failed — fall through to onboarding redirect
   }
 
-  // No primary_discipline or profile creation failed — send to onboarding
+  // Clear the consent cookie now that it's been consumed
+  cookieStore.set("grantrx_consent", "", { maxAge: 0, path: "/" });
+
+  // Route returning users to "/" and new users to "/?onboarding=open"
+  if (profileExists) {
+    return NextResponse.redirect(`${requestUrl.origin}/`);
+  }
   return NextResponse.redirect(`${requestUrl.origin}/?onboarding=open`);
 }

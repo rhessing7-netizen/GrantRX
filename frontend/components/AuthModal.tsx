@@ -50,6 +50,26 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
     }
     setError(null);
 
+    // Persist consent flags to localStorage so they survive the OAuth redirect.
+    // Also set cookies so the server-side callback route can read them.
+    if (mode === "signup") {
+      const consent = {
+        terms_accepted: true,
+        privacy_accepted: true,
+        marketing_opt_in: marketingOptIn,
+        full_name: fullName.trim() || null,
+        timestamp: new Date().toISOString(),
+      };
+      try {
+        localStorage.setItem("grantrx_oauth_consent", JSON.stringify(consent));
+        // Cookie for server-side callback (expires in 10 minutes)
+        const cookieExpiry = new Date(Date.now() + 10 * 60 * 1000).toUTCString();
+        document.cookie = `grantrx_consent=${JSON.stringify(consent)}; expires=${cookieExpiry}; path=/; SameSite=Lax`;
+      } catch {
+        // localStorage may be unavailable (private mode) — cookies still work
+      }
+    }
+
     if (!supabase) {
       // Dev mode without Supabase configured — simulate auth
       setAuthToken("grantrx-dev-demo");
@@ -63,11 +83,6 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
         provider,
         options: {
           redirectTo,
-          queryParams: {
-            marketing_opt_in: marketingOptIn ? "true" : "false",
-            terms_accepted: "true",
-            privacy_accepted: "true",
-          },
         },
       });
       if (sbError) {
