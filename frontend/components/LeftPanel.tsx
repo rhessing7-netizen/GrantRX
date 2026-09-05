@@ -178,9 +178,9 @@ export function LeftPanel({
   return (
     <div className="space-y-6">
       {/* Profile summary — frosted glass */}
-      <section className="bg-white/95 backdrop-blur-md rounded-2xl border border-slate-200 shadow-xs p-6">
+      <section className="bg-white/90 backdrop-blur-xl rounded-2xl border border-slate-200/90 shadow-sm p-6 space-y-6">
         <div className="flex items-center justify-between">
-          <h2 className="font-serif text-slate-900 font-semibold text-base">
+          <h2 className="font-serif text-slate-900 font-bold text-base tracking-tight">
             Student Profile
           </h2>
           <button
@@ -212,7 +212,7 @@ export function LeftPanel({
                 <button
                   onClick={handleManageSubscription}
                   disabled={portalLoading}
-                  className="w-full rounded-full bg-slate-100 hover:bg-slate-200/70 text-slate-700 font-medium border border-slate-200 px-4 py-2 text-xs transition disabled:opacity-50"
+                  className="w-full rounded-lg bg-slate-100 hover:bg-slate-200/80 text-slate-700 font-medium border border-slate-200/70 px-4 py-2 text-xs transition disabled:opacity-50"
                 >
                   {portalLoading
                     ? "Opening portal…"
@@ -298,7 +298,7 @@ export function LeftPanel({
       </section>
 
       {/* Search — frosted glass */}
-      <section className="bg-white/95 backdrop-blur-md rounded-2xl border border-slate-200 shadow-xs p-6">
+      <section className="bg-white/90 backdrop-blur-xl rounded-2xl border border-slate-200/90 shadow-sm p-6 space-y-6">
         <label className="text-sm font-medium text-textSecondary">
           Keyword Search
         </label>
@@ -337,7 +337,7 @@ export function LeftPanel({
             else onRefreshFeed();
           }}
           disabled={searchDisabled}
-          className="mt-3 w-full rounded-full bg-blueEnergy hover:bg-[#3b7ed6] text-white font-medium shadow-xs transition-colors disabled:cursor-not-allowed disabled:opacity-40"
+          className="mt-3 w-full rounded-full bg-blueEnergy hover:bg-[#3b7ed6] text-white font-semibold shadow-sm hover:shadow-md transition-all active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-40"
         >
           {searchDisabled
             ? "Keyword Search Limit Reached"
@@ -349,7 +349,7 @@ export function LeftPanel({
         {/* Free refresh button — always free, no quota deduction */}
         <button
           onClick={onRefreshFeed}
-          className="mt-2 w-full rounded-full bg-slate-100 hover:bg-slate-200/70 text-slate-700 font-medium border border-slate-200 px-4 py-2 text-sm transition"
+          className="mt-2 w-full rounded-lg bg-slate-100 hover:bg-slate-200/80 text-slate-700 font-medium border border-slate-200/70 px-4 py-2 text-xs transition"
         >
           Refresh Matches (free)
         </button>
@@ -372,7 +372,7 @@ export function LeftPanel({
       </section>
 
       {/* Metro Area filter — frosted glass */}
-      <section className="bg-white/95 backdrop-blur-md rounded-2xl border border-slate-200 shadow-xs p-6">
+      <section className="bg-white/90 backdrop-blur-xl rounded-2xl border border-slate-200/90 shadow-sm p-6 space-y-6">
         <label className="text-sm font-medium text-textSecondary">
           Metro Area Filter
         </label>
@@ -400,8 +400,8 @@ export function LeftPanel({
 
       {/* Usage tracker — frosted glass */}
       {usage && (
-        <section className="bg-white/95 backdrop-blur-md rounded-2xl border border-slate-200 shadow-xs p-6">
-          <h3 className="font-serif text-slate-900 font-semibold text-base">
+        <section className="bg-white/90 backdrop-blur-xl rounded-2xl border border-slate-200/90 shadow-sm p-6 space-y-6">
+          <h3 className="font-serif text-slate-900 font-bold text-base tracking-tight">
             Keyword Search Quota
           </h3>
           {usage.is_premium ? (
@@ -446,13 +446,13 @@ export function LeftPanel({
       {/* Upgrade CTA */}
       {usage && !usage.is_premium && (
         <section className="rounded-2xl bg-gradient-to-r from-aquamarine to-neonIce p-5 text-textPrimary">
-          <h3 className="font-serif text-slate-900 font-semibold text-base">Upgrade to Premium</h3>
+          <h3 className="font-serif text-slate-900 font-bold text-base tracking-tight">Upgrade to Premium</h3>
           <p className="mt-1 text-sm">
             Unlimited searches, unmasked results, and deadline reminders.
           </p>
           <button
             onClick={onUpgrade}
-            className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-blueEnergy hover:bg-[#3b7ed6] text-white font-medium shadow-xs transition-colors"
+            className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-blueEnergy hover:bg-[#3b7ed6] text-white font-semibold shadow-sm hover:shadow-md transition-all active:scale-[0.99]"
           >
             <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
               <path d="M11.983 1.908a.963.963 0 00-1.306.196L6.95 7.075A.963.963 0 007.646 8.6h2.09l-1.39 4.36a.963.963 0 001.548.963l4.727-4.97a.963.963 0 00-.696-1.617h-2.09l1.39-4.36a.963.963 0 00-.732-1.068z" />
@@ -488,7 +488,7 @@ export function LeftPanel({
             className="w-full max-w-md rounded-3xl bg-surfaceBg p-6 shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <h2 className="font-serif text-slate-900 font-semibold text-base">
+            <h2 className="font-serif text-slate-900 font-bold text-base tracking-tight">
               Before you go
             </h2>
             <p className="mt-1 text-sm text-textSecondary">
@@ -568,7 +568,7 @@ export function LeftPanel({
               <button
                 onClick={handleExitSurveySubmit}
                 disabled={!exitReason || exitSubmitting}
-                className="rounded-full bg-blueEnergy hover:bg-[#3b7ed6] text-white font-medium shadow-xs transition-colors disabled:opacity-50"
+                className="rounded-full bg-blueEnergy hover:bg-[#3b7ed6] text-white font-semibold shadow-sm hover:shadow-md transition-all active:scale-[0.99] disabled:opacity-50"
               >
                 {exitSubmitting ? "Submitting…" : "Submit & continue"}
               </button>

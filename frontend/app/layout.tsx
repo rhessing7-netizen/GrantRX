@@ -32,7 +32,7 @@ export default function RootLayout({
       suppressHydrationWarning
       className={`${fraunces.variable} ${sora.variable} h-full antialiased`}
     >
-      <body className="min-h-full bg-surfaceBg text-textPrimary font-sans">
+      <body className="min-h-full bg-gradient-to-br from-[#F8FAFC] via-[#F1F5F9] to-[#E2E8F0]/40 text-slate-900 font-sans antialiased">
         {children}
       </body>
     </html>

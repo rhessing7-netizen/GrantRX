@@ -33,6 +33,7 @@ function getBannerUrl(disciplines: string[] | undefined): string {
 
 export const ScholarshipFeed = ({ results, isPremium, onTrack, onUnlock }: ScholarshipFeedProps) => {
   const [tracking, setTracking] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<"cards" | "list">("cards");
   // Feed curation: ids animating out, ids fully hidden, and undo toast state
   const [fadingIds, setFadingIds] = useState<Set<string>>(new Set());
   const [hiddenIds, setHiddenIds] = useState<Set<string>>(new Set());
@@ -114,18 +115,76 @@ export const ScholarshipFeed = ({ results, isPremium, onTrack, onUnlock }: Schol
 
   return (
     <div className="space-y-4">
-      {visibleResults.map((s) => (
-        <ScholarshipCard
-          key={s.scholarship_id}
-          scholarship={s}
-          isPremium={isPremium}
-          onTrack={handleTrack}
-          onUnlock={onUnlock}
-          onDismiss={handleDismiss}
-          tracking={tracking === s.scholarship_id}
-          fading={fadingIds.has(s.scholarship_id)}
-        />
-      ))}
+      {/* Toolbar: result count + view mode toggle */}
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-slate-500">
+          {visibleResults.length} scholarship{visibleResults.length === 1 ? "" : "s"}
+        </p>
+        <div className="inline-flex p-1 rounded-xl bg-slate-100 border border-slate-200/80">
+          <button
+            onClick={() => setViewMode("cards")}
+            className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs transition ${
+              viewMode === "cards"
+                ? "bg-white text-slate-900 shadow-xs font-semibold"
+                : "text-slate-500 hover:text-slate-700"
+            }`}
+            aria-label="Card view"
+          >
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <rect x="3" y="3" width="7" height="7" rx="1" />
+              <rect x="14" y="3" width="7" height="7" rx="1" />
+              <rect x="3" y="14" width="7" height="7" rx="1" />
+              <rect x="14" y="14" width="7" height="7" rx="1" />
+            </svg>
+            Cards
+          </button>
+          <button
+            onClick={() => setViewMode("list")}
+            className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs transition ${
+              viewMode === "list"
+                ? "bg-white text-slate-900 shadow-xs font-semibold"
+                : "text-slate-500 hover:text-slate-700"
+            }`}
+            aria-label="List view"
+          >
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <line x1="8" y1="6" x2="21" y2="6" />
+              <line x1="8" y1="12" x2="21" y2="12" />
+              <line x1="8" y1="18" x2="21" y2="18" />
+              <line x1="3" y1="6" x2="3.01" y2="6" />
+              <line x1="3" y1="12" x2="3.01" y2="12" />
+              <line x1="3" y1="18" x2="3.01" y2="18" />
+            </svg>
+            List
+          </button>
+        </div>
+      </div>
+
+      {viewMode === "cards"
+        ? visibleResults.map((s) => (
+            <ScholarshipCard
+              key={s.scholarship_id}
+              scholarship={s}
+              isPremium={isPremium}
+              onTrack={handleTrack}
+              onUnlock={onUnlock}
+              onDismiss={handleDismiss}
+              tracking={tracking === s.scholarship_id}
+              fading={fadingIds.has(s.scholarship_id)}
+            />
+          ))
+        : visibleResults.map((s) => (
+            <ScholarshipListItem
+              key={s.scholarship_id}
+              scholarship={s}
+              isPremium={isPremium}
+              onTrack={handleTrack}
+              onUnlock={onUnlock}
+              onDismiss={handleDismiss}
+              tracking={tracking === s.scholarship_id}
+              fading={fadingIds.has(s.scholarship_id)}
+            />
+          ))}
 
       {/* Undo toast */}
       {undoToast && (
@@ -182,7 +241,7 @@ function ScholarshipCard({
 
   return (
     <article
-      className={`bg-white rounded-2xl border border-slate-200 shadow-xs hover:shadow-md hover:border-slate-300 transition-all duration-200 overflow-hidden flex flex-col ${
+      className={`bg-white/95 rounded-2xl border border-slate-200/90 shadow-[0_4px_20px_-4px_rgba(15,23,42,0.06)] hover:shadow-[0_12px_32px_-6px_rgba(74,143,231,0.18)] hover:-translate-y-1 hover:border-slate-300 transition-all duration-200 overflow-hidden flex flex-col relative ${
         locked ? "ring-1 ring-textSecondary/10" : ""
       } ${fading ? "opacity-0 scale-95 max-h-0 pointer-events-none" : "opacity-100"}`}
     >
@@ -211,12 +270,12 @@ function ScholarshipCard({
           }}
         />
         {/* Darkened gradient overlay anchored to bottom for text contrast */}
-        <div className="absolute inset-0 bg-gradient-to-t from-slate-950/60 via-transparent to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-slate-950/25 to-transparent" />
       </div>
 
-      {/* Provider avatar — overlaps banner bottom-left and card body */}
+      {/* Provider avatar — crisp 44x44 tile overlapping the banner */}
       <div className="relative z-10 -mt-6 ml-5">
-        <div className="h-11 w-11 flex items-center justify-center font-bold text-white text-sm rounded-xl ring-2 ring-white shadow-md bg-gradient-to-br from-crayolaBlue to-blueEnergy">
+        <div className="h-11 w-11 rounded-xl bg-gradient-to-br from-crayolaBlue to-blueEnergy text-white font-bold shadow-md ring-2 ring-white flex items-center justify-center text-sm">
           {providerInitial}
         </div>
       </div>
@@ -237,10 +296,10 @@ function ScholarshipCard({
               </>
             ) : (
               <>
-                <h3 className="font-serif text-slate-900 font-bold text-lg leading-snug">
+                <h3 className="font-serif text-slate-900 font-bold text-lg leading-snug tracking-tight hover:text-blueEnergy transition-colors">
                   {scholarship.title}
                 </h3>
-                <p className="mt-0.5 text-slate-600 font-medium text-xs tracking-wide uppercase">
+                <p className="mt-0.5 text-slate-500 font-semibold text-xs tracking-wider uppercase">
                   {scholarship.provider}
                 </p>
                 {/* Metro restriction badges — soft glowing pills */}
@@ -267,8 +326,8 @@ function ScholarshipCard({
             <span
               className={
                 scholarship.score >= 80
-                  ? "bg-aquamarine text-slate-950 font-bold px-2.5 py-1 rounded-full text-xs shadow-xs"
-                  : "bg-slate-100 text-slate-800 border border-slate-200 font-semibold px-2.5 py-1 rounded-full text-xs"
+                  ? "bg-aquamarine text-slate-950 font-bold px-3 py-1 rounded-full text-xs shadow-xs"
+                  : "bg-slate-100 text-slate-800 border border-slate-200 font-semibold px-3 py-1 rounded-full text-xs"
               }
             >
               {scholarship.score}% Match
@@ -343,7 +402,7 @@ function ScholarshipCard({
                 {scholarship.missing_criteria.map((c) => (
                   <span
                     key={c}
-                    className="bg-amber-50 text-amber-900 border border-amber-200/80 font-medium px-2 py-0.5 rounded-md text-xs flex items-center gap-1.5"
+                    className="bg-amber-50 text-amber-900 border border-amber-200/80 font-medium px-2.5 py-0.5 rounded-md text-xs flex items-center gap-1.5"
                   >
                     {c}
                   </span>
@@ -412,6 +471,186 @@ function ScholarshipCard({
           </>
         )}
       </div>
+    </article>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Compact List / Row Item
+// ---------------------------------------------------------------------------
+
+function ScholarshipListItem({
+  scholarship,
+  isPremium,
+  onTrack,
+  onUnlock,
+  onDismiss,
+  tracking,
+  fading,
+}: {
+  scholarship: MatchedScholarship;
+  isPremium: boolean;
+  onTrack: (id: string) => void;
+  onUnlock?: () => void;
+  onDismiss: (id: string, title: string) => void;
+  tracking: boolean;
+  fading: boolean;
+}) {
+  const locked = scholarship.is_locked && !isPremium;
+  const providerInitial = (scholarship.provider?.trim()?.charAt(0) || "G").toUpperCase();
+  const firstDiscipline = scholarship.eligible_disciplines?.[0];
+
+  // Days-left countdown
+  const daysLeft = (() => {
+    if (!scholarship.deadline) return null;
+    const d = new Date(scholarship.deadline);
+    if (isNaN(d.getTime())) return null;
+    const diff = Math.ceil((d.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+    return diff;
+  })();
+
+  return (
+    <article
+      className={`bg-white rounded-xl border border-slate-200/90 shadow-xs hover:border-slate-300 hover:shadow-sm transition-all duration-150 p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 group ${
+        fading ? "opacity-0 scale-95 max-h-0 pointer-events-none" : "opacity-100"
+      }`}
+    >
+      {locked ? (
+        /* Paywalled list row — blurred with centered lock badge */
+        <div className="flex flex-1 items-center justify-center py-2">
+          <div className="flex items-center gap-3 text-slate-400">
+            <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+              <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+            </svg>
+            <span className="text-sm font-medium blur-[2px] select-none">
+              {scholarship.masked_title ?? scholarship.title}
+            </span>
+            <span className="inline-block rounded-full bg-blueEnergy px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
+              Pro Only
+            </span>
+            <button
+              onClick={onUnlock}
+              className="rounded-full bg-gradient-to-r from-aquamarine to-neonIce px-4 py-1.5 text-xs font-semibold text-textPrimary transition hover:opacity-90"
+            >
+              Unlock with Premium
+            </button>
+          </div>
+        </div>
+      ) : (
+        <>
+          {/* Left column — identity & details */}
+          <div className="min-w-0 flex-1">
+            {/* Provider row */}
+            <div className="flex items-center gap-2">
+              <div className="h-8 w-8 bg-gradient-to-br from-crayolaBlue to-blueEnergy text-white rounded-lg font-bold text-xs flex items-center justify-center shrink-0">
+                {providerInitial}
+              </div>
+              <span className="text-slate-500 text-xs font-semibold tracking-wider uppercase truncate">
+                {scholarship.provider}
+              </span>
+              {firstDiscipline && (
+                <span className="shrink-0 rounded-full bg-slate-100 border border-slate-200 px-2 py-0.5 text-[10px] font-medium text-slate-600 capitalize">
+                  {firstDiscipline.replace(/_/g, " ")}
+                </span>
+              )}
+            </div>
+
+            {/* Title */}
+            <h3 className="mt-1.5 font-serif text-slate-900 font-bold text-base leading-snug group-hover:text-blueEnergy transition-colors">
+              {scholarship.title}
+            </h3>
+
+            {/* Metadata strip */}
+            <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
+              <span className="text-blueEnergy font-bold text-sm">
+                {scholarship.award_amount > 0
+                  ? `$${scholarship.award_amount.toLocaleString()}`
+                  : "Varies"}
+              </span>
+              <span className="text-slate-500">
+                {scholarship.deadline || "Rolling"}
+                {daysLeft !== null && daysLeft >= 0 && (
+                  <span className={`ml-1 font-medium ${daysLeft <= 7 ? "text-amber-600" : "text-slate-400"}`}>
+                    ({daysLeft}d left)
+                  </span>
+                )}
+              </span>
+              {scholarship.missing_criteria.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {scholarship.missing_criteria.slice(0, 3).map((c) => (
+                    <span
+                      key={c}
+                      className="bg-amber-50 text-amber-900 border border-amber-200/80 font-medium px-2.5 py-0.5 rounded-md text-xs"
+                    >
+                      {c}
+                    </span>
+                  ))}
+                  {scholarship.missing_criteria.length > 3 && (
+                    <span className="text-xs text-slate-400">
+                      +{scholarship.missing_criteria.length - 3} more
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Right column — score & actions */}
+          <div className="flex shrink-0 items-center gap-3">
+            <span
+              className={
+                scholarship.score >= 80
+                  ? "bg-aquamarine text-slate-950 font-bold px-2.5 py-1 rounded-full text-xs shadow-xs"
+                  : "bg-slate-100 text-slate-800 border border-slate-200 font-semibold px-2.5 py-1 rounded-full text-xs"
+              }
+            >
+              {scholarship.score}%
+            </span>
+
+            <div className="flex items-center gap-2">
+              {scholarship.portal_url && (
+                <a
+                  href={scholarship.portal_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="rounded-full bg-blueEnergy hover:bg-[#3b7ed6] text-white font-medium px-4 py-1.5 text-xs transition-colors"
+                >
+                  Apply
+                </a>
+              )}
+              <button
+                onClick={() => onTrack(scholarship.scholarship_id)}
+                disabled={tracking}
+                className="rounded-full border border-slate-200 px-4 py-1.5 text-xs font-medium text-slate-600 hover:border-slate-300 hover:text-slate-900 disabled:opacity-50 transition"
+              >
+                {tracking ? "Saving\u2026" : "Save"}
+              </button>
+              <button
+                onClick={() => onDismiss(scholarship.scholarship_id, scholarship.title)}
+                className="rounded-lg p-1.5 text-slate-300 transition hover:bg-slate-100 hover:text-slate-600 opacity-0 group-hover:opacity-100"
+                aria-label="Hide this scholarship"
+                title="Hide from my feed"
+              >
+                <svg
+                  className="h-4 w-4"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  viewBox="0 0 24 24"
+                >
+                  <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24" />
+                  <path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68" />
+                  <path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61" />
+                  <line x1="2" x2="22" y1="2" y2="22" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        </>
+      )}
     </article>
   );
 }
