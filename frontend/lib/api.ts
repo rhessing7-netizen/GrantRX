@@ -106,6 +106,21 @@ async function request<T>(
 }
 
 // ---------------------------------------------------------------------------
+// Blob download helper — triggers a browser file download from a Blob
+// ---------------------------------------------------------------------------
+
+function triggerDownload(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+// ---------------------------------------------------------------------------
 // Profile
 // ---------------------------------------------------------------------------
 
@@ -182,4 +197,38 @@ export const api = {
       method: "PUT",
       body: JSON.stringify(data),
     }),
+
+  // Exports — Calendar & Asana
+  getGcalUrl: (scholarshipId: string) =>
+    request<{ url: string }>(
+      `/api/v1/planner/export/gcal-url/${scholarshipId}`,
+    ),
+  downloadAsanaCsv: async () => {
+    const resp = await fetch(
+      `${API_BASE}/api/v1/planner/export/asana-csv`,
+      { headers: authHeaders(), signal: AbortSignal.timeout(15000) },
+    );
+    if (!resp.ok) {
+      const body = await resp.json().catch(() => ({ detail: resp.statusText }));
+      throw new Error(
+        typeof body.detail === "string" ? body.detail : "Download failed",
+      );
+    }
+    const blob = await resp.blob();
+    triggerDownload(blob, "grantrx_planner_asana.csv");
+  },
+  downloadIcsCalendar: async () => {
+    const resp = await fetch(
+      `${API_BASE}/api/v1/planner/export/calendar.ics`,
+      { headers: authHeaders(), signal: AbortSignal.timeout(15000) },
+    );
+    if (!resp.ok) {
+      const body = await resp.json().catch(() => ({ detail: resp.statusText }));
+      throw new Error(
+        typeof body.detail === "string" ? body.detail : "Download failed",
+      );
+    }
+    const blob = await resp.blob();
+    triggerDownload(blob, "grantrx_deadlines.ics");
+  },
 };

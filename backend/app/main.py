@@ -46,6 +46,11 @@ from .services.stripe_service import (
     verify_webhook_signature,
 )
 from .workers.ingestion import run_ingestion
+from .services.export_service import (
+    generate_asana_csv,
+    generate_gcal_url,
+    generate_ics_feed,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -844,3 +849,116 @@ def update_financial_planner(
     )
 
     return _compute_financial_planner(budget, total_planned_scholarships)
+
+
+# ---------------------------------------------------------------------------
+# Calendar & Asana Multi-Export
+# ---------------------------------------------------------------------------
+
+
+@app.get("/api/v1/planner/export/gcal-url/{scholarship_id}")
+def get_gcal_url(
+    scholarship_id: UUID,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Return a Google Calendar web intent URL for a single scholarship."""
+    scholarship = (
+        db.query(Scholarship)
+        .filter(Scholarship.id == scholarship_id)
+        .first()
+    )
+    if not scholarship:
+        raise HTTPException(status_code=404, detail="Scholarship not found")
+    if not scholarship.deadline:
+        raise HTTPException(status_code=400, detail="Scholarship has no deadline")
+
+    url = generate_gcal_url(
+        scholarship_title=scholarship.title,
+        deadline=scholarship.deadline,
+        portal_url=scholarship.portal_url,
+        provider=scholarship.provider,
+    )
+    return {"url": url}
+
+
+@app.get("/api/v1/planner/export/asana-csv")
+def export_asana_csv(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Download planned scholarships as an Asana-compatible CSV file."""
+    planned = (
+        db.query(UserScholarship)
+        .options(joinedload(UserScholarship.scholarship))
+        .filter(
+            UserScholarship.user_id == user.id,
+            UserScholarship.is_planned == True,  # noqa: E712
+        )
+        .all()
+    )
+
+    items = []
+    for t in planned:
+        s = t.scholarship
+        if not s:
+            continue
+        items.append({
+            "title": s.title,
+            "deadline": s.deadline.isoformat() if s.deadline else "",
+            "portal_url": s.portal_url or "",
+            "provider": s.provider or "",
+            "award_amount": s.award_amount or 0,
+            "status": t.status,
+        })
+
+    csv_content = generate_asana_csv(items)
+
+    return Response(
+        content=csv_content,
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": 'attachment; filename="grantrx_planner_asana.csv"',
+        },
+    )
+
+
+@app.get("/api/v1/planner/export/calendar.ics")
+def export_ics_calendar(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Download all tracked scholarships as an .ics calendar feed."""
+    tracked = (
+        db.query(UserScholarship)
+        .options(joinedload(UserScholarship.scholarship))
+        .filter(
+            UserScholarship.user_id == user.id,
+            UserScholarship.is_dismissed == False,  # noqa: E712
+            UserScholarship.status != "archived",
+        )
+        .all()
+    )
+
+    items = []
+    for t in tracked:
+        s = t.scholarship
+        if not s:
+            continue
+        items.append({
+            "title": s.title,
+            "deadline": s.deadline.isoformat() if s.deadline else "",
+            "portal_url": s.portal_url or "",
+            "provider": s.provider or "",
+            "award_amount": s.award_amount or 0,
+        })
+
+    ics_content = generate_ics_feed(items)
+
+    return Response(
+        content=ics_content,
+        media_type="text/calendar",
+        headers={
+            "Content-Disposition": 'attachment; filename="grantrx_deadlines.ics"',
+        },
+    )

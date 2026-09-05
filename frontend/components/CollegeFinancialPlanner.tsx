@@ -40,6 +40,8 @@ export function CollegeFinancialPlanner() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [openSection, setOpenSection] = useState<string | null>("direct");
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   // Local editable budget state
   const [budget, setBudget] = useState<Record<string, number>>({});
@@ -103,6 +105,30 @@ export function CollegeFinancialPlanner() {
     setBudget((prev) => ({ ...prev, [key]: value }));
   };
 
+  const handleDownloadAsanaCsv = async () => {
+    setExporting(true);
+    setExportOpen(false);
+    try {
+      await api.downloadAsanaCsv();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "CSV export failed");
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handleDownloadIcs = async () => {
+    setExporting(true);
+    setExportOpen(false);
+    try {
+      await api.downloadIcsCalendar();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "ICS export failed");
+    } finally {
+      setExporting(false);
+    }
+  };
+
   // Local computed totals (for live preview before saving)
   const localDirect = DIRECT_EDUCATIONAL_FIELDS.reduce(
     (sum, f) => sum + (budget[f.key as string] || 0), 0,
@@ -155,6 +181,68 @@ export function CollegeFinancialPlanner() {
           {error}
         </div>
       )}
+
+      {/* Export & Sync toolbar */}
+      <div className="flex items-center justify-end gap-3">
+        <div className="relative">
+          <button
+            onClick={() => setExportOpen((v) => !v)}
+            disabled={exporting}
+            className="inline-flex items-center gap-2 rounded-full border border-textSecondary/20 px-4 py-2 text-sm font-medium text-textSecondary hover:border-crayolaBlue hover:text-textPrimary disabled:opacity-50"
+          >
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v12m0 0l-4-4m4 4l4-4M4 20h16" />
+            </svg>
+            {exporting ? "Exporting…" : "Export & Sync"}
+            <svg className={`h-3 w-3 transition-transform ${exportOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+          {exportOpen && (
+            <div className="absolute right-0 z-20 mt-2 w-64 rounded-xl border border-slate-200 bg-white shadow-lg">
+              <button
+                onClick={handleDownloadAsanaCsv}
+                className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm text-textPrimary hover:bg-slate-50 rounded-t-xl"
+              >
+                <svg className="h-5 w-5 text-aquamarine" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 13h6m-3-3v6m-9 1V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
+                </svg>
+                <div>
+                  <p className="font-medium">Export for Asana (.CSV)</p>
+                  <p className="text-xs text-textSecondary">Planned scholarships as tasks</p>
+                </div>
+              </button>
+              <button
+                onClick={handleDownloadIcs}
+                className="flex w-full items-center gap-3 border-t border-slate-100 px-4 py-3 text-left text-sm text-textPrimary hover:bg-slate-50"
+              >
+                <svg className="h-5 w-5 text-blueEnergy" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                <div>
+                  <p className="font-medium">Download Apple / Outlook (.ICS)</p>
+                  <p className="text-xs text-textSecondary">Calendar feed with 7-day reminders</p>
+                </div>
+              </button>
+              <a
+                href="https://calendar.google.com/"
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => setExportOpen(false)}
+                className="flex w-full items-center gap-3 border-t border-slate-100 px-4 py-3 text-left text-sm text-textPrimary hover:bg-slate-50 rounded-b-xl"
+              >
+                <svg className="h-5 w-5 text-crayolaBlue" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 2a10 10 0 100 20 10 10 0 000-20zm0 4v6l4 2" />
+                </svg>
+                <div>
+                  <p className="font-medium">Sync with Google Calendar</p>
+                  <p className="text-xs text-textSecondary">Open Google Calendar to add events</p>
+                </div>
+              </a>
+            </div>
+          )}
+        </div>
+      </div>
 
       {/* Top: 3x Application Cushion Progress Meter */}
       <section className="bg-white/95 backdrop-blur-md rounded-2xl border border-slate-200 shadow-xs p-6">
@@ -270,9 +358,22 @@ export function CollegeFinancialPlanner() {
                 <p className="text-sm font-medium text-textPrimary">Planned Scholarships</p>
                 <p className="text-xs text-textSecondary">From saved & tracked awards</p>
               </div>
-              <span className="font-serif text-lg font-bold text-textPrimary">
-                {money(plannedScholarships)}
-              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleDownloadIcs}
+                  disabled={exporting || plannedScholarships === 0}
+                  title="Add deadlines to your calendar"
+                  className="rounded-lg p-1.5 text-blueEnergy transition hover:bg-blueEnergy/10 disabled:opacity-40"
+                  aria-label="Sync planned deadlines to calendar"
+                >
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                </button>
+                <span className="font-serif text-lg font-bold text-textPrimary">
+                  {money(plannedScholarships)}
+                </span>
+              </div>
             </div>
 
             {/* Net deficit */}
