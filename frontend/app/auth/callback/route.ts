@@ -110,15 +110,24 @@ export async function GET(request: Request) {
   // Use the consent-stored full_name if the OAuth payload didn't provide one
   const effectiveFullName = fullName ?? consentFullName;
 
-  // Upsert the backend profile with consent timestamps
+  // Upsert the backend profile with consent timestamps.
+  // Sanitize the access token to prevent Headers.append exceptions from
+  // stray whitespace, newlines, or malformed JWT strings.
+  const rawToken = session?.access_token || "";
+  const cleanToken = rawToken.replace(/[\r\n\t]/g, "").trim();
+
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+  if (cleanToken) {
+    headers["Authorization"] = `Bearer ${cleanToken}`;
+  }
+
   let profileExists = false;
   try {
     const resp = await fetch(`${apiUrl}/profiles`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${session.access_token}`,
-      },
+      headers,
       body: JSON.stringify({
         full_name: effectiveFullName,
         email,
@@ -139,7 +148,11 @@ export async function GET(request: Request) {
       profileExists = true;
     }
   } catch {
-    // Profile upsert failed — fall through to onboarding redirect
+    // Profile upsert failed (network error, header rejection, timeout, etc.)
+    // Do NOT block the user with an auth_error redirect — fall through to
+    // the appropriate redirect based on profileExists (which is false here,
+    // so the user lands on /?onboarding=open where the client-side app will
+    // retry profile initialization).
   }
 
   // Clear the consent cookie now that it's been consumed
