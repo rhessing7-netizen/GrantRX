@@ -108,6 +108,9 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
   };
 
   const handleSubmit = async () => {
+    console.log("[AuthModal] Submitting with mode:", mode);
+    console.log("[AuthModal] NEXT_PUBLIC_API_URL:", process.env.NEXT_PUBLIC_API_URL);
+    console.log("[AuthModal] NEXT_PUBLIC_SUPABASE_URL:", process.env.NEXT_PUBLIC_SUPABASE_URL);
     setTouched({ email: true, password: true });
     if (!emailValid || !passwordValid) return;
     if (mode === "signup" && !termsAccepted) {
@@ -120,6 +123,7 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
     try {
       if (!supabase) {
         // Dev mode without Supabase configured — simulate auth
+        console.log("[AuthModal] No Supabase client — using dev demo token");
         setAuthToken("grantrx-dev-demo");
         onAuthSuccess(null);
         return;
@@ -139,6 +143,7 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
 
         // Set the auth token for API calls if a session was returned
         if (data.session?.access_token) {
+          console.log("[AuthModal] Signup: setAuthToken with session token, length:", data.session.access_token.length);
           setAuthToken(data.session.access_token);
         }
 
@@ -194,14 +199,21 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
         }
 
         if (data.session?.access_token) {
+          console.log("[AuthModal] Signin: setAuthToken with session token, length:", data.session.access_token.length);
           setAuthToken(data.session.access_token);
         }
 
         // Advance user — profile will be loaded from Supabase or localStorage
         onAuthSuccess(null);
       }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Authentication failed");
+    } catch (err: any) {
+      console.error("[AuthModal Catch] Detailed error object:", err);
+      console.error("[AuthModal Catch] Error stack:", err?.stack);
+      setError(
+        err?.stack
+          ? `${err.message} (${err.stack.split("\n")[1]?.trim() || ""})`
+          : err?.message || "Registration failed",
+      );
     } finally {
       setSubmitting(false);
     }
