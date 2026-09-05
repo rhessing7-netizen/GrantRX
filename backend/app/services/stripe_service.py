@@ -90,6 +90,19 @@ def create_checkout_session(
     return stripe.checkout.Session.create(**params)
 
 
+def create_billing_portal_session(
+    customer_id: str,
+    return_url: str = "https://grant-rx.vercel.app",
+) -> stripe.billing_portal.Session:
+    """Create a Stripe Customer Portal session for self-service billing management."""
+    if not stripe.api_key:
+        raise RuntimeError("STRIPE_SECRET_KEY not configured")
+    return stripe.billing_portal.Session.create(
+        customer=customer_id,
+        return_url=return_url,
+    )
+
+
 # ---------------------------------------------------------------------------
 # Webhook handling
 # ---------------------------------------------------------------------------
@@ -125,6 +138,8 @@ def handle_webhook_event(db: Session, event: stripe.Event) -> dict:
         return _on_subscription_deleted(db, data)
     elif etype == "invoice.payment_succeeded":
         return _on_invoice_paid(db, data)
+    elif etype == "invoice.payment_failed":
+        return _on_invoice_failed(db, data)
     else:
         logger.debug("Unhandled event type: %s", etype)
         return {"status": "ignored", "event": etype}
@@ -189,4 +204,46 @@ def _on_invoice_paid(db: Session, invoice: dict) -> dict:
     if sub_id:
         profile.stripe_subscription_id = sub_id
     db.commit()
+
+    # Send payment receipt email
+    if profile.email:
+        from .email_service import payment_receipt
+        amount_total = invoice.get("total")
+        currency = invoice.get("currency", "usd")
+        amount_str = f"${amount_total / 100:.2f}" if amount_total else None
+        invoice_url = invoice.get("hosted_invoice_url")
+        payment_receipt(
+            to=profile.email,
+            name=profile.full_name,
+            amount=amount_str,
+            plan="Premium",
+            invoice_url=invoice_url,
+        )
+
     return {"status": "renewed", "tier": "premium"}
+
+
+def _on_invoice_failed(db: Session, invoice: dict) -> dict:
+    customer_id = invoice.get("customer")
+    profile = _find_profile_by_stripe_id(db, customer_id)
+    if not profile:
+        return {"status": "no_profile"}
+
+    # Send dunning notification email
+    if profile.email:
+        from .email_service import dunning_notification
+        amount_total = invoice.get("total")
+        amount_str = f"${amount_total / 100:.2f}" if amount_total else None
+        attempt = invoice.get("attempt_count")
+        next_attempt = invoice.get("next_payment_attempt")
+        invoice_url = invoice.get("hosted_invoice_url")
+        dunning_notification(
+            to=profile.email,
+            name=profile.full_name,
+            amount=amount_str,
+            attempt=attempt,
+            next_attempt=str(next_attempt) if next_attempt else None,
+            invoice_url=invoice_url,
+        )
+
+    return {"status": "dunning_sent"}

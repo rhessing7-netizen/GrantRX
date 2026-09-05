@@ -189,6 +189,22 @@ export const api = {
         cancel_url: cancelUrl,
       }),
     }),
+  createBillingPortalSession: () =>
+    request<{ url: string }>("/api/v1/billing/portal", { method: "POST" }),
+
+  // Scholarship issue reporting
+  reportScholarship: (
+    scholarshipId: string,
+    reason: "broken_link" | "inaccurate_deadline" | "expired",
+    notes?: string,
+  ) =>
+    request<{ id: string; status: string }>(
+      `/api/v1/scholarships/${scholarshipId}/report`,
+      {
+        method: "POST",
+        body: JSON.stringify({ reason, notes }),
+      },
+    ),
 
   // Financial Planner
   getFinancialPlanner: () =>

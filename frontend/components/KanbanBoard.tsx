@@ -524,6 +524,13 @@ function ApplicationDrawer({
   // New checklist item state
   const [newChecklistText, setNewChecklistText] = useState("");
 
+  // Report inaccurate info state
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportReason, setReportReason] = useState<"broken_link" | "inaccurate_deadline" | "expired">("broken_link");
+  const [reportNotes, setReportNotes] = useState("");
+  const [reportSubmitting, setReportSubmitting] = useState(false);
+  const [reportSubmitted, setReportSubmitted] = useState(false);
+
   // AI Statement Coach state
   const [coachOpen, setCoachOpen] = useState(false);
   const [outlineLoading, setOutlineLoading] = useState(false);
@@ -627,6 +634,21 @@ function ApplicationDrawer({
     }
   };
 
+  const handleReportSubmit = async () => {
+    if (!scholarship) return;
+    setReportSubmitting(true);
+    try {
+      await api.reportScholarship(scholarship.id, reportReason, reportNotes || undefined);
+      setReportSubmitted(true);
+      setReportOpen(false);
+      setReportNotes("");
+    } catch {
+      // Silently fail — reporting is best-effort
+    } finally {
+      setReportSubmitting(false);
+    }
+  };
+
   const completedCount = checklist.filter((c) => c.completed).length;
   const checklistProgress = checklist.length > 0 ? Math.round((completedCount / checklist.length) * 100) : 0;
 
@@ -672,6 +694,55 @@ function ApplicationDrawer({
               </span>
             )}
             {deadline && <span>Deadline: <span className="font-medium text-textPrimary">{deadline}</span></span>}
+          </div>
+
+          {/* Report inaccurate info */}
+          <div className="text-right">
+            {reportSubmitted ? (
+              <p className="text-xs text-aquamarine">✓ Report submitted — thank you!</p>
+            ) : reportOpen ? (
+              <div className="space-y-2 rounded-xl border border-textSecondary/15 bg-cardBg px-3 py-2 text-left">
+                <p className="text-xs font-medium text-textPrimary">Report inaccurate info</p>
+                <select
+                  value={reportReason}
+                  onChange={(e) => setReportReason(e.target.value as typeof reportReason)}
+                  className="w-full rounded-lg border border-textSecondary/20 px-2.5 py-1.5 text-xs text-textPrimary"
+                >
+                  <option value="broken_link">Broken application link</option>
+                  <option value="inaccurate_deadline">Inaccurate deadline</option>
+                  <option value="expired">Scholarship has expired</option>
+                </select>
+                <input
+                  type="text"
+                  value={reportNotes}
+                  onChange={(e) => setReportNotes(e.target.value)}
+                  placeholder="Additional notes (optional)"
+                  className="w-full rounded-lg border border-textSecondary/20 px-2.5 py-1.5 text-xs text-textPrimary"
+                />
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setReportOpen(false)}
+                    className="flex-1 rounded-lg border border-textSecondary/20 px-3 py-1.5 text-xs text-textSecondary"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleReportSubmit}
+                    disabled={reportSubmitting}
+                    className="flex-1 rounded-lg bg-crayolaBlue px-3 py-1.5 text-xs font-medium text-surfaceBg disabled:opacity-50"
+                  >
+                    {reportSubmitting ? "Submitting…" : "Submit"}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                onClick={() => setReportOpen(true)}
+                className="text-xs text-textSecondary/50 hover:text-crayolaBlue hover:underline"
+              >
+                ⚑ Report inaccurate info
+              </button>
+            )}
           </div>
 
           {/* Application Notes */}

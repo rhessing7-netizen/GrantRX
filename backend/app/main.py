@@ -17,7 +17,7 @@ from .middleware.tier_guard import (
     consume_search,
     get_usage,
 )
-from .models.models import Profile, Scholarship, StudentCollegeBudget, UserScholarship
+from .models.models import Profile, Scholarship, ScholarshipReport, StudentCollegeBudget, UserScholarship
 from .schemas.schemas import (
     CalendarEventOut,
     CalendarFeedOut,
@@ -26,11 +26,14 @@ from .schemas.schemas import (
     FinancialPlannerOut,
     MatchedFeedOut,
     MatchedScholarshipOut,
+    PortalUrlResponse,
     ProfileCreate,
     ProfileOut,
     ProfileUpdate,
     ScholarshipCreate,
     ScholarshipOut,
+    ScholarshipReportCreate,
+    ScholarshipReportOut,
     StudentCollegeBudgetBase,
     StudentCollegeBudgetUpdate,
     UsageOut,
@@ -40,8 +43,10 @@ from .schemas.schemas import (
 )
 from .services.archiver import archive_expired_scholarships, get_archival_summary
 from .services.calendar_service import generate_ics_feed, get_calendar_events
+from .services.email_service import welcome_email
 from .services.matcher import match_scholarships
 from .services.stripe_service import (
+    create_billing_portal_session,
     create_checkout_session,
     handle_webhook_event,
     verify_webhook_signature,
@@ -171,6 +176,14 @@ def create_profile(
     db.add(profile)
     db.commit()
     db.refresh(profile)
+
+    # Send welcome email on initial onboarding
+    if profile.email:
+        try:
+            welcome_email(to=profile.email, name=profile.full_name)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Welcome email failed for %s: %s", profile.email, exc)
+
     return profile
 
 
@@ -606,6 +619,80 @@ async def stripe_webhook(
 
     result = handle_webhook_event(db, event)
     return {"received": True, **result}
+
+
+@app.post("/api/v1/billing/portal", response_model=PortalUrlResponse)
+def create_billing_portal(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Create a Stripe Customer Portal session for self-service billing management.
+
+    Allows premium users to update their card, view invoices, or cancel
+    their subscription without contacting support.
+    """
+    profile = db.query(Profile).filter(Profile.id == user.id).first()
+    if not profile:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profile not found")
+
+    if not profile.stripe_customer_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No Stripe customer account found. Upgrade to Premium first.",
+        )
+
+    return_url = os.getenv("PORTAL_RETURN_URL", "https://grant-rx.vercel.app")
+    try:
+        session = create_billing_portal_session(
+            customer_id=profile.stripe_customer_id,
+            return_url=return_url,
+        )
+    except RuntimeError as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=f"Stripe error: {exc}") from exc
+
+    return PortalUrlResponse(url=session.url)
+
+
+# ---------------------------------------------------------------------------
+# Scholarship issue reporting (crowdsourced)
+# ---------------------------------------------------------------------------
+
+
+@app.post(
+    "/api/v1/scholarships/{scholarship_id}/report",
+    response_model=ScholarshipReportOut,
+    status_code=201,
+)
+def report_scholarship(
+    scholarship_id: UUID,
+    payload: ScholarshipReportCreate,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Report inaccurate information for a scholarship (broken link, wrong deadline, expired).
+
+    Creates a record in the scholarship_reports table for admin review.
+    """
+    scholarship = (
+        db.query(Scholarship)
+        .filter(Scholarship.id == scholarship_id)
+        .first()
+    )
+    if not scholarship:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Scholarship not found")
+
+    report = ScholarshipReport(
+        scholarship_id=scholarship_id,
+        reported_by=user.id,
+        reason=payload.reason,
+        notes=payload.notes,
+    )
+    db.add(report)
+    db.commit()
+    db.refresh(report)
+    return report
 
 
 # ---------------------------------------------------------------------------

@@ -1,9 +1,11 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import type { Profile, Usage } from "@/lib/types";
 import { DISCIPLINE_LABELS } from "@/lib/types";
 import { TOP_20_METROS } from "@/lib/constants/metros";
+import { api } from "@/lib/api";
 
 export type LeftPanelProps = {
   profile: Profile | null;
@@ -32,6 +34,8 @@ export function LeftPanel({
   onUpgrade,
   onOpenAuth,
 }: LeftPanelProps) {
+  const [portalLoading, setPortalLoading] = useState(false);
+  const [portalError, setPortalError] = useState<string | null>(null);
   const hasText = search.trim().length > 0;
   const quotaExhausted =
     !!usage && !usage.is_premium && usage.remaining !== null && usage.remaining <= 0;
@@ -115,6 +119,21 @@ export function LeftPanel({
     return "Add remaining profile details to boost match accuracy.";
   })();
 
+  const handleManageSubscription = async () => {
+    setPortalLoading(true);
+    setPortalError(null);
+    try {
+      const { url } = await api.createBillingPortalSession();
+      window.location.href = url;
+    } catch (err) {
+      setPortalError(
+        err instanceof Error ? err.message : "Failed to open billing portal",
+      );
+    } finally {
+      setPortalLoading(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Profile summary — frosted glass */}
@@ -145,6 +164,24 @@ export function LeftPanel({
             <p className="text-xs">
               {profile.subscription_tier === "premium" ? "Premium" : "Free"} tier
             </p>
+
+            {/* Manage Subscription & Invoices — premium users only */}
+            {profile.subscription_tier === "premium" && (
+              <div className="mt-3">
+                <button
+                  onClick={handleManageSubscription}
+                  disabled={portalLoading}
+                  className="w-full rounded-full border border-crayolaBlue/30 bg-crayolaBlue/5 px-4 py-2 text-xs font-medium text-crayolaBlue transition hover:bg-crayolaBlue/10 disabled:opacity-50"
+                >
+                  {portalLoading
+                    ? "Opening portal…"
+                    : "Manage Subscription & Invoices"}
+                </button>
+                {portalError && (
+                  <p className="mt-1.5 text-xs text-red-600">{portalError}</p>
+                )}
+              </div>
+            )}
 
             {/* Profile Strength meter */}
             <div className="mt-4">

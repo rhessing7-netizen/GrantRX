@@ -257,6 +257,26 @@ class CheckoutResponse(BaseModel):
     session_id: str
 
 
+class PortalUrlResponse(BaseModel):
+    url: str
+
+
+class ScholarshipReportCreate(BaseModel):
+    reason: str = Field(..., pattern="^(broken_link|inaccurate_deadline|expired)$")
+    notes: Optional[str] = None
+
+
+class ScholarshipReportOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    scholarship_id: UUID
+    reason: str
+    notes: Optional[str] = None
+    status: str = "open"
+    created_at: Optional[datetime] = None
+
+
 # ---------------------------------------------------------------------------
 # Financial Planner
 # ---------------------------------------------------------------------------

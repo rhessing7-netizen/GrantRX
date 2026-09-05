@@ -170,10 +170,23 @@ function ScholarshipCard({
   fading: boolean;
 }) {
   const [imgLoaded, setImgLoaded] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportReason, setReportReason] = useState<"broken_link" | "inaccurate_deadline" | "expired">("broken_link");
+  const [reportSubmitted, setReportSubmitted] = useState(false);
   const locked = scholarship.is_locked && !isPremium;
   const badge = scoreColor(scholarship.score);
   const bannerUrl = getBannerUrl(scholarship.eligible_disciplines);
   const providerInitial = (scholarship.provider?.trim()?.charAt(0) || "G").toUpperCase();
+
+  const handleReport = async () => {
+    try {
+      await api.reportScholarship(scholarship.scholarship_id, reportReason);
+      setReportSubmitted(true);
+      setReportOpen(false);
+    } catch {
+      // Best-effort
+    }
+  };
 
   return (
     <article
@@ -362,6 +375,44 @@ function ScholarshipCard({
               >
                 {tracking ? "Saving\u2026" : "Save to Kanban"}
               </button>
+            </div>
+
+            {/* Report inaccurate info */}
+            <div className="mt-3">
+              {reportSubmitted ? (
+                <p className="text-xs text-aquamarine">✓ Report submitted — thank you!</p>
+              ) : reportOpen ? (
+                <div className="flex items-center gap-2">
+                  <select
+                    value={reportReason}
+                    onChange={(e) => setReportReason(e.target.value as typeof reportReason)}
+                    className="rounded-lg border border-textSecondary/20 px-2 py-1 text-xs text-textPrimary"
+                  >
+                    <option value="broken_link">Broken link</option>
+                    <option value="inaccurate_deadline">Wrong deadline</option>
+                    <option value="expired">Expired</option>
+                  </select>
+                  <button
+                    onClick={handleReport}
+                    className="rounded-lg bg-crayolaBlue px-3 py-1 text-xs font-medium text-surfaceBg"
+                  >
+                    Submit
+                  </button>
+                  <button
+                    onClick={() => setReportOpen(false)}
+                    className="text-xs text-textSecondary hover:text-textPrimary"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setReportOpen(true)}
+                  className="text-xs text-textSecondary/50 hover:text-crayolaBlue hover:underline"
+                >
+                  ⚑ Report inaccurate info
+                </button>
+              )}
             </div>
           </>
         )}

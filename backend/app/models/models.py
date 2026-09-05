@@ -155,3 +155,18 @@ class StudentCollegeBudget(Base):
 
     # ORM relationship
     profile = relationship("Profile", backref="college_budget")
+
+
+class ScholarshipReport(Base):
+    __tablename__ = "scholarship_reports"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    scholarship_id = Column(UUID(as_uuid=True), ForeignKey("scholarships.id", ondelete="CASCADE"), nullable=False)
+    reported_by = Column(UUID(as_uuid=True), ForeignKey("profiles.id", ondelete="SET NULL"), nullable=True)
+    reason = Column(Text, nullable=False)  # broken_link | inaccurate_deadline | expired
+    notes = Column(Text, nullable=True)
+    status = Column(Text, default="open")  # open | reviewed | resolved
+    created_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
+
+    scholarship = relationship("Scholarship", backref="reports")
