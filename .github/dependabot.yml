@@ -1,0 +1,86 @@
+# Dependabot configuration for GrantRx
+# Schedules weekly vulnerability scans for npm (frontend) and pip (backend).
+
+version: 2
+
+updates:
+  # Frontend — npm dependencies
+  - package-ecosystem: "npm"
+    directory: "/frontend"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "America/New_York"
+    open-pull-requests-limit: 10
+    labels:
+      - "dependencies"
+      - "frontend"
+      - "security"
+    commit-message:
+      prefix: "deps(frontend)"
+      include: "scope"
+    reviewers:
+      - "rhessing7-netizen"
+    groups:
+      react:
+        patterns:
+          - "react"
+          - "react-dom"
+          - "next"
+          - "@types/react"
+          - "@types/react-dom"
+      tailwind:
+        patterns:
+          - "tailwindcss"
+          - "postcss"
+          - "autoprefixer"
+
+  # Backend — pip dependencies
+  - package-ecosystem: "pip"
+    directory: "/backend"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "America/New_York"
+    open-pull-requests-limit: 10
+    labels:
+      - "dependencies"
+      - "backend"
+      - "security"
+    commit-message:
+      prefix: "deps(backend)"
+      include: "scope"
+    reviewers:
+      - "rhessing7-netizen"
+    groups:
+      fastapi:
+        patterns:
+          - "fastapi"
+          - "uvicorn"
+          - "pydantic"
+      sqlalchemy:
+        patterns:
+          - "sqlalchemy"
+          - "psycopg"
+          - "alembic"
+
+  # GitHub Actions — workflow dependencies
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "America/New_York"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "ci"
+      - "security"
+    commit-message:
+      prefix: "deps(ci)"
+      include: "scope"
+    reviewers:
+      - "rhessing7-netizen"
