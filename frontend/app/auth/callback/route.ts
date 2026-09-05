@@ -113,21 +113,18 @@ export async function GET(request: Request) {
   // Upsert the backend profile with consent timestamps.
   // Sanitize the access token to prevent Headers.append exceptions from
   // stray whitespace, newlines, or malformed JWT strings.
-  const rawToken = session?.access_token || "";
-  const cleanToken = rawToken.replace(/[\r\n\t]/g, "").trim();
-
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-  };
-  if (cleanToken) {
-    headers["Authorization"] = `Bearer ${cleanToken}`;
-  }
+  const accessToken = session?.access_token
+    ? session.access_token.trim().replace(/[\r\n]/g, "")
+    : "";
 
   let profileExists = false;
   try {
     const resp = await fetch(`${apiUrl}/profiles`, {
       method: "POST",
-      headers,
+      headers: {
+        "Content-Type": "application/json",
+        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+      },
       body: JSON.stringify({
         full_name: effectiveFullName,
         email,

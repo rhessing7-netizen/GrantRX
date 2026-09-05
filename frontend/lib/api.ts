@@ -38,7 +38,8 @@ let authToken: string | null =
   process.env.NEXT_PUBLIC_DEMO_JWT ?? DEMO_TOKEN_FALLBACK;
 
 export function setAuthToken(token: string | null) {
-  authToken = token;
+  // Sanitize at storage time so all downstream consumers get a clean token.
+  authToken = token ? token.trim().replace(/[\r\n]/g, "") : null;
 }
 
 export function getAuthToken(): string | null {
@@ -50,7 +51,12 @@ function authHeaders(): HeadersInit {
     "Content-Type": "application/json",
   };
   if (authToken) {
-    headers["Authorization"] = `Bearer ${authToken}`;
+    // Sanitize token to prevent Headers.append invalid header value errors
+    // from stray whitespace, newlines, or malformed JWT strings.
+    const cleanToken = authToken.trim().replace(/[\r\n]/g, "");
+    if (cleanToken) {
+      headers["Authorization"] = `Bearer ${cleanToken}`;
+    }
   }
   return headers;
 }
