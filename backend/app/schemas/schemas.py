@@ -249,3 +249,66 @@ class CheckoutRequest(BaseModel):
 class CheckoutResponse(BaseModel):
     checkout_url: str
     session_id: str
+
+
+# ---------------------------------------------------------------------------
+# Financial Planner
+# ---------------------------------------------------------------------------
+
+
+class StudentCollegeBudgetBase(BaseModel):
+    # Direct educational costs
+    tuition_fees: int = 0
+    books_supplies: int = 0
+    clinical_lab_fees: int = 0
+    # Living & personal costs
+    housing_rent: int = 0
+    food_groceries: int = 0
+    utilities_wifi: int = 0
+    transportation: int = 0
+    health_insurance: int = 0
+    personal_misc: int = 0
+    # Income / resources
+    family_contribution: int = 0
+    work_study_wages: int = 0
+    other_grants: int = 0
+    # Loan configuration
+    program_years: int = 4
+    interest_rate: float = 7.5
+
+
+class StudentCollegeBudgetUpdate(BaseModel):
+    tuition_fees: Optional[int] = None
+    books_supplies: Optional[int] = None
+    clinical_lab_fees: Optional[int] = None
+    housing_rent: Optional[int] = None
+    food_groceries: Optional[int] = None
+    utilities_wifi: Optional[int] = None
+    transportation: Optional[int] = None
+    health_insurance: Optional[int] = None
+    personal_misc: Optional[int] = None
+    family_contribution: Optional[int] = None
+    work_study_wages: Optional[int] = None
+    other_grants: Optional[int] = None
+    program_years: Optional[int] = None
+    interest_rate: Optional[float] = None
+
+
+class FinancialPlannerOut(BaseModel):
+    # Budget values
+    budget: StudentCollegeBudgetBase
+    # Computed totals
+    total_direct_educational: int
+    total_living_personal: int
+    total_annual_expenses: int  # COA
+    total_non_loan_income: int
+    total_planned_scholarships: int
+    net_unfunded_annual: int
+    # Loan calculations
+    estimated_total_debt: float
+    monthly_loan_payment: float
+    total_lifetime_interest: float
+    # Planning goals
+    three_x_cushion: int  # 3 * COA
+    five_x_safety_buffer: int  # 5 * COA
+    cushion_progress_pct: float  # funded / 3x COA * 100

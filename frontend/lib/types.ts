@@ -306,3 +306,57 @@ export interface CheckoutResponse {
   checkout_url: string;
   session_id: string;
 }
+
+// ---------------------------------------------------------------------------
+// Financial Planner
+// ---------------------------------------------------------------------------
+
+export interface StudentCollegeBudget {
+  tuition_fees: number;
+  books_supplies: number;
+  clinical_lab_fees: number;
+  housing_rent: number;
+  food_groceries: number;
+  utilities_wifi: number;
+  transportation: number;
+  health_insurance: number;
+  personal_misc: number;
+  family_contribution: number;
+  work_study_wages: number;
+  other_grants: number;
+  program_years: number;
+  interest_rate: number;
+}
+
+export interface StudentCollegeBudgetUpdate {
+  tuition_fees?: number;
+  books_supplies?: number;
+  clinical_lab_fees?: number;
+  housing_rent?: number;
+  food_groceries?: number;
+  utilities_wifi?: number;
+  transportation?: number;
+  health_insurance?: number;
+  personal_misc?: number;
+  family_contribution?: number;
+  work_study_wages?: number;
+  other_grants?: number;
+  program_years?: number;
+  interest_rate?: number;
+}
+
+export interface FinancialPlanner {
+  budget: StudentCollegeBudget;
+  total_direct_educational: number;
+  total_living_personal: number;
+  total_annual_expenses: number;
+  total_non_loan_income: number;
+  total_planned_scholarships: number;
+  net_unfunded_annual: number;
+  estimated_total_debt: number;
+  monthly_loan_payment: number;
+  total_lifetime_interest: number;
+  three_x_cushion: number;
+  five_x_safety_buffer: number;
+  cushion_progress_pct: number;
+}

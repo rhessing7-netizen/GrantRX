@@ -16,12 +16,13 @@ from .middleware.tier_guard import (
     consume_search,
     get_usage,
 )
-from .models.models import Profile, Scholarship, UserScholarship
+from .models.models import Profile, Scholarship, StudentCollegeBudget, UserScholarship
 from .schemas.schemas import (
     CalendarEventOut,
     CalendarFeedOut,
     CheckoutRequest,
     CheckoutResponse,
+    FinancialPlannerOut,
     MatchedFeedOut,
     MatchedScholarshipOut,
     ProfileCreate,
@@ -29,6 +30,8 @@ from .schemas.schemas import (
     ProfileUpdate,
     ScholarshipCreate,
     ScholarshipOut,
+    StudentCollegeBudgetBase,
+    StudentCollegeBudgetUpdate,
     UsageOut,
     UserScholarshipCreate,
     UserScholarshipOut,
@@ -686,3 +689,158 @@ def archival_summary(
     """Return a summary of scholarship archival state."""
     _verify_admin_key(x_admin_key)
     return get_archival_summary(db)
+
+
+# ---------------------------------------------------------------------------
+# Financial Planner — College Budget & Debt Simulator
+# ---------------------------------------------------------------------------
+
+
+def _compute_financial_planner(
+    budget: StudentCollegeBudget,
+    total_planned_scholarships: int,
+) -> FinancialPlannerOut:
+    """Run the financial planner calculation engine."""
+    total_direct_educational = (
+        budget.tuition_fees + budget.books_supplies + budget.clinical_lab_fees
+    )
+    total_living_personal = (
+        budget.housing_rent + budget.food_groceries + budget.utilities_wifi
+        + budget.transportation + budget.health_insurance + budget.personal_misc
+    )
+    total_annual_expenses = total_direct_educational + total_living_personal
+
+    total_non_loan_income = (
+        budget.family_contribution + budget.work_study_wages + budget.other_grants
+    )
+
+    net_unfunded_annual = max(
+        0,
+        total_annual_expenses - (total_planned_scholarships + total_non_loan_income),
+    )
+
+    # 10-year (120 months) amortization
+    principal = net_unfunded_annual * budget.program_years
+    monthly_rate = budget.interest_rate / 100.0 / 12.0
+    num_payments = 120
+
+    if principal > 0 and monthly_rate > 0:
+        factor = (1 + monthly_rate) ** num_payments
+        monthly_payment = principal * (monthly_rate * factor) / (factor - 1)
+    elif principal > 0:
+        monthly_payment = principal / num_payments
+    else:
+        monthly_payment = 0.0
+
+    total_paid = monthly_payment * num_payments
+    total_lifetime_interest = max(0.0, total_paid - principal)
+
+    three_x_cushion = total_annual_expenses * 3
+    five_x_safety_buffer = total_annual_expenses * 5
+    total_funding = total_planned_scholarships + total_non_loan_income
+    cushion_progress_pct = (
+        round(total_funding / three_x_cushion * 100, 1) if three_x_cushion > 0 else 0.0
+    )
+
+    return FinancialPlannerOut(
+        budget=StudentCollegeBudgetBase(
+            tuition_fees=budget.tuition_fees,
+            books_supplies=budget.books_supplies,
+            clinical_lab_fees=budget.clinical_lab_fees,
+            housing_rent=budget.housing_rent,
+            food_groceries=budget.food_groceries,
+            utilities_wifi=budget.utilities_wifi,
+            transportation=budget.transportation,
+            health_insurance=budget.health_insurance,
+            personal_misc=budget.personal_misc,
+            family_contribution=budget.family_contribution,
+            work_study_wages=budget.work_study_wages,
+            other_grants=budget.other_grants,
+            program_years=budget.program_years,
+            interest_rate=budget.interest_rate,
+        ),
+        total_direct_educational=total_direct_educational,
+        total_living_personal=total_living_personal,
+        total_annual_expenses=total_annual_expenses,
+        total_non_loan_income=total_non_loan_income,
+        total_planned_scholarships=total_planned_scholarships,
+        net_unfunded_annual=net_unfunded_annual,
+        estimated_total_debt=round(principal, 2),
+        monthly_loan_payment=round(monthly_payment, 2),
+        total_lifetime_interest=round(total_lifetime_interest, 2),
+        three_x_cushion=three_x_cushion,
+        five_x_safety_buffer=five_x_safety_buffer,
+        cushion_progress_pct=cushion_progress_pct,
+    )
+
+
+@app.get("/api/v1/financial-planner/budget", response_model=FinancialPlannerOut)
+def get_financial_planner(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Get the user's college budget and computed financial planner metrics."""
+    budget = (
+        db.query(StudentCollegeBudget)
+        .filter(StudentCollegeBudget.user_id == user.id)
+        .first()
+    )
+    if not budget:
+        budget = StudentCollegeBudget(user_id=user.id)
+        db.add(budget)
+        db.commit()
+        db.refresh(budget)
+
+    # Aggregate total planned scholarships
+    planned = (
+        db.query(UserScholarship)
+        .filter(
+            UserScholarship.user_id == user.id,
+            UserScholarship.is_planned == True,  # noqa: E712
+        )
+        .all()
+    )
+    total_planned_scholarships = sum(
+        (t.scholarship.award_amount or 0) for t in planned if t.scholarship
+    )
+
+    return _compute_financial_planner(budget, total_planned_scholarships)
+
+
+@app.put("/api/v1/financial-planner/budget", response_model=FinancialPlannerOut)
+def update_financial_planner(
+    update: StudentCollegeBudgetUpdate,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Update the user's college budget values and loan settings."""
+    budget = (
+        db.query(StudentCollegeBudget)
+        .filter(StudentCollegeBudget.user_id == user.id)
+        .first()
+    )
+    if not budget:
+        budget = StudentCollegeBudget(user_id=user.id)
+        db.add(budget)
+
+    update_data = update.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(budget, field, value)
+    budget.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(budget)
+
+    # Aggregate total planned scholarships
+    planned = (
+        db.query(UserScholarship)
+        .filter(
+            UserScholarship.user_id == user.id,
+            UserScholarship.is_planned == True,  # noqa: E712
+        )
+        .all()
+    )
+    total_planned_scholarships = sum(
+        (t.scholarship.award_amount or 0) for t in planned if t.scholarship
+    )
+
+    return _compute_financial_planner(budget, total_planned_scholarships)

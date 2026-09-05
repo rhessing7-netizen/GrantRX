@@ -9,6 +9,7 @@ import { AuthModal } from "@/components/AuthModal";
 import { ScholarshipFeed } from "@/components/ScholarshipFeed";
 import { KanbanBoard } from "@/components/KanbanBoard";
 import { DeadlineCalendar } from "@/components/DeadlineCalendar";
+import { CollegeFinancialPlanner } from "@/components/CollegeFinancialPlanner";
 import { UpgradeModal } from "@/components/UpgradeModal";
 import { api, setAuthToken } from "@/lib/api";
 import { supabase } from "@/lib/supabase";
@@ -20,7 +21,7 @@ import type {
   UserScholarship,
 } from "@/lib/types";
 
-type Tab = "discover" | "kanban" | "calendar";
+type Tab = "discover" | "kanban" | "calendar" | "planner";
 
 export default function Home() {
   const [tab, setTab] = useState<Tab>("discover");
@@ -268,6 +269,12 @@ export default function Home() {
               >
                 Calendar
               </TabButton>
+              <TabButton
+                active={tab === "planner"}
+                onClick={() => setTab("planner")}
+              >
+                Financial Planner
+              </TabButton>
             </div>
 
             {error && (
@@ -357,6 +364,10 @@ export default function Home() {
 
             {tab === "calendar" && (
               <DeadlineCalendar isPremium={isPremium} />
+            )}
+
+            {tab === "planner" && (
+              <CollegeFinancialPlanner />
             )}
           </div>
         }

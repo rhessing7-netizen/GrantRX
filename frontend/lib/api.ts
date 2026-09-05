@@ -3,10 +3,12 @@ import type {
   CalendarEvent,
   CalendarFeedInfo,
   CheckoutResponse,
+  FinancialPlanner,
   MatchedFeed,
   Profile,
   ProfileCreate,
   ProfileUpdate,
+  StudentCollegeBudgetUpdate,
   Usage,
   UserScholarship,
   UserScholarshipCreate,
@@ -170,5 +172,14 @@ export const api = {
         success_url: successUrl,
         cancel_url: cancelUrl,
       }),
+    }),
+
+  // Financial Planner
+  getFinancialPlanner: () =>
+    request<FinancialPlanner>("/api/v1/financial-planner/budget"),
+  updateFinancialPlanner: (data: StudentCollegeBudgetUpdate) =>
+    request<FinancialPlanner>("/api/v1/financial-planner/budget", {
+      method: "PUT",
+      body: JSON.stringify(data),
     }),
 };

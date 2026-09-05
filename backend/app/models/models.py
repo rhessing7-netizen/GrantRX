@@ -106,6 +106,8 @@ class UserScholarship(Base):
     scholarship_id = Column(UUID(as_uuid=True), ForeignKey("scholarships.id", ondelete="CASCADE"), nullable=False)
     status = Column(AppStatusEnum, default="saved")
     is_dismissed = Column(Boolean, default=False)
+    is_planned = Column(Boolean, default=False)
+    target_submission_date = Column(Date, nullable=True)
     custom_deadline_reminder = Column(DateTime(timezone=True), nullable=True)
     user_notes = Column(Text, nullable=True)
     # Application Document Vault
@@ -117,3 +119,33 @@ class UserScholarship(Base):
 
     # ORM relationship so joinedload(UserScholarship.scholarship) works
     scholarship = relationship("Scholarship", lazy="joined")
+
+
+class StudentCollegeBudget(Base):
+    __tablename__ = "student_college_budgets"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("profiles.id", ondelete="CASCADE"), nullable=False, unique=True)
+    # Direct educational costs
+    tuition_fees = Column(Integer, default=0)
+    books_supplies = Column(Integer, default=0)
+    clinical_lab_fees = Column(Integer, default=0)
+    # Living & personal costs
+    housing_rent = Column(Integer, default=0)
+    food_groceries = Column(Integer, default=0)
+    utilities_wifi = Column(Integer, default=0)
+    transportation = Column(Integer, default=0)
+    health_insurance = Column(Integer, default=0)
+    personal_misc = Column(Integer, default=0)
+    # Income / resources
+    family_contribution = Column(Integer, default=0)
+    work_study_wages = Column(Integer, default=0)
+    other_grants = Column(Integer, default=0)
+    # Loan configuration
+    program_years = Column(Integer, default=4)
+    interest_rate = Column(Float, default=7.5)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
+
+    # ORM relationship
+    profile = relationship("Profile", backref="college_budget")
