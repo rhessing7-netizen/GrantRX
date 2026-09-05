@@ -127,9 +127,9 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
 
       if (mode === "signup") {
         const { data, error: authError } = await supabase.auth.signUp({
-          email,
+          email: email.trim(),
           password,
-          options: { data: { full_name: fullName } },
+          options: { data: { full_name: fullName.trim() } },
         });
         if (authError) {
           setError(authError.message);
@@ -143,11 +143,11 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
         }
 
         // Construct default base profile so the session never resets to null
-        const initialProfile = {
-          id: data?.user?.id || "guest-user",
-          user_id: data?.user?.id || "guest-user",
-          full_name: fullName,
-          email: email,
+        const studentProfile = {
+          id: data?.user?.id || "local-user",
+          user_id: data?.user?.id || "local-user",
+          full_name: fullName.trim(),
+          email: email.trim(),
           primary_discipline: "pharmacy",
           target_credential: "PharmD",
           clinical_phase: "Professional (P1-P4)",
@@ -159,7 +159,7 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
         // Store in localStorage immediately so the LeftPanel and feed
         // recognize the user is logged in without waiting for backend sync.
         try {
-          localStorage.setItem("grantrx_profile", JSON.stringify(initialProfile));
+          localStorage.setItem("grantrx_profile", JSON.stringify(studentProfile));
         } catch {
           // localStorage may be unavailable (private mode) — proceed anyway
         }
@@ -170,8 +170,8 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
             await supabase.from("profiles").upsert({
               id: data.user.id,
               user_id: data.user.id,
-              full_name: fullName,
-              email: email,
+              full_name: fullName.trim(),
+              email: email.trim(),
               terms_accepted_at: new Date().toISOString(),
               privacy_accepted_at: new Date().toISOString(),
               marketing_opt_in: marketingOptIn,
@@ -182,8 +182,8 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
           console.warn("Profile table upsert skipped:", dbErr);
         }
 
-        // Advance user to the app with the initial profile
-        onAuthSuccess(initialProfile as unknown as Profile);
+        // Advance user to the app with the student profile
+        onAuthSuccess(studentProfile as unknown as Profile);
       } else {
         const { data, error: authError } =
           await supabase.auth.signInWithPassword({ email, password });

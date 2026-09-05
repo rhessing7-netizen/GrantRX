@@ -305,8 +305,13 @@ export const api = {
       `/api/v1/planner/export/gcal-url/${scholarshipId}`,
     ),
   downloadAsanaCsv: async () => {
+    const url = `${API_BASE}/api/v1/planner/export/asana-csv`;
+    if (!url || typeof url !== "string" || !url.startsWith("http")) {
+      console.warn("Blocked fetch call with invalid URL:", url);
+      return;
+    }
     const resp = await fetch(
-      `${API_BASE}/api/v1/planner/export/asana-csv`,
+      url,
       { headers: authHeaders(), signal: AbortSignal.timeout(15000) },
     );
     if (!resp.ok) {
@@ -319,8 +324,13 @@ export const api = {
     triggerDownload(blob, "grantrx_planner_asana.csv");
   },
   downloadIcsCalendar: async () => {
+    const url = `${API_BASE}/api/v1/planner/export/calendar.ics`;
+    if (!url || typeof url !== "string" || !url.startsWith("http")) {
+      console.warn("Blocked fetch call with invalid URL:", url);
+      return;
+    }
     const resp = await fetch(
-      `${API_BASE}/api/v1/planner/export/calendar.ics`,
+      url,
       { headers: authHeaders(), signal: AbortSignal.timeout(15000) },
     );
     if (!resp.ok) {
