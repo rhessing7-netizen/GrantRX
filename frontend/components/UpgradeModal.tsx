@@ -41,8 +41,8 @@ export function UpgradeModal({ open, onClose, reason }: UpgradeModalProps) {
     setRedirecting(true);
     setError(null);
     try {
-      const successUrl = `${window.location.origin}/?upgrade=success`;
-      const cancelUrl = `${window.location.origin}/?upgrade=cancelled`;
+      const successUrl = `${window.location.origin}/?upgraded=true`;
+      const cancelUrl = `${window.location.origin}`;
       const resp = await api.createCheckout(selectedPlan, successUrl, cancelUrl);
       window.location.href = resp.checkout_url;
     } catch (err) {

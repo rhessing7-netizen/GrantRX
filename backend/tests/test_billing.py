@@ -320,16 +320,17 @@ class TestSearchQuotaPaywall:
         db.commit.assert_called_once()
 
     def test_free_user_blocked_at_limit_with_402(self):
-        """The 11th search must raise HTTP 402 with PAYWALL_REQUIRED payload."""
+        """The 11th search must raise HTTP 402 with PAYWALL_SEARCH_LIMIT_REACHED payload."""
         profile = _make_profile(searches_used_this_week=FREE_SEARCH_LIMIT)
         db = MagicMock()
         with pytest.raises(HTTPException) as exc_info:
             consume_search(profile, db)
         assert exc_info.value.status_code == 402
         detail = exc_info.value.detail
-        assert detail["detail"] == "PAYWALL_REQUIRED"
+        assert detail["detail"] == "PAYWALL_SEARCH_LIMIT_REACHED"
         assert detail["feature"] == "keyword_search"
         assert detail["upgrade_url"] == "/billing"
+        assert detail["limit"] == FREE_SEARCH_LIMIT
 
     def test_free_tracking_limit_constant(self):
         """The Kanban free-tier limit should match the advertised '3 active apps'."""

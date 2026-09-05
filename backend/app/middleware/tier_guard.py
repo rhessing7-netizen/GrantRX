@@ -102,9 +102,11 @@ def consume_search(profile: Profile, db: Session, now: datetime | None = None) -
         raise HTTPException(
             status_code=status.HTTP_402_PAYMENT_REQUIRED,
             detail={
-                "detail": "PAYWALL_REQUIRED",
+                "detail": "PAYWALL_SEARCH_LIMIT_REACHED",
                 "feature": "keyword_search",
                 "upgrade_url": "/billing",
+                "limit": FREE_SEARCH_LIMIT,
+                "used": used,
             },
         )
 

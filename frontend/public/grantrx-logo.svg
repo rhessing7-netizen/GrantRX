@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" fill="none">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="512" y2="512" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#4A8FE7"/>
+      <stop offset="1" stop-color="#5C7AFF"/>
+    </linearGradient>
+    <linearGradient id="arrowAccent" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#73FBD3"/>
+      <stop offset="1" stop-color="#73FBD3" stop-opacity="0.7"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Rounded square background -->
+  <rect width="512" height="512" rx="96" fill="url(#bg)"/>
+
+  <!-- Subtle inner glow ring -->
+  <rect x="8" y="8" width="496" height="496" rx="88" fill="none" stroke="#FFFFFF" stroke-opacity="0.08" stroke-width="2"/>
+
+  <!-- =============================== -->
+  <!-- Core Icon: Medical Cross + Rx + Growth Arrow -->
+  <!-- =============================== -->
+
+  <!-- Medical cross (white, vertical + horizontal bars) centered at (256, 200) -->
+  <g>
+    <!-- Vertical bar -->
+    <rect x="232" y="120" width="48" height="160" rx="12" fill="#FFFFFF"/>
+    <!-- Horizontal bar -->
+    <rect x="172" y="180" width="168" height="48" rx="12" fill="#FFFFFF"/>
+  </g>
+
+  <!-- Rx overlay (Aquamarine accent, sits inside the cross) -->
+  <g fill="url(#arrowAccent)">
+    <!-- R leg (vertical) -->
+    <rect x="244" y="140" width="24" height="60" rx="6"/>
+    <!-- R top curve suggestion (horizontal stub) -->
+    <rect x="244" y="140" width="40" height="20" rx="6"/>
+    <!-- x diagonal stroke (crossing through lower right) -->
+    <rect x="262" y="186" width="56" height="20" rx="6" transform="rotate(35 262 186)"/>
+  </g>
+
+  <!-- Upward-trending grant growth arrow (Aquamarine accent) -->
+  <g>
+    <!-- Arrow shaft (trending up from left to right, below the cross) -->
+    <path d="M 140 312 L 200 280 L 260 296 L 340 248"
+          stroke="url(#arrowAccent)" stroke-width="14" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+    <!-- Arrowhead pointing up-right -->
+    <path d="M 340 248 L 322 252 M 340 248 L 336 266"
+          stroke="#73FBD3" stroke-width="14" stroke-linecap="round" fill="none"/>
+    <!-- Small growth dots along the path -->
+    <circle cx="200" cy="280" r="5" fill="#73FBD3"/>
+    <circle cx="260" cy="296" r="5" fill="#73FBD3"/>
+  </g>
+
+  <!-- =============================== -->
+  <!-- Typography: GrantRx wordmark -->
+  <!-- =============================== -->
+  <text x="256" y="400"
+        font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif"
+        font-size="64" font-weight="700" fill="#FFFFFF"
+        text-anchor="middle" letter-spacing="-1">GrantRx</text>
+
+  <!-- Tagline -->
+  <text x="256" y="436"
+        font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif"
+        font-size="18" font-weight="500" fill="#FFFFFF" fill-opacity="0.7"
+        text-anchor="middle" letter-spacing="3">SCHOLARSHIPS</text>
+</svg>
