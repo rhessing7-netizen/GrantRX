@@ -191,6 +191,10 @@ export const api = {
     }),
   createBillingPortalSession: () =>
     request<{ url: string }>("/api/v1/billing/portal", { method: "POST" }),
+  deleteAccount: () =>
+    request<{ status: string; message: string }>("/api/v1/profile/me", {
+      method: "DELETE",
+    }),
 
   // Scholarship issue reporting
   reportScholarship: (

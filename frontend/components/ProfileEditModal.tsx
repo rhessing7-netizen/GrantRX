@@ -10,6 +10,7 @@ import {
 import { getMetrosForState } from "@/lib/constants/metros";
 import { MAJOR_CATEGORIES, mapMajorToClinicalDiscipline } from "@/lib/constants/disciplines";
 import { api } from "@/lib/api";
+import { supabase } from "@/lib/supabase";
 import { MultiSelect } from "./MultiSelect";
 import { GroupedMultiSelect } from "./GroupedMultiSelect";
 
@@ -18,9 +19,10 @@ export type ProfileEditModalProps = {
   onClose: () => void;
   profile: Profile;
   onSaved: (profile: Profile) => void;
+  onDeleted?: () => void;
 };
 
-export function ProfileEditModal({ open, onClose, profile, onSaved }: ProfileEditModalProps) {
+export function ProfileEditModal({ open, onClose, profile, onSaved, onDeleted }: ProfileEditModalProps) {
   const [disciplines, setDisciplines] = useState<string[]>(profile.disciplines ?? []);
   const [credentials, setCredentials] = useState<string[]>(profile.target_credentials ?? []);
   const [clinicalPhase, setClinicalPhase] = useState(profile.clinical_phase ?? "");
@@ -34,6 +36,11 @@ export function ProfileEditModal({ open, onClose, profile, onSaved }: ProfileEdi
   const [hobbies, setHobbies] = useState((profile.hobbies ?? []).join(", "));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Danger Zone state
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   if (!open) return null;
 
@@ -275,7 +282,90 @@ export function ProfileEditModal({ open, onClose, profile, onSaved }: ProfileEdi
             {saving ? "Saving…" : "Save Changes"}
           </button>
         </div>
+
+        {/* Danger Zone */}
+        <div className="mt-8 rounded-2xl border-2 border-red-200/60 bg-red-50/30 p-5">
+          <h3 className="font-serif text-sm font-semibold text-red-700">
+            Danger Zone
+          </h3>
+          <p className="mt-1 text-xs text-textSecondary">
+            Permanently delete your account, cancel any active subscription,
+            and remove all saved scholarships, budgets, and reports. This
+            action cannot be undone.
+          </p>
+          <button
+            onClick={() => setConfirmDeleteOpen(true)}
+            disabled={deleting}
+            className="mt-3 rounded-full border-2 border-red-500 px-5 py-2 text-sm font-medium text-red-600 transition hover:bg-red-500 hover:text-white disabled:opacity-50"
+          >
+            Delete Account & Data
+          </button>
+          {deleteError && (
+            <p className="mt-2 text-xs text-red-600">{deleteError}</p>
+          )}
+        </div>
       </div>
+
+      {/* Confirmation modal */}
+      {confirmDeleteOpen && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-textPrimary/50 backdrop-blur-sm"
+          onClick={() => !deleting && setConfirmDeleteOpen(false)}
+        >
+          <div
+            className="w-full max-w-md rounded-3xl bg-surfaceBg p-6 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="font-serif text-lg font-bold text-red-700">
+              Delete Account?
+            </h3>
+            <p className="mt-2 text-sm text-textSecondary">
+              Are you sure? This will cancel your subscription immediately and
+              permanently delete your profile, budget, and saved scholarships.
+            </p>
+            <div className="mt-5 flex items-center justify-end gap-3">
+              <button
+                onClick={() => setConfirmDeleteOpen(false)}
+                disabled={deleting}
+                className="text-sm text-textSecondary hover:text-textPrimary disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteAccount}
+                disabled={deleting}
+                className="rounded-full bg-red-600 px-5 py-2 text-sm font-medium text-white transition hover:bg-red-700 disabled:opacity-50"
+              >
+                {deleting ? "Deleting…" : "Yes, delete my account"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
+
+  async function handleDeleteAccount() {
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      await api.deleteAccount();
+      // Sign out of Supabase client auth
+      if (supabase) {
+        try {
+          await supabase.auth.signOut();
+        } catch {
+          // Best-effort — backend already purged credentials
+        }
+      }
+      setConfirmDeleteOpen(false);
+      onDeleted?.();
+    } catch (err) {
+      setDeleteError(
+        err instanceof Error ? err.message : "Failed to delete account",
+      );
+    } finally {
+      setDeleting(false);
+    }
+  }
 }

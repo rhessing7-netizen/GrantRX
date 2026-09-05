@@ -147,6 +147,12 @@ export function UpgradeModal({ open, onClose, reason }: UpgradeModalProps) {
         </div>
 
         {/* CTA */}
+        <p className="mb-3 text-xs text-slate-500 leading-relaxed text-center">
+          Subscription automatically renews monthly at $10.00/mo ($79.00/yr
+          for annual) until canceled. You can cancel online at any time with 1
+          click via your billing settings. No minimum commitment or phone calls
+          required.
+        </p>
         <button
           onClick={handleCheckout}
           disabled={redirecting}

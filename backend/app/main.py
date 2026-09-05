@@ -45,6 +45,7 @@ from .services.archiver import archive_expired_scholarships, get_archival_summar
 from .services.calendar_service import generate_ics_feed, get_calendar_events
 from .services.email_service import welcome_email
 from .services.matcher import match_scholarships
+from .services.profile_service import delete_account
 from .services.stripe_service import (
     create_billing_portal_session,
     create_checkout_session,
@@ -693,6 +694,28 @@ def report_scholarship(
     db.commit()
     db.refresh(report)
     return report
+
+
+# ---------------------------------------------------------------------------
+# Account deletion (self-serve, GDPR/CCPA-friendly)
+# ---------------------------------------------------------------------------
+
+
+@app.delete("/api/v1/profile/me")
+def delete_my_account(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Permanently delete the authenticated user's account and all personal data.
+
+    Cancels any active Stripe subscription, removes user_scholarships,
+    student_college_budgets, scholarship_reports filed by the user, the
+    profile row, and Supabase Auth credentials (when configured).
+    """
+    result = delete_account(db, str(user.id))
+    if result.get("status") == "not_found":
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=result["message"])
+    return result
 
 
 # ---------------------------------------------------------------------------

@@ -391,6 +391,15 @@ export default function Home() {
             loadProfileAndUsage();
             loadFeed();
           }}
+          onDeleted={() => {
+            setProfile(null);
+            setUsage(null);
+            setKanbanItems([]);
+            setFeed(null);
+            setShowProfileEdit(false);
+            setShowOnboarding(false);
+            setError("Your account has been permanently deleted.");
+          }}
         />
       )}
 

@@ -934,6 +934,14 @@ function ApplicationDrawer({
               </svg>
             </button>
 
+            {/* Academic honesty disclaimer — always visible */}
+            <div className="mt-2 bg-amber-50/70 border border-amber-200/60 rounded-xl p-3 text-xs text-amber-900">
+              GrantRx Statement Coach is an educational brainstorming and
+              outlining tool. It does not write essays for you, submit
+              materials on your behalf, or guarantee award selection. Always
+              abide by your institution&apos;s academic honesty policies.
+            </div>
+
             {coachOpen && (
               <div className="mt-3 space-y-4">
                 {/* Provider mission & core values */}
