@@ -19,6 +19,7 @@ export type LeftPanelProps = {
   onRefreshFeed: () => void;
   onUpgrade?: () => void;
   onOpenAuth?: () => void;
+  onSignOut?: () => void;
 };
 
 export function LeftPanel({
@@ -33,6 +34,7 @@ export function LeftPanel({
   onRefreshFeed,
   onUpgrade,
   onOpenAuth,
+  onSignOut,
 }: LeftPanelProps) {
   const [portalLoading, setPortalLoading] = useState(false);
   const [portalError, setPortalError] = useState<string | null>(null);
@@ -192,6 +194,11 @@ export function LeftPanel({
         </div>
         {profile ? (
           <div className="mt-3 space-y-1 text-sm text-textSecondary">
+            {profile.full_name && (
+              <p className="font-serif font-bold text-slate-900 text-base">
+                {profile.full_name}
+              </p>
+            )}
             <p>
               <span className="font-medium text-textPrimary">
                 {disciplineDisplay}
@@ -205,6 +212,16 @@ export function LeftPanel({
             <p className="text-xs">
               {profile.subscription_tier === "premium" ? "Premium" : "Free"} tier
             </p>
+
+            {/* Sign Out button — makes login state immediately clear */}
+            {onSignOut && (
+              <button
+                onClick={onSignOut}
+                className="mt-2 w-full rounded-lg bg-slate-100 hover:bg-slate-200/80 text-slate-700 font-medium border border-slate-200/70 px-4 py-2 text-xs transition"
+              >
+                Sign Out
+              </button>
+            )}
 
             {/* Manage Subscription & Invoices — premium users only */}
             {profile.subscription_tier === "premium" && (

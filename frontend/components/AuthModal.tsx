@@ -142,9 +142,31 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
           setAuthToken(data.session.access_token);
         }
 
-        // Attempt direct profile initialization via Supabase
-        if (data?.user) {
-          try {
+        // Construct default base profile so the session never resets to null
+        const initialProfile = {
+          id: data?.user?.id || "guest-user",
+          user_id: data?.user?.id || "guest-user",
+          full_name: fullName,
+          email: email,
+          primary_discipline: "pharmacy",
+          target_credential: "PharmD",
+          clinical_phase: "Professional (P1-P4)",
+          gpa: 3.5,
+          state_residence: "OH",
+          updated_at: new Date().toISOString(),
+        };
+
+        // Store in localStorage immediately so the LeftPanel and feed
+        // recognize the user is logged in without waiting for backend sync.
+        try {
+          localStorage.setItem("grantrx_profile", JSON.stringify(initialProfile));
+        } catch {
+          // localStorage may be unavailable (private mode) — proceed anyway
+        }
+
+        // Attempt direct profile initialization via Supabase (best-effort)
+        try {
+          if (data?.user) {
             await supabase.from("profiles").upsert({
               id: data.user.id,
               user_id: data.user.id,
@@ -155,13 +177,13 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
               marketing_opt_in: marketingOptIn,
               marketing_opt_in_at: marketingOptIn ? new Date().toISOString() : null,
             });
-          } catch (profileErr) {
-            console.warn("Direct profile upsert error:", profileErr);
           }
+        } catch (dbErr) {
+          console.warn("Profile table upsert skipped:", dbErr);
         }
 
-        // Advance user to the app — onboarding wizard will handle the rest
-        onAuthSuccess(null);
+        // Advance user to the app with the initial profile
+        onAuthSuccess(initialProfile as unknown as Profile);
       } else {
         const { data, error: authError } =
           await supabase.auth.signInWithPassword({ email, password });

@@ -45,28 +45,30 @@ export default function Home() {
   //   - Falls back to "grantrx-dev-demo" for local dev (accepted by backend in dev mode)
   //   - In production, setAuthToken(supabaseSession.access_token) after OAuth login
 
+  // Immediately restore cached profile from localStorage on mount so the
+  // LeftPanel and matching feed recognize the user is logged in without
+  // waiting for the async Supabase session check to complete.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const cachedProfile = localStorage.getItem("grantrx_profile");
+      if (cachedProfile) {
+        setProfile(JSON.parse(cachedProfile));
+      }
+    } catch {
+      // localStorage may be unavailable or contain invalid JSON — ignore
+    }
+  }, []);
+
   // Check for existing Supabase session on mount.
   // If the user is unauthenticated (guest visitor), do NOT throw or set an
   // error state — simply load the public/fallback scholarships.
-  // If Supabase returns a user but profile is null, check localStorage for
-  // a cached profile before falling back to empty.
   // (Feed loading is deferred to after loadFeed is defined below.)
   useEffect(() => {
     if (!supabase) return;
     supabase.auth.getSession().then(({ data }) => {
       if (data.session?.access_token) {
         setAuthToken(data.session.access_token);
-      }
-      // If we have a session but no profile yet, try localStorage fallback
-      if (data.session?.user && !profile) {
-        try {
-          const localData = localStorage.getItem("grantrx_profile");
-          if (localData) {
-            setProfile(JSON.parse(localData));
-          }
-        } catch {
-          // localStorage may be unavailable or contain invalid JSON — ignore
-        }
       }
     });
   }, []);
@@ -299,6 +301,25 @@ export default function Home() {
     setShowUpgrade(true);
   };
 
+  const handleSignOut = async () => {
+    if (supabase) {
+      try {
+        await supabase.auth.signOut();
+      } catch {
+        // Best-effort — proceed with local cleanup
+      }
+    }
+    try {
+      localStorage.removeItem("grantrx_profile");
+    } catch {
+      // localStorage may be unavailable — ignore
+    }
+    setProfile(null);
+    setUsage(null);
+    setFeed(null);
+    setAuthToken(null);
+  };
+
   return (
     <>
       <Shell
@@ -321,6 +342,7 @@ export default function Home() {
             onRefreshFeed={loadFeed}
             onUpgrade={() => openUpgrade()}
             onOpenAuth={() => setShowAuth(true)}
+            onSignOut={handleSignOut}
           />
         }
         right={
