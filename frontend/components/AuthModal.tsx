@@ -41,7 +41,7 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
     setTimeout(() => setTermsShake(false), 600);
   };
 
-  const handleOAuth = async (provider: "google" | "linkedin") => {
+  const handleOAuth = async (provider: "google" | "linkedin_oidc") => {
     // Enforce Terms checkbox for OAuth sign-ups too
     if (mode === "signup" && !termsAccepted) {
       triggerTermsShake();
@@ -267,7 +267,7 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
 
           <button
             type="button"
-            onClick={() => handleOAuth("linkedin")}
+            onClick={() => handleOAuth("linkedin_oidc")}
             className="flex w-full items-center justify-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-textPrimary shadow-sm transition hover:bg-slate-50 hover:border-slate-300"
           >
             <svg className="h-5 w-5" viewBox="0 0 24 24" fill="#0A66C2" aria-hidden="true">
