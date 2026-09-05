@@ -48,12 +48,25 @@ export default function Home() {
   // Check for existing Supabase session on mount.
   // If the user is unauthenticated (guest visitor), do NOT throw or set an
   // error state — simply load the public/fallback scholarships.
+  // If Supabase returns a user but profile is null, check localStorage for
+  // a cached profile before falling back to empty.
   // (Feed loading is deferred to after loadFeed is defined below.)
   useEffect(() => {
     if (!supabase) return;
     supabase.auth.getSession().then(({ data }) => {
       if (data.session?.access_token) {
         setAuthToken(data.session.access_token);
+      }
+      // If we have a session but no profile yet, try localStorage fallback
+      if (data.session?.user && !profile) {
+        try {
+          const localData = localStorage.getItem("grantrx_profile");
+          if (localData) {
+            setProfile(JSON.parse(localData));
+          }
+        } catch {
+          // localStorage may be unavailable or contain invalid JSON — ignore
+        }
       }
     });
   }, []);
