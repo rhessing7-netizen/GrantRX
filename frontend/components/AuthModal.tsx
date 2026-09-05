@@ -28,6 +28,7 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
   const [verifyScreen, setVerifyScreen] = useState(false);
   const [otpCode, setOtpCode] = useState("");
   const [pendingEmail, setPendingEmail] = useState("");
+  const [success, setSuccess] = useState<string | null>(null);
 
   if (!open) return null;
 
@@ -355,6 +356,11 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
                 {error}
               </div>
             )}
+            {success && (
+              <div className="mb-3 rounded-xl bg-aquamarine/20 px-4 py-2.5 text-sm text-textPrimary">
+                {success}
+              </div>
+            )}
 
             <div className="space-y-4">
               <input
@@ -374,16 +380,39 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
               >
                 {submitting ? "Verifying…" : "Verify Code"}
               </button>
-              <button
-                onClick={() => {
-                  setVerifyScreen(false);
-                  setOtpCode("");
-                  setError(null);
-                }}
-                className="text-xs text-textSecondary hover:text-textPrimary"
-              >
-                Back to sign up
-              </button>
+              <div className="flex items-center justify-between">
+                <button
+                  onClick={() => {
+                    setVerifyScreen(false);
+                    setOtpCode("");
+                    setError(null);
+                  }}
+                  className="text-xs text-textSecondary hover:text-textPrimary"
+                >
+                  Back to sign up
+                </button>
+                <button
+                  onClick={async () => {
+                    try {
+                      const { error: resendErr } = await supabase.auth.resend({
+                        type: "signup",
+                        email: pendingEmail,
+                      });
+                      if (resendErr) {
+                        setError(resendErr.message);
+                      } else {
+                        setSuccess("Verification code resent to " + pendingEmail);
+                        setError(null);
+                      }
+                    } catch {
+                      setError("Failed to resend code. Please try again.");
+                    }
+                  }}
+                  className="text-xs text-crayolaBlue hover:underline"
+                >
+                  Resend code
+                </button>
+              </div>
             </div>
           </div>
         ) : (
@@ -529,14 +558,14 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
             <div className="space-y-2.5 pt-1">
               {/* Terms & Privacy — mandatory */}
               <label
-                className={`flex items-start gap-2 text-xs text-slate-600 leading-normal ${termsShake ? "animate-shake" : ""}`}
+                className={`flex items-start gap-2 text-xs text-slate-600 leading-tight ${termsShake ? "animate-shake" : ""}`}
                 style={termsShake ? { animation: "shake 0.4s ease-in-out" } : undefined}
               >
                 <input
                   type="checkbox"
                   checked={termsAccepted}
                   onChange={(e) => setTermsAccepted(e.target.checked)}
-                  className={`h-4 w-4 shrink-0 rounded border-slate-300 text-blueEnergy focus:ring-blueEnergy/30 focus:ring-offset-0 ${termsShake ? "ring-2 ring-red-300" : ""}`}
+                  className={`h-4 w-4 shrink-0 rounded border-slate-300 text-blue-600 focus:ring-blue-500 mt-0.5 ${termsShake ? "ring-2 ring-red-300" : ""}`}
                 />
                 <span>
                   I agree to the{" "}
@@ -561,12 +590,12 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
               </label>
 
               {/* Marketing opt-in — optional */}
-              <label className="flex items-start gap-2 text-xs text-slate-600 leading-normal">
+              <label className="flex items-start gap-2 text-xs text-slate-600 leading-tight">
                 <input
                   type="checkbox"
                   checked={marketingOptIn}
                   onChange={(e) => setMarketingOptIn(e.target.checked)}
-                  className="h-4 w-4 shrink-0 rounded border-slate-300 text-blueEnergy focus:ring-blueEnergy/30 focus:ring-offset-0"
+                  className="h-4 w-4 shrink-0 rounded border-slate-300 text-blue-600 focus:ring-blue-500 mt-0.5"
                 />
                 <span>
                   I opt in to receive scholarship alerts, updates, and email
