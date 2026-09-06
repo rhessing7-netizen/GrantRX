@@ -634,7 +634,7 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="At least 6 characters"
-                  className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm text-slate-800 placeholder-slate-400 focus:border-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-100 transition-all"
+                  className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm text-slate-800 placeholder-slate-400 focus:border-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-100 transition-all font-sans tracking-normal"
                 />
               </div>
 
@@ -650,7 +650,7 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
                     if (error && error.includes("match")) setError(null);
                   }}
                   placeholder="Re-enter your new password"
-                  className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm text-slate-800 placeholder-slate-400 focus:border-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-100 transition-all"
+                  className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm text-slate-800 placeholder-slate-400 focus:border-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-100 transition-all font-sans tracking-normal"
                 />
               </div>
 
@@ -818,7 +818,7 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
 
           <div>
             <div className="flex items-center justify-between">
-              <label className="block text-sm font-medium text-textSecondary">
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
                 Password
               </label>
               {mode === "signin" && (
@@ -837,10 +837,10 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
               onBlur={() => setTouched((t) => ({ ...t, password: true }))}
               type="password"
               placeholder="At least 6 characters"
-              className={`mt-1 w-full rounded-xl border bg-surfaceBg px-4 py-2 text-textPrimary transition ${
+              className={`w-full rounded-xl border px-3.5 py-2.5 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 transition-all font-sans tracking-normal ${
                 showPasswordError
-                  ? "border-red-400 ring-1 ring-red-200"
-                  : "border-textSecondary/20 focus:border-crayolaBlue"
+                  ? "border-red-400 ring-1 ring-red-200 focus:ring-red-100"
+                  : "border-slate-200 focus:border-blue-600 focus:ring-blue-100"
               }`}
             />
             {showPasswordError && (
@@ -862,7 +862,7 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
                 }}
                 placeholder="Re-enter your password"
                 required
-                className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm text-slate-800 placeholder-slate-400 focus:border-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-100 transition-all"
+                className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm text-slate-800 placeholder-slate-400 focus:border-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-100 transition-all font-sans tracking-normal"
               />
             </div>
           )}
