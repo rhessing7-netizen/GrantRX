@@ -109,6 +109,12 @@ def _make_scholarship(**kwargs):
         "provider_core_values": ["equity", "service"],
         "is_local": False,
         "target_community": None,
+        "is_general_major": False,
+        "academic_levels": [],
+        "scope": "national",
+        "county_restrictions": [],
+        "city_restrictions": [],
+        "competition_level": "medium",
     }
     defaults.update(kwargs)
     obj = MagicMock()

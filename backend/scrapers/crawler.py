@@ -153,6 +153,19 @@ REGIONAL_FILTERS = {
     ],
 }
 
+# Local qualifier terms — detect hyper-local / low-competition opportunities.
+# When any of these appear in page text, the candidate gets a +3 relevance boost
+# to surface community foundation, civic club, and unrestricted-major awards.
+LOCAL_QUALIFIER_TERMS = [
+    "county",
+    "high school senior",
+    "township",
+    "chamber of commerce",
+    "rotary club",
+    "all majors",
+    "unrestricted",
+]
+
 # State name -> 2-letter code mapping for residency extraction
 _STATE_NAME_TO_CODE = {
     "ohio": "OH",
@@ -161,6 +174,9 @@ _STATE_NAME_TO_CODE = {
 
 # Boost applied per regional keyword hit
 REGIONAL_BOOST_PER_HIT = 3
+
+# Boost applied when local qualifier terms are detected (county, rotary, etc.)
+LOCAL_QUALIFIER_BOOST = 3
 
 # Boost applied when a Top-20 metro area is detected in page text
 METRO_BOOST = 4
@@ -466,6 +482,17 @@ class ScholarshipCrawler:
                 regional_keywords.append(term)
 
         regional_score = len(regional_keywords) * REGIONAL_BOOST_PER_HIT
+
+        # Local qualifier boost — award +3 when the page mentions hyper-local
+        # or unrestricted-major terms (county, high school senior, rotary club,
+        # chamber of commerce, all majors, etc.). This surfaces low-competition
+        # community foundation and civic organization opportunities.
+        local_qualifier_hits = [t for t in LOCAL_QUALIFIER_TERMS if t in lower]
+        if local_qualifier_hits:
+            regional_score += LOCAL_QUALIFIER_BOOST
+            for term in local_qualifier_hits:
+                if term not in regional_keywords:
+                    regional_keywords.append(term)
 
         # Top-20 metro area detection — award a +4 boost when candidate page
         # text matches any top-20 county or metro keyword, and attach detected

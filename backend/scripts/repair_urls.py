@@ -2,9 +2,13 @@
 
 Iterates over all scholarships in the database, checks each portal_url with a
 HEAD/GET request, and:
-  1. If the portal_url returns 404, looks up the source URL from sources.json
+  1. If the portal_url returns 404 or a broken status, attempt to repair by
+     replacing the path with the root source domain (e.g. https://example.com).
+     If the root domain resolves to 200 OK, update portal_url with the
+     validated link.
+  2. If the root domain is also dead, look up the source URL from sources.json
      by matching the provider name, and replaces the dead URL.
-  2. If no source URL is found or the source URL is also dead, marks the
+  3. If no source URL is found or the source URL is also dead, marks the
      scholarship as inactive (is_archived=True) so it doesn't appear in feeds.
 
 Usage:
@@ -87,7 +91,10 @@ async def _check_url(url: str) -> int:
         async with httpx.AsyncClient(
             timeout=TIMEOUT,
             follow_redirects=True,
-            headers={"User-Agent": USER_AGENT},
+            headers={
+                "User-Agent": USER_AGENT,
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            },
         ) as client:
             try:
                 resp = await client.head(url)
@@ -98,6 +105,20 @@ async def _check_url(url: str) -> int:
             return resp.status_code
     except Exception:  # noqa: BLE001
         return 999
+
+
+def _root_domain_url(url: str) -> Optional[str]:
+    """Extract the root domain URL (scheme + host) from a full URL.
+
+    e.g. 'https://www.example.com/scholarships/apply?x=1' -> 'https://www.example.com'
+    Returns None if the URL is invalid or has no netloc.
+    """
+    if not url or not url.strip():
+        return None
+    parsed = urlparse(url.strip())
+    if not parsed.scheme or not parsed.netloc:
+        return None
+    return f"{parsed.scheme}://{parsed.netloc}"
 
 
 async def repair_urls(dry_run: bool = False) -> dict:
@@ -142,15 +163,31 @@ async def repair_urls(dry_run: bool = False) -> dict:
                 summary["ok"] += 1
                 continue
 
-            # URL is dead — try to find a replacement from sources.json
+            # URL is dead — try root domain fallback first
             logger.warning("Dead URL (HTTP %d): %s — '%s'", status_code, portal_url, s.title)
+
+            root_url = _root_domain_url(portal_url)
+            if root_url and root_url != portal_url:
+                root_status = await _check_url(root_url)
+                if root_status < 400:
+                    logger.info("  Repairing (root domain): %s -> %s", portal_url, root_url)
+                    if not dry_run:
+                        s.portal_url = root_url
+                        s.updated_at = datetime.utcnow()
+                        db.commit()
+                    summary["repaired"] += 1
+                    continue
+                else:
+                    logger.debug("  Root domain also dead (HTTP %d): %s", root_status, root_url)
+
+            # Root domain is dead — try to find a replacement from sources.json
             source_url = _find_source_url(s.provider, portal_url, source_map)
 
             if source_url and source_url != portal_url:
                 # Verify the source URL is alive
                 source_status = await _check_url(source_url)
                 if source_status < 400:
-                    logger.info("  Repairing: %s -> %s", portal_url, source_url)
+                    logger.info("  Repairing (source map): %s -> %s", portal_url, source_url)
                     if not dry_run:
                         s.portal_url = source_url
                         s.updated_at = datetime.utcnow()
@@ -160,7 +197,7 @@ async def repair_urls(dry_run: bool = False) -> dict:
                 else:
                     logger.warning("  Source URL also dead (HTTP %d): %s", source_status, source_url)
 
-            # Both portal and source URLs are dead — archive the scholarship
+            # All repair attempts failed — archive the scholarship
             logger.warning("  Archiving dead scholarship: '%s' (provider: %s)", s.title, s.provider)
             if not dry_run:
                 s.is_archived = True

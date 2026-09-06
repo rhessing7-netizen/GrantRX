@@ -89,22 +89,36 @@ async def _verify_portal_url(
 ) -> Tuple[str, bool]:
     """Verify the portal URL, falling back to source URL if needed.
 
-    Returns (final_url, is_valid). If both URLs are dead, returns (portal_url, False).
+    Ensures any relative path in portal_url is resolved against source_url
+    using urllib.parse.urljoin before validation.
+
+    Returns (final_url, is_valid). If both URLs are dead (HTTP >= 400),
+    returns (portal_url, False) so the caller can drop the entry and
+    increment dead_links.
     """
-    # Check the extracted portal URL first
-    is_valid = await _verify_url(portal_url)
+    # Resolve relative paths against the source URL
+    resolved_url = _resolve_portal_url(portal_url, source_url)
+
+    # Check the resolved portal URL first
+    is_valid = await _verify_url(resolved_url)
     if is_valid:
-        return portal_url, True
+        return resolved_url, True
 
     # Portal URL is dead — try the source URL as fallback
-    logger.warning("Portal URL returned error (404?): %s — falling back to source URL", portal_url)
+    logger.warning(
+        "Portal URL returned error (>= 400): %s — falling back to source URL",
+        resolved_url,
+    )
     source_valid = await _verify_url(source_url)
     if source_valid:
         return source_url, True
 
-    # Both are dead
-    logger.warning("Source URL also unreachable: %s — link will not be saved", source_url)
-    return portal_url, False
+    # Both are dead — caller should drop the entry and increment dead_links
+    logger.warning(
+        "Source URL also unreachable: %s — link will not be saved",
+        source_url,
+    )
+    return resolved_url, False
 
 
 # ---------------------------------------------------------------------------
@@ -315,10 +329,19 @@ def _to_db_dict(extract: ScholarshipExtract) -> dict:
         "matching_tags": extract.matching_tags or [],
         "is_archived": is_archived,
         "estimated_next_cycle": estimated_next_cycle,
+        # Academic criteria — general major & academic levels
+        "is_general_major": getattr(extract, "is_general_major", False),
+        "academic_levels": getattr(extract, "academic_levels", []) or [],
+        # Geographic targeting
+        "scope": getattr(extract, "scope", "national") or "national",
+        "county_restrictions": getattr(extract, "county_restrictions", []) or [],
+        "city_restrictions": getattr(extract, "city_restrictions", []) or [],
+        # Provider alignment & local discovery
         "provider_type": extract.provider_type,
         "provider_mission": extract.provider_mission,
         "provider_core_values": extract.provider_core_values or [],
         "is_local": extract.is_local,
+        "competition_level": getattr(extract, "competition_level", "medium") or "medium",
         "target_community": extract.target_community,
         "updated_at": datetime.utcnow(),
     }

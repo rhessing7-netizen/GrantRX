@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, Column, Date, DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, Column, Date, DateTime, Float, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.dialects.postgresql import ARRAY, ENUM, JSONB, UUID
 from sqlalchemy.orm import relationship
 
@@ -94,14 +94,27 @@ class Scholarship(Base):
     matching_tags = Column(ARRAY(Text), default=list)
     is_archived = Column(Boolean, default=False)
     estimated_next_cycle = Column(Date, nullable=True)
+    # Academic criteria — general major & academic levels
+    is_general_major = Column(Boolean, default=False, index=True)
+    academic_levels = Column(ARRAY(Text), default=list)
+    # Geographic targeting
+    scope = Column(String, default="national", index=True)
+    county_restrictions = Column(ARRAY(Text), default=list)
+    city_restrictions = Column(ARRAY(Text), default=list)
     # Provider alignment & local discovery fields
     provider_type = Column(String, nullable=True)
     provider_mission = Column(Text, nullable=True)
     provider_core_values = Column(ARRAY(Text), default=list)
     is_local = Column(Boolean, default=False, index=True)
+    competition_level = Column(String, default="medium", index=True)
     target_community = Column(String, nullable=True)
     created_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
+
+    __table_args__ = (
+        Index("idx_scholarships_scope_local", "scope", "is_local"),
+        Index("idx_scholarships_deadline_active", "deadline", "is_archived"),
+    )
 
 
 class UserScholarship(Base):

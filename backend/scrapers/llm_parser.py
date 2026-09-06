@@ -36,31 +36,75 @@ class LLMScholarship(BaseModel):
     portal_url: str = Field(
         "",
         description=(
-            "The exact, fully qualified HTTP/HTTPS application or portal URL "
-            "(e.g. SmarterSelect, OpenWater, Formstack, or direct apply page). "
+            "STRICT: The exact, fully qualified HTTP/HTTPS application or portal "
+            "URL (e.g. SmarterSelect, OpenWater, Formstack, or direct apply page) "
+            "as it explicitly appears in the source text. "
+            "NEVER guess, construct, predict, or hallucinate a URL. "
+            "NEVER build a relative path or append '/apply' to a domain. "
             "If no explicit apply button or link is found in the page text, "
-            "default to the source URL provided above rather than guessing or "
-            "constructing a link."
+            "you MUST default to the exact source URL provided above. "
+            "An empty string is also acceptable if no URL is present."
         ),
     )
     award_amount: int = Field(..., description="Award amount in whole US dollars")
     deadline: str = Field(..., description="Application deadline as YYYY-MM-DD")
+    is_general_major: bool = Field(
+        default=False,
+        description=(
+            "True if the scholarship is open to ANY major or field of study "
+            "(i.e. no major/degree constraint is specified). "
+            "If true, set eligible_disciplines to ['any']."
+        ),
+    )
     eligible_disciplines: List[str] = Field(
         default_factory=list,
         description=(
             "One or more of: pharmacy, medicine, nursing, therapeutics_rehab, "
-            "diagnostic_imaging, public_health_emergency"
+            "diagnostic_imaging, public_health_emergency. "
+            "Use ['any'] if the award is unrestricted / open to all majors."
         ),
     )
     eligible_credentials: List[str] = Field(
         default_factory=list,
-        description="e.g. ['BSN', 'PharmD', 'DPT', 'MD']",
+        description=(
+            "e.g. ['High School', 'Associate', 'Bachelor', 'Master', "
+            "'Doctorate', 'Vocational', 'BSN', 'PharmD', 'DPT', 'MD']"
+        ),
+    )
+    academic_levels: List[str] = Field(
+        default_factory=list,
+        description=(
+            "Target academic levels. Include all that apply from: "
+            "'high_school_senior', 'undergraduate_freshman', 'undergraduate', "
+            "'graduate', 'doctoral'. Empty if not specified."
+        ),
     )
     min_gpa: Optional[float] = Field(None, description="Minimum GPA, or null")
     max_sai: Optional[int] = Field(None, description="Maximum SAI (Student Aid Index), or null")
+    scope: str = Field(
+        default="national",
+        description=(
+            "Geographic scope of the award: 'national', 'state', 'metro', "
+            "'county', or 'city'. Default 'national' if no geographic restriction."
+        ),
+    )
     state_restrictions: List[str] = Field(
         default_factory=list,
         description="Two-letter state codes the award is restricted to, or empty",
+    )
+    county_restrictions: List[str] = Field(
+        default_factory=list,
+        description=(
+            "Specific counties the award is restricted to (e.g. "
+            "['Wayne County', 'Cuyahoga County']). Empty if no county restriction."
+        ),
+    )
+    city_restrictions: List[str] = Field(
+        default_factory=list,
+        description=(
+            "Specific municipalities or towns the award is restricted to. "
+            "Empty if no city restriction."
+        ),
     )
     required_affiliations: List[str] = Field(
         default_factory=list,
@@ -82,8 +126,9 @@ class LLMScholarship(BaseModel):
         None,
         description=(
             "Type of sponsoring organization, e.g. 'community_foundation', "
-            "'hospital_system', 'national_association', 'state_agency', "
-            "'corporate', 'faith_based', 'local_business', 'academic_department'. "
+            "'chamber_of_commerce', 'civic_club', 'hospital_system', "
+            "'national_association', 'state_agency', 'corporate', "
+            "'faith_based', 'local_business', 'academic_department'. "
             "Null if not determinable."
         ),
     )
@@ -105,14 +150,24 @@ class LLMScholarship(BaseModel):
         False,
         description=(
             "True if the scholarship is specifically local to a city, county, "
-            "parish, or university community (not a national award). "
+            "town, high school, church, or civic organization (not a national award). "
             "False if national or if locality is unclear."
+        ),
+    )
+    competition_level: str = Field(
+        default="medium",
+        description=(
+            "'low' if restricted to a specific county, town, high school, or "
+            "local civic organization (e.g. Rotary, Lions, Elks, Chamber of "
+            "Commerce, Community Foundation). "
+            "'medium' if restricted statewide or regional/endowment specific. "
+            "'high' if open nationwide across the US with no geographic boundary."
         ),
     )
     target_community: Optional[str] = Field(
         None,
         description=(
-            "The specific municipality, county, parish, or university name "
+            "The specific municipality, county, parish, high school, or university "
             "the award is local to (e.g. 'Cleveland, OH', 'Cuyahoga County', "
             "'University of Michigan'). Null if not local or not specified."
         ),
@@ -131,35 +186,59 @@ SYSTEM_PROMPT = (
     "  date without a year, use the next upcoming occurrence.\n"
     "- Award amount: whole US dollars. If a range is given, use the maximum. "
     "  If it says 'varies' with no number, return 0.\n"
+    "- Is general major: If the scholarship does NOT specify a major, field of "
+    "  study, or degree requirement, set is_general_major=True and set "
+    "  eligible_disciplines=['any']. Otherwise set is_general_major=False and "
+    "  list the specific disciplines.\n"
+    "- Eligible disciplines: Use the controlled vocabulary: pharmacy, medicine, "
+    "  nursing, therapeutics_rehab, diagnostic_imaging, public_health_emergency. "
+    "  Use ['any'] when the award is open to all majors.\n"
+    "- Eligible credentials: e.g. ['High School', 'Associate', 'Bachelor', "
+    "  'Master', 'Doctorate', 'Vocational', 'BSN', 'PharmD', 'DPT', 'MD'].\n"
+    "- Academic levels: Extract all that apply from 'high_school_senior', "
+    "  'undergraduate_freshman', 'undergraduate', 'graduate', 'doctoral'. "
+    "  Empty if not specified.\n"
     "- Min GPA: extract the numeric minimum (e.g. 3.0, 3.5). Null if not specified.\n"
+    "- Scope: 'national' (open nationwide), 'state' (restricted to a state), "
+    "  'metro' (restricted to a metro area), 'county' (restricted to a county), "
+    "  'city' (restricted to a city/town). Default 'national' if no restriction.\n"
     "- State restrictions: two-letter codes only (e.g. CA, NY, TX). Empty if none.\n"
+    "- County restrictions: specific county names (e.g. 'Wayne County'). Empty if none.\n"
+    "- City restrictions: specific municipality names. Empty if none.\n"
     "- Metro restrictions: If the scholarship restricts eligibility to a specific "
     "  metropolitan area or group of counties, specify the matching Top 20 Metro "
     "  name (e.g. 'New York-Newark-Jersey City', 'Los Angeles-Long Beach-Anaheim') "
     "  or CBSA code (e.g. 'cbsa:35620'). Empty if no metro-level restriction.\n"
-    "- Portal URL: Extract the exact, fully qualified HTTP/HTTPS application or "
-    "  portal URL (e.g. SmarterSelect, OpenWater, Formstack, or direct apply page). "
-    "  If no explicit apply button or link is found in the page text, default "
-    "  directly to the source's exact input URL rather than guessing or "
-    "  constructing a link.\n"
+    "- Competition level: Assign based on geographic restriction:\n"
+    "  * 'low': Restricted to a specific county, town, high school, or local "
+    "    civic organization (e.g. Rotary, Lions, Elks, Chamber of Commerce, "
+    "    Community Foundation).\n"
+    "  * 'medium': Restricted statewide or regional/endowment specific.\n"
+    "  * 'high': Open nationwide across the US with no geographic boundary "
+    "    (e.g. Coca-Cola, Taco Bell, Burger King).\n"
+    "- Portal URL: STRICT RULE — Extract the exact, fully qualified HTTP/HTTPS "
+    "  application or portal URL (e.g. SmarterSelect, OpenWater, Formstack, or "
+    "  direct apply page) ONLY if it explicitly appears in the source text. "
+    "  NEVER guess, construct, predict, or hallucinate a URL. NEVER append paths "
+    "  like '/apply' to a domain. NEVER build relative paths. If no explicit "
+    "  apply button or link is found in the page text, you MUST default directly "
+    "  to the exact source URL provided above. Do not invent URLs.\n"
     "- Provider type: Classify the sponsoring organization type (e.g. "
-    "  'community_foundation', 'hospital_system', 'national_association', "
-    "  'state_agency', 'corporate', 'faith_based', 'local_business', "
-    "  'academic_department'). Null if not determinable.\n"
+    "  'community_foundation', 'chamber_of_commerce', 'civic_club', "
+    "  'hospital_system', 'national_association', 'state_agency', 'corporate', "
+    "  'faith_based', 'local_business', 'academic_department'). Null if not determinable.\n"
     "- Provider mission: If the page includes a mission statement or purpose "
     "  for the sponsoring organization, summarize it briefly. Null if not found.\n"
     "- Provider core values: Extract any stated core values or guiding principles "
     "  of the organization (e.g. 'equity', 'service', 'compassion'). Empty if none.\n"
     "- Is local: Set to true if the award is specifically targeted at residents "
-    "  of a particular city, county, parish, or university community. Set to false "
-    "  for national awards or when locality is unclear.\n"
+    "  of a particular city, county, town, high school, church, or civic "
+    "  organization. Set to false for national awards or when locality is unclear.\n"
     "- Target community: If is_local is true, specify the municipality, county, "
-    "  parish, or university name (e.g. 'Cleveland, OH', 'Cuyahoga County', "
-    "  'University of Michigan'). Null if not local or not specified.\n"
-    "Only include disciplines from this controlled vocabulary: "
-    "pharmacy, medicine, nursing, therapeutics_rehab, diagnostic_imaging, "
-    "public_health_emergency. If a field is not present, return null or an empty "
-    "list as appropriate. Do not invent values."
+    "  high school, or organization name (e.g. 'Cleveland, OH', 'Cuyahoga County', "
+    "  'Rotary District 6650'). Null if not local or not specified.\n"
+    "If a field is not present, return null or an empty list as appropriate. "
+    "Do not invent values."
 )
 
 USER_PROMPT_TEMPLATE = (
@@ -298,11 +377,16 @@ async def extract_with_llm(html: str, url: str) -> Optional[ScholarshipExtract]:
         portal_url=portal_url,
         award_amount=result.award_amount,
         deadline=result.deadline,
+        is_general_major=result.is_general_major,
         eligible_disciplines=disciplines,
         eligible_credentials=credentials,
+        academic_levels=result.academic_levels or [],
         min_gpa=result.min_gpa,
         max_sai=result.max_sai,
+        scope=result.scope or "national",
         state_restrictions=[s.upper() for s in result.state_restrictions if s],
+        county_restrictions=result.county_restrictions or [],
+        city_restrictions=result.city_restrictions or [],
         metro_restrictions=result.metro_restrictions or [],
         required_affiliations=result.required_affiliations,
         matching_tags=result.matching_tags,
@@ -311,5 +395,6 @@ async def extract_with_llm(html: str, url: str) -> Optional[ScholarshipExtract]:
         provider_mission=result.provider_mission,
         provider_core_values=result.provider_core_values or [],
         is_local=result.is_local,
+        competition_level=result.competition_level or "medium",
         target_community=result.target_community,
     )

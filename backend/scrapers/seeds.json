@@ -125,5 +125,119 @@
     "region": "National",
     "category": "regional_foundation",
     "scraper_type": "playwright"
+  },
+  {
+    "url": "https://www.nycommunitytrust.org/information-for/scholarship-applicants/",
+    "name": "The New York Community Trust",
+    "region": "NY",
+    "category": "community_foundation"
+  },
+  {
+    "url": "https://www.calfund.org/nonprofits/scholarships/",
+    "name": "California Community Foundation",
+    "region": "CA",
+    "category": "community_foundation"
+  },
+  {
+    "url": "https://www.cct.org/what-we-offer/scholarships/",
+    "name": "The Chicago Community Trust",
+    "region": "IL",
+    "category": "community_foundation"
+  },
+  {
+    "url": "https://www.cftexas.org/scholarships",
+    "name": "Communities Foundation of Texas",
+    "region": "TX",
+    "category": "community_foundation"
+  },
+  {
+    "url": "https://ghcf.org/scholarships/",
+    "name": "Greater Houston Community Foundation",
+    "region": "TX",
+    "category": "community_foundation"
+  },
+  {
+    "url": "https://cfgreateratlanta.org/scholarships/",
+    "name": "Community Foundation for Greater Atlanta",
+    "region": "GA",
+    "category": "community_foundation"
+  },
+  {
+    "url": "https://www.thecommunityfoundation.org/scholarships",
+    "name": "Greater Washington Community Foundation",
+    "region": "DC",
+    "category": "community_foundation"
+  },
+  {
+    "url": "https://miamifoundation.org/scholarships/",
+    "name": "The Miami Foundation",
+    "region": "FL",
+    "category": "community_foundation"
+  },
+  {
+    "url": "https://www.azfoundation.org/scholarships/",
+    "name": "Arizona Community Foundation",
+    "region": "AZ",
+    "category": "community_foundation"
+  },
+  {
+    "url": "https://www.tbf.org/what-we-do/scholarships",
+    "name": "The Boston Foundation",
+    "region": "MA",
+    "category": "community_foundation"
+  },
+  {
+    "url": "https://www.iegives.org/students/scholarships/",
+    "name": "Inland Empire Community Foundation",
+    "region": "CA",
+    "category": "community_foundation"
+  },
+  {
+    "url": "https://www.siliconvalleycf.org/scholarships",
+    "name": "Silicon Valley Community Foundation",
+    "region": "CA",
+    "category": "community_foundation"
+  },
+  {
+    "url": "https://cfsem.org/apply/scholarships/",
+    "name": "Community Foundation for Southeast Michigan",
+    "region": "MI",
+    "category": "community_foundation"
+  },
+  {
+    "url": "https://www.seattlefoundation.org/scholarships/",
+    "name": "Seattle Foundation",
+    "region": "WA",
+    "category": "community_foundation"
+  },
+  {
+    "url": "https://www.minneapolisfoundation.org/scholarships/",
+    "name": "The Minneapolis Foundation",
+    "region": "MN",
+    "category": "community_foundation"
+  },
+  {
+    "url": "https://cftampabay.org/scholarships/",
+    "name": "Community Foundation of Tampa Bay",
+    "region": "FL",
+    "category": "community_foundation"
+  },
+  {
+    "url": "https://www.sdfoundation.org/students/community-scholarship-program/",
+    "name": "San Diego Foundation",
+    "region": "CA",
+    "category": "community_foundation"
+  },
+  {
+    "url": "https://denverfoundation.org/scholarships/",
+    "name": "The Denver Foundation",
+    "region": "CO",
+    "category": "community_foundation"
+  },
+  {
+    "url": "https://cffound.org/scholarships/",
+    "name": "Central Florida Foundation",
+    "region": "FL",
+    "category": "community_foundation"
   }
 ]

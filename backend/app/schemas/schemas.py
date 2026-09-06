@@ -113,11 +113,19 @@ class ScholarshipBase(BaseModel):
     matching_tags: List[str] = []
     is_archived: bool = False
     estimated_next_cycle: Optional[date] = None
+    # Academic criteria — general major & academic levels
+    is_general_major: bool = False
+    academic_levels: List[str] = []
+    # Geographic targeting
+    scope: str = "national"
+    county_restrictions: List[str] = []
+    city_restrictions: List[str] = []
     # Provider alignment & local discovery
     provider_type: Optional[str] = None
     provider_mission: Optional[str] = None
     provider_core_values: List[str] = []
     is_local: bool = False
+    competition_level: str = "medium"
     target_community: Optional[str] = None
 
 

@@ -75,6 +75,14 @@ def _make_scholarship(**kwargs):
         "matching_tags": [],
         "is_archived": False,
         "estimated_next_cycle": None,
+        "is_general_major": False,
+        "academic_levels": [],
+        "scope": "national",
+        "county_restrictions": [],
+        "city_restrictions": [],
+        "is_local": False,
+        "competition_level": "medium",
+        "target_community": None,
     }
     defaults.update(kwargs)
     obj = MagicMock()
