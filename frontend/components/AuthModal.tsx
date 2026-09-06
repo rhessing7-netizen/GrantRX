@@ -12,8 +12,10 @@ export type AuthModalProps = {
   onAuthSuccess: (profile: Profile | null) => void;
 };
 
+type AuthMode = "signin" | "signup" | "forgot_password" | "verify_reset_otp";
+
 export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
-  const [mode, setMode] = useState<"signin" | "signup">("signup");
+  const [mode, setMode] = useState<AuthMode>("signup");
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -42,6 +44,15 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
     emailValid &&
     passwordValid &&
     (mode === "signin" || (fullName.trim() !== "" && termsAccepted && confirmPassword.trim().length > 0));
+
+  // Forgot password mode only needs a valid email
+  const canSendResetCode = emailValid;
+
+  // Reset OTP mode needs code + matching passwords
+  const canResetPassword =
+    otpCode.trim().length === 6 &&
+    password.length >= 6 &&
+    password === confirmPassword;
 
   const triggerTermsShake = () => {
     setTermsShake(true);
@@ -330,6 +341,82 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
     }
   };
 
+  // Forgot Password — send recovery code to email
+  const handleSendResetCode = async () => {
+    if (!emailValid) {
+      setError("Please enter a valid email address.");
+      return;
+    }
+    setSubmitting(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      const { error: resetErr } = await supabase.auth.resetPasswordForEmail(
+        email.trim(),
+      );
+      if (resetErr) {
+        setError(resetErr.message);
+        return;
+      }
+      setSuccess("Recovery code sent to " + email.trim());
+      setMode("verify_reset_otp");
+    } catch (err: any) {
+      setError(err?.message || "Failed to send reset code. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // Verify recovery OTP and update password
+  const handleVerifyResetOtp = async () => {
+    if (otpCode.trim().length !== 6) {
+      setError("Please enter the 6-digit recovery code.");
+      return;
+    }
+    if (password.length < 6) {
+      setError("Password must be at least 6 characters long.");
+      return;
+    }
+    if (password !== confirmPassword) {
+      setError("Passwords do not match. Please check and try again.");
+      return;
+    }
+    setSubmitting(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      // 1. Verify the recovery OTP to establish recovery session
+      const { data, error: verifyErr } = await supabase.auth.verifyOtp({
+        email: email.trim(),
+        token: otpCode.trim(),
+        type: "recovery",
+      });
+      if (verifyErr) throw verifyErr;
+
+      // 2. Update user password
+      const { error: updateErr } = await supabase.auth.updateUser({
+        password,
+      });
+      if (updateErr) throw updateErr;
+
+      // Set auth token if a session was established
+      if (data.session?.access_token) {
+        setAuthToken(data.session.access_token);
+      }
+
+      // 3. Complete and log in
+      setSuccess("Password updated successfully! Signing you in...");
+      setTimeout(() => {
+        onAuthSuccess(null);
+      }, 1200);
+    } catch (err: any) {
+      console.error("[AuthModal] Password reset error:", err);
+      setError(err?.message || "Password reset failed. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-textPrimary/40 backdrop-blur-sm"
@@ -350,7 +437,7 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
           </svg>
         </button>
 
-        {/* OTP Verification Screen */}
+        {/* OTP Verification Screen (signup) */}
         {verifyScreen ? (
           <div className="text-center">
             <div className="mb-4 pr-6">
@@ -415,6 +502,189 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
                         setError(resendErr.message);
                       } else {
                         setSuccess("Verification code resent to " + pendingEmail);
+                        setError(null);
+                      }
+                    } catch {
+                      setError("Failed to resend code. Please try again.");
+                    }
+                  }}
+                  className="text-xs text-crayolaBlue hover:underline"
+                >
+                  Resend code
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : mode === "forgot_password" ? (
+          <div className="text-center">
+            <div className="mb-4 pr-6">
+              <h2 className="font-serif text-xl font-bold text-textPrimary">
+                Reset Your Password
+              </h2>
+              <p className="mt-1 text-sm text-textSecondary">
+                Enter your registered email address and we will send you a
+                6-digit recovery code.
+              </p>
+            </div>
+
+            {error && (
+              <div className="mb-3 rounded-xl bg-red-50 px-4 py-2.5 text-sm text-red-700">
+                {error}
+              </div>
+            )}
+            {success && (
+              <div className="mb-3 rounded-xl bg-aquamarine/20 px-4 py-2.5 text-sm text-textPrimary">
+                {success}
+              </div>
+            )}
+
+            <div className="space-y-4 text-left">
+              <div>
+                <label className="block text-sm font-medium text-textSecondary">
+                  Email Address
+                </label>
+                <input
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  onBlur={() => setTouched((t) => ({ ...t, email: true }))}
+                  type="email"
+                  placeholder="jane@example.com"
+                  className={`mt-1 w-full rounded-xl border bg-surfaceBg px-4 py-2 text-textPrimary transition ${
+                    showEmailError
+                      ? "border-red-400 ring-1 ring-red-200"
+                      : "border-textSecondary/20 focus:border-crayolaBlue"
+                  }`}
+                />
+                {showEmailError && (
+                  <p className="mt-1 text-xs text-red-500">
+                    Please enter a valid email address.
+                  </p>
+                )}
+              </div>
+
+              <button
+                onClick={handleSendResetCode}
+                disabled={!canSendResetCode || submitting}
+                className="w-full rounded-full bg-crayolaBlue px-6 py-2.5 text-sm font-medium text-surfaceBg disabled:opacity-40"
+              >
+                {submitting ? "Sending…" : "Send Reset Code"}
+              </button>
+
+              <button
+                onClick={() => {
+                  setMode("signin");
+                  setError(null);
+                  setSuccess(null);
+                }}
+                className="w-full text-xs text-textSecondary hover:text-textPrimary"
+              >
+                Back to Sign In
+              </button>
+            </div>
+          </div>
+        ) : mode === "verify_reset_otp" ? (
+          <div className="text-center">
+            <div className="mb-4 pr-6">
+              <h2 className="font-serif text-xl font-bold text-textPrimary">
+                Enter Recovery Code
+              </h2>
+              <p className="mt-1 text-sm text-textSecondary">
+                Enter the 6-digit code sent to{" "}
+                <span className="font-medium text-textPrimary">{email}</span>{" "}
+                and choose your new password.
+              </p>
+            </div>
+
+            {error && (
+              <div className="mb-3 rounded-xl bg-red-50 px-4 py-2.5 text-sm text-red-700">
+                {error}
+              </div>
+            )}
+            {success && (
+              <div className="mb-3 rounded-xl bg-aquamarine/20 px-4 py-2.5 text-sm text-textPrimary">
+                {success}
+              </div>
+            )}
+
+            <div className="space-y-4 text-left">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Recovery Code
+                </label>
+                <input
+                  type="text"
+                  value={otpCode}
+                  onChange={(e) =>
+                    setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))
+                  }
+                  placeholder="123456"
+                  maxLength={6}
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  className="w-full rounded-xl border border-textSecondary/20 bg-surfaceBg px-4 py-3 text-center text-2xl font-bold tracking-[0.5em] text-textPrimary focus:border-crayolaBlue"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  New Password
+                </label>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="At least 6 characters"
+                  className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm text-slate-800 placeholder-slate-400 focus:border-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-100 transition-all"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Confirm New Password
+                </label>
+                <input
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => {
+                    setConfirmPassword(e.target.value);
+                    if (error && error.includes("match")) setError(null);
+                  }}
+                  placeholder="Re-enter your new password"
+                  className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm text-slate-800 placeholder-slate-400 focus:border-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-100 transition-all"
+                />
+              </div>
+
+              <button
+                onClick={handleVerifyResetOtp}
+                disabled={!canResetPassword || submitting}
+                className="w-full rounded-full bg-crayolaBlue px-6 py-2.5 text-sm font-medium text-surfaceBg disabled:opacity-40"
+              >
+                {submitting ? "Updating…" : "Update Password"}
+              </button>
+
+              <div className="flex items-center justify-between">
+                <button
+                  onClick={() => {
+                    setMode("signin");
+                    setOtpCode("");
+                    setPassword("");
+                    setConfirmPassword("");
+                    setError(null);
+                    setSuccess(null);
+                  }}
+                  className="text-xs text-textSecondary hover:text-textPrimary"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={async () => {
+                    try {
+                      const { error: resendErr } =
+                        await supabase.auth.resetPasswordForEmail(email.trim());
+                      if (resendErr) {
+                        setError(resendErr.message);
+                      } else {
+                        setSuccess("Recovery code resent to " + email.trim());
                         setError(null);
                       }
                     } catch {
@@ -547,9 +817,20 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-textSecondary">
-              Password
-            </label>
+            <div className="flex items-center justify-between">
+              <label className="block text-sm font-medium text-textSecondary">
+                Password
+              </label>
+              {mode === "signin" && (
+                <button
+                  type="button"
+                  onClick={() => { setMode("forgot_password"); setError(null); setSuccess(null); }}
+                  className="text-xs font-semibold text-blue-600 hover:text-blue-700"
+                >
+                  Forgot password?
+                </button>
+              )}
+            </div>
             <input
               value={password}
               onChange={(e) => setPassword(e.target.value)}
