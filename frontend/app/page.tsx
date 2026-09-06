@@ -590,6 +590,7 @@ export default function Home() {
         onClose={() => setShowAccountSettings(false)}
         profile={profile}
         onProfileUpdated={(p) => setProfile(p)}
+        onUpgrade={() => openUpgrade()}
         onDeleted={() => {
           setProfile(null);
           setUsage(null);
