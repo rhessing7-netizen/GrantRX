@@ -324,10 +324,10 @@ export function AccountSettingsModal({
 
         <hr className="my-6 border-textSecondary/10" />
 
-        {/* Danger Zone */}
-        <div className="rounded-2xl border-2 border-red-200/60 bg-red-50/30 p-5">
-          <h3 className="font-serif text-sm font-semibold text-red-700">
-            Danger Zone
+        {/* Permanently Delete */}
+        <div className="rounded-2xl border border-red-200/70 bg-red-50/40 p-5 mt-6">
+          <h3 className="text-red-700 font-semibold text-sm mb-1">
+            Permanently Delete
           </h3>
           <p className="mt-1 text-xs text-textSecondary">
             Permanently delete your account, cancel any active subscription,
