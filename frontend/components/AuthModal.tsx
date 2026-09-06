@@ -17,6 +17,7 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [marketingOptIn, setMarketingOptIn] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -40,7 +41,7 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
   const canSubmit =
     emailValid &&
     passwordValid &&
-    (mode === "signin" || (fullName.trim() !== "" && termsAccepted));
+    (mode === "signin" || (fullName.trim() !== "" && termsAccepted && confirmPassword.trim().length > 0));
 
   const triggerTermsShake = () => {
     setTermsShake(true);
@@ -122,6 +123,18 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
     if (mode === "signup" && !termsAccepted) {
       triggerTermsShake();
       return;
+    }
+
+    // Client-side password validation for signup
+    if (mode === "signup") {
+      if (password.length < 6) {
+        setError("Password must be at least 6 characters long.");
+        return;
+      }
+      if (password !== confirmPassword) {
+        setError("Passwords do not match. Please check and try again.");
+        return;
+      }
     }
 
     setSubmitting(true);
@@ -433,7 +446,7 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
         <div className="mb-4 flex rounded-full bg-textSecondary/10 p-1">
           <button
             type="button"
-            onClick={() => setMode("signup")}
+            onClick={() => { setMode("signup"); setConfirmPassword(""); setError(null); }}
             className={`flex-1 rounded-full px-4 py-1.5 text-sm font-medium transition ${
               mode === "signup"
                 ? "bg-crayolaBlue text-surfaceBg"
@@ -444,7 +457,7 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
           </button>
           <button
             type="button"
-            onClick={() => setMode("signin")}
+            onClick={() => { setMode("signin"); setConfirmPassword(""); setError(null); }}
             className={`flex-1 rounded-full px-4 py-1.5 text-sm font-medium transition ${
               mode === "signin"
                 ? "bg-crayolaBlue text-surfaceBg"
@@ -553,6 +566,25 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
               <p className="mt-1 text-xs text-red-500">Password must be at least 6 characters.</p>
             )}
           </div>
+
+          {mode === "signup" && (
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Confirm Password
+              </label>
+              <input
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => {
+                  setConfirmPassword(e.target.value);
+                  if (error && error.includes("match")) setError(null);
+                }}
+                placeholder="Re-enter your password"
+                required
+                className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm text-slate-800 placeholder-slate-400 focus:border-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-100 transition-all"
+              />
+            </div>
+          )}
 
           {mode === "signup" && (
             <div className="space-y-2.5 pt-1">
