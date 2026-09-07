@@ -46,38 +46,44 @@ jobs:
             exit 0
           fi
 
-          # Otherwise, determine day of the week (1=Mon, 2=Tue, ..., 7=Sun)
+          # Day of week (1=Mon, 2=Tue, 3=Wed, 4=Thu, 5=Fri, 6=Sat, 7=Sun)
           DOW=$(date +%u)
 
           case $DOW in
             1)
-              echo "Monday: Ingesting Corporate Unrestricted"
+              echo "Monday: Ingesting Corporate Unrestricted & Employer Tuition Benefits"
               python -m scrapers.runner --category=corporate_unrestricted
+              python -m scrapers.runner --category=employer_tuition_benefit
               ;;
             2)
-              echo "Tuesday: Ingesting National Associations & Honor Societies"
+              echo "Tuesday: Ingesting National Associations & Accrediting Bodies"
               python -m scrapers.runner --category=national_association
+              python -m scrapers.runner --category=accrediting_body
               python -m scrapers.runner --category=honor_society
               ;;
             3)
-              echo "Wednesday: Ingesting Hospital Systems & Networks"
+              echo "Wednesday: Ingesting Hospital Systems & Clinical Employee Pipelines"
               python -m scrapers.runner --category=hospital_system
+              python -m scrapers.runner --category=clinical_employee_pipeline
               ;;
             4)
-              echo "Thursday: Ingesting Diversity & Affinity Programs"
+              echo "Thursday: Ingesting Diversity/Affinity & Government Employee Programs"
               python -m scrapers.runner --category=diversity_affinity
+              python -m scrapers.runner --category=government_employee_benefit
+              python -m scrapers.runner --category=state_agency
               ;;
             5)
-              echo "Friday: Ingesting Regional Foundations (OH & PA)"
+              echo "Friday: Ingesting Hyper-Local & Regional Foundations"
               python -m scrapers.runner --category=regional_foundation --state=OH
               python -m scrapers.runner --category=regional_foundation --state=PA
+              python -m scrapers.runner --category=chamber_of_commerce
               ;;
             6)
-              echo "Saturday: Running Seed Crawl (Capped at 50)"
+              echo "Saturday: Running Outside Aid & AcademicWorks Seed Crawl"
               python -m scrapers.runner --crawl --seeds-file=scrapers/seeds.json --max-depth=2 --limit-extract=50
               ;;
             7)
-              echo "Sunday: Full Link Audit & URL Repair"
+              echo "Sunday: Full Link Audit & Dead URL Repair"
               python -m scripts.repair_urls
               ;;
           esac
