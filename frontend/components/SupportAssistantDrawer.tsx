@@ -1,15 +1,23 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import type { Session } from "@supabase/supabase-js";
 import type { SupportMessage } from "@/lib/types";
 import { api } from "@/lib/api";
+import { supabase } from "@/lib/supabase";
 
 const MAX_TURNS = 4;
 const WELCOME_REPLY =
   "Hi! I'm the GrantRx Support Assistant. Ask me about search quotas, match scoring, the Kanban board, document vault, deadline calendars, or subscriptions. How can I help?";
+const GUEST_WELCOME_REPLY =
+  "Hi! I'm the GrantRx Support Assistant. To protect your account details and route tickets to your student profile, please sign in or create an account.";
+const GUEST_SIGNIN_PROMPT = "Please sign in to continue chatting with support.";
+const SUPPORT_MAILTO =
+  "mailto:phuturecliciansphoundation@gmail.com?subject=%5BGrantRx%20Guest%20Inquiry%5D";
 
 export function SupportAssistantDrawer() {
   const [isOpen, setIsOpen] = useState(false);
+  const [session, setSession] = useState<Session | null>(null);
   const [messages, setMessages] = useState<SupportMessage[]>([
     { role: "assistant", content: WELCOME_REPLY },
   ]);
@@ -24,17 +32,71 @@ export function SupportAssistantDrawer() {
 
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
+  // Read the Supabase auth session and subscribe to auth state changes.
+  useEffect(() => {
+    if (!supabase) return;
+    supabase.auth
+      .getSession()
+      .then(({ data }) => setSession(data.session))
+      .catch(() => {
+        // getSession may fail if Supabase is unreachable — treat as guest
+      });
+    const { data } = supabase.auth.onAuthStateChange(
+      (_event, sess) => {
+        setSession(sess);
+      },
+    );
+    return () => {
+      data.subscription.unsubscribe();
+    };
+  }, []);
+
+  const isGuest = !session;
+
+  // When the auth state changes, swap the initial welcome message so guests
+  // see the sign-in prompt instead of the authenticated welcome.
+  useEffect(() => {
+    setMessages((prev) => {
+      if (isGuest) {
+        // Replace only the very first assistant message if it is still the
+        // authenticated welcome — preserve any user/assistant conversation.
+        if (prev.length === 1 && prev[0].role === "assistant" && prev[0].content === WELCOME_REPLY) {
+          return [{ role: "assistant", content: GUEST_WELCOME_REPLY }];
+        }
+        return prev;
+      }
+      // Authenticated: restore the standard welcome if the only message is the guest welcome.
+      if (prev.length === 1 && prev[0].role === "assistant" && prev[0].content === GUEST_WELCOME_REPLY) {
+        return [{ role: "assistant", content: WELCOME_REPLY }];
+      }
+      return prev;
+    });
+  }, [isGuest]);
+
   // Auto-scroll to the latest message.
   useEffect(() => {
     const el = scrollRef.current;
     if (el) el.scrollTop = el.scrollHeight;
   }, [messages, isOpen]);
 
-  const chatDisabled = isEscalated || turnCount >= MAX_TURNS || sending;
+  const chatDisabled = isEscalated || turnCount >= MAX_TURNS || sending || isGuest;
 
   const handleSend = async () => {
     const text = input.trim();
     if (!text || chatDisabled) return;
+
+    // Guest guard: never hit the backend for unauthenticated users.
+    if (isGuest) {
+      setMessages((prev) => [
+        ...prev,
+        { role: "user", content: text },
+        { role: "assistant", content: GUEST_SIGNIN_PROMPT },
+      ]);
+      setInput("");
+      window.dispatchEvent(new CustomEvent("grantrx:auth:open"));
+      return;
+    }
+
     setError(null);
     const userMsg: SupportMessage = { role: "user", content: text };
     setMessages((prev) => [...prev, userMsg]);
@@ -90,6 +152,10 @@ export function SupportAssistantDrawer() {
     }
   };
 
+  const openAuth = () => {
+    window.dispatchEvent(new CustomEvent("grantrx:auth:open"));
+  };
+
   return (
     <>
       {/* Floating launcher button */}
@@ -136,9 +202,11 @@ export function SupportAssistantDrawer() {
                   GrantRx Assistant
                 </h2>
                 <p className="text-xs text-textSecondary">
-                  {isEscalated || turnCount >= MAX_TURNS
-                    ? "Escalated to human support"
-                    : `${turnsRemaining}/${MAX_TURNS} queries remaining`}
+                  {isGuest
+                    ? "Guest Mode"
+                    : isEscalated || turnCount >= MAX_TURNS
+                      ? "Escalated to human support"
+                      : `${turnsRemaining}/${MAX_TURNS} queries remaining`}
                 </p>
               </div>
               <button
@@ -189,8 +257,33 @@ export function SupportAssistantDrawer() {
                 </div>
               )}
 
+              {/* Guest sign-in CTA card */}
+              {isGuest && (
+                <div className="rounded-xl border border-blueEnergy/30 bg-blueEnergy/5 px-4 py-4 text-sm">
+                  <p className="font-semibold text-textPrimary">
+                    Sign in to continue
+                  </p>
+                  <p className="mt-1 text-textSecondary">
+                    To protect your account details and route tickets to your
+                    student profile, please sign in or create an account.
+                  </p>
+                  <button
+                    onClick={openAuth}
+                    className="mt-3 w-full rounded-full bg-blueEnergy px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90"
+                  >
+                    Sign In / Create Account
+                  </button>
+                  <a
+                    href={SUPPORT_MAILTO}
+                    className="mt-2 block text-center text-xs font-medium text-blueEnergy hover:underline"
+                  >
+                    Email Support Instead
+                  </a>
+                </div>
+              )}
+
               {/* Escalation card */}
-              {(isEscalated || turnCount >= MAX_TURNS) && (
+              {!isGuest && (isEscalated || turnCount >= MAX_TURNS) && (
                 <div className="rounded-xl border border-aquamarine/40 bg-aquamarine/10 px-4 py-3 text-sm text-textPrimary">
                   <p className="font-semibold text-blueEnergy">
                     You&rsquo;ve reached the automated assistant limit.
@@ -209,7 +302,19 @@ export function SupportAssistantDrawer() {
 
             {/* Input + actions */}
             <div className="border-t border-textSecondary/10 bg-surfaceBg/95 px-5 py-3 backdrop-blur">
-              {chatDisabled ? (
+              {isGuest ? (
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-xs text-textSecondary">
+                    Sign in to chat with the assistant.
+                  </p>
+                  <button
+                    onClick={openAuth}
+                    className="rounded-full bg-blueEnergy px-4 py-2 text-xs font-semibold text-white transition hover:opacity-90"
+                  >
+                    Sign In / Create Account
+                  </button>
+                </div>
+              ) : chatDisabled ? (
                 <div className="flex items-center justify-between gap-3">
                   <p className="text-xs text-textSecondary">
                     Chat disabled — conversation escalated.
@@ -230,7 +335,7 @@ export function SupportAssistantDrawer() {
                       onChange={(e) => setInput(e.target.value)}
                       onKeyDown={handleKeyDown}
                       rows={1}
-                      placeholder="Ask about quotas, scoring, Kanban\u2026"
+                      placeholder="Ask about quotas, scoring, Kanban..."
                       className="max-h-32 flex-1 resize-none rounded-xl border border-textSecondary/20 bg-white px-3 py-2 text-sm text-textPrimary placeholder:text-textSecondary/60 focus:border-blueEnergy focus:outline-none focus:ring-1 focus:ring-blueEnergy"
                     />
                     <button
