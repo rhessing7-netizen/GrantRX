@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
+import confetti from "canvas-confetti";
 import {
   DndContext,
   DragOverlay,
@@ -54,6 +55,51 @@ export function KanbanBoard({ items, isPremium, onChanged, onPaywall }: KanbanBo
   } | null>(null);
   const [awardInput, setAwardInput] = useState<string>("");
   const [awardSubmitted, setAwardSubmitted] = useState(false);
+  // Track the last item we celebrated so confetti only fires on a genuine
+  // status transition, not on unrelated re-renders.
+  const celebratedRef = useRef<Set<string>>(new Set());
+
+  const fireConfetti = (type: "submitted" | "awarded") => {
+    if (type === "awarded") {
+      // Bigger celebration for an award win
+      confetti({
+        particleCount: 160,
+        spread: 90,
+        origin: { y: 0.7 },
+        colors: ["#73FBD3", "#44E5E7", "#59D2FE", "#4A8FE7", "#5C7AFF"],
+      });
+      setTimeout(
+        () =>
+          confetti({
+            particleCount: 80,
+            angle: 60,
+            spread: 70,
+            origin: { x: 0, y: 0.7 },
+            colors: ["#73FBD3", "#44E5E7", "#59D2FE"],
+          }),
+        250,
+      );
+      setTimeout(
+        () =>
+          confetti({
+            particleCount: 80,
+            angle: 120,
+            spread: 70,
+            origin: { x: 1, y: 0.7 },
+            colors: ["#4A8FE7", "#5C7AFF", "#73FBD3"],
+          }),
+        450,
+      );
+    } else {
+      // Smaller burst for a submission
+      confetti({
+        particleCount: 90,
+        spread: 70,
+        origin: { y: 0.75 },
+        colors: ["#73FBD3", "#44E5E7", "#59D2FE", "#4A8FE7"],
+      });
+    }
+  };
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -115,14 +161,22 @@ export function KanbanBoard({ items, isPremium, onChanged, onPaywall }: KanbanBo
     try {
       await api.updateTracking(item.id, { status: newStatus });
       onChanged?.();
-      // Milestone celebration toasts
+      // Milestone celebration toasts + confetti
       if (newStatus === "submitted") {
         setMilestone({ type: "submitted", title: item.scholarship?.title ?? "scholarship", itemId: item.id });
         setTimeout(() => setMilestone(null), 6000);
+        if (!celebratedRef.current.has(`${item.id}:submitted`)) {
+          celebratedRef.current.add(`${item.id}:submitted`);
+          fireConfetti("submitted");
+        }
       } else if (newStatus === "awarded") {
         setMilestone({ type: "awarded", title: item.scholarship?.title ?? "scholarship", itemId: item.id });
         setAwardInput("");
         setAwardSubmitted(false);
+        if (!celebratedRef.current.has(`${item.id}:awarded`)) {
+          celebratedRef.current.add(`${item.id}:awarded`);
+          fireConfetti("awarded");
+        }
       }
     } catch (err) {
       console.error("Failed to update tracking", err);

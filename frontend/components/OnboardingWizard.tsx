@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   AFFILIATION_OPTIONS,
   CREDENTIAL_OPTIONS,
+  type MatchPreview,
   type Profile,
   type ProfileCreate,
 } from "@/lib/types";
@@ -64,6 +65,12 @@ export function OnboardingWizard({ onComplete, onCancel, existingProfile }: Onbo
     (existingProfile?.hobbies ?? []).join(", "),
   );
 
+  // Live matching projection — debounced preview of how many scholarships
+  // the user's current onboarding answers would surface.
+  const [projection, setProjection] = useState<MatchPreview | null>(null);
+  const [projectionLoading, setProjectionLoading] = useState(false);
+  const previewAbort = useRef<AbortController | null>(null);
+
   // ALL steps are optional — canNext always returns true
   const canNext = () => true;
 
@@ -101,6 +108,59 @@ export function OnboardingWizard({ onComplete, onCancel, existingProfile }: Onbo
     if (saiScore) payload.sai_score = parseInt(saiScore, 10);
     return payload;
   };
+
+  const hasEnoughInfo =
+    disciplines.length > 0 || credentials.length > 0 || !!selectedCredential;
+
+  useEffect(() => {
+    // Only run the preview once the user has selected at least one discipline
+    // or credential — otherwise the projection is meaningless.
+    if (!hasEnoughInfo) return;
+    // Debounce: wait 400ms after the last change before firing.
+    const handle = setTimeout(() => {
+      previewAbort.current?.abort();
+      const controller = new AbortController();
+      previewAbort.current = controller;
+      setProjectionLoading(true);
+      const payload = buildPayload();
+      api
+        .previewMatchCount(payload, controller.signal)
+        .then((res) => {
+          if (!controller.signal.aborted) setProjection(res);
+        })
+        .catch(() => {
+          // Silent — onboarding must never block on a preview failure.
+          if (!controller.signal.aborted) setProjection(null);
+        })
+        .finally(() => {
+          if (!controller.signal.aborted) setProjectionLoading(false);
+        });
+    }, 400);
+    return () => {
+      clearTimeout(handle);
+      previewAbort.current?.abort();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- buildPayload is a stable closure over state setters
+  }, [
+    hasEnoughInfo,
+    disciplines,
+    credentials,
+    selectedCredential,
+    clinicalPhase,
+    gpa,
+    stateResidence,
+    metroArea,
+    saiScore,
+    firstGen,
+    minorityFlag,
+    affiliations,
+    hobbies,
+  ]);
+
+  // Clear the projection when there's not enough info to project.
+  // Derived in render to avoid setState-in-effect.
+  const displayedProjection = hasEnoughInfo ? projection : null;
+  const displayedLoading = hasEnoughInfo && projectionLoading;
 
   /**
    * Persist the profile via Supabase directly (primary), then fall back to
@@ -471,6 +531,47 @@ export function OnboardingWizard({ onComplete, onCancel, existingProfile }: Onbo
                 placeholder="research, volunteering, music"
                 className="mt-2 w-full rounded-xl border border-textSecondary/20 bg-surfaceBg px-4 py-2.5 text-textPrimary"
               />
+            </div>
+          </div>
+        )}
+
+        {/* Live matching projection — shows on every step once enough
+            info exists to project a match count. */}
+        {(displayedProjection || displayedLoading) && (
+          <div className="mt-6 flex items-center gap-3 rounded-xl border border-aquamarine/40 bg-aquamarine/10 px-4 py-3">
+            <svg
+              className="h-5 w-5 shrink-0 text-blueEnergy"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2}
+              viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="M13 7h8m0 0v8m0-8l-8 8" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 17l6-6 4 4 3-3" />
+            </svg>
+            <div className="text-sm">
+              {displayedLoading ? (
+                <span className="text-textSecondary">
+                  Estimating your matches…
+                </span>
+              ) : displayedProjection ? (
+                <span className="text-textPrimary">
+                  <span className="font-bold text-blueEnergy">
+                    {displayedProjection.projected_count} scholarship
+                    {displayedProjection.projected_count === 1 ? "" : "s"}
+                  </span>{" "}
+                  projected to match your profile
+                  {displayedProjection.projected_funding_total > 0 && (
+                    <>
+                      {" "}·{" "}
+                      <span className="font-semibold">
+                        ${displayedProjection.projected_funding_total.toLocaleString()}
+                      </span>{" "}
+                      potential funding
+                    </>
+                  )}
+                </span>
+              ) : null}
             </div>
           </div>
         )}

@@ -1,10 +1,23 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
-import type { MatchedScholarship, Profile } from "@/lib/types";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
+import type { MatchedScholarship, Profile, ScoreBucket } from "@/lib/types";
 import { getMetroShortName } from "@/lib/constants/metros";
 import { api } from "@/lib/api";
 import { ApplicationDrawer } from "./ApplicationDrawer";
+
+/** True when the keydown target is a text-entry surface — shortcuts must not
+ *  fire while the user is typing. */
+function isTypingTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  const tag = target.tagName;
+  return (
+    tag === "INPUT" ||
+    tag === "TEXTAREA" ||
+    tag === "SELECT" ||
+    target.isContentEditable
+  );
+}
 
 export type ScholarshipFeedProps = {
   results: MatchedScholarship[];
@@ -44,6 +57,9 @@ export const ScholarshipFeed = ({ results, isPremium, profile, onTrack, onUnlock
   const [hiddenIds, setHiddenIds] = useState<Set<string>>(new Set());
   const [undoToast, setUndoToast] = useState<{ id: string; title: string } | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Rapid-fire triage: index of the keyboard-focused card/row
+  const [selectedCardIndex, setSelectedCardIndex] = useState(0);
+  const cardRefs = useRef<Map<string, HTMLElement>>(new Map());
 
   const handleTrack = useCallback(async (scholarshipId: string) => {
     setTracking(scholarshipId);
@@ -109,6 +125,64 @@ export const ScholarshipFeed = ({ results, isPremium, profile, onTrack, onUnlock
 
   const visibleResults = results.filter((s) => !hiddenIds.has(s.scholarship_id));
 
+  // Keep the pointer in range as cards are dismissed / results refresh.
+  const clampedIndex = Math.min(selectedCardIndex, Math.max(0, visibleResults.length - 1));
+  const focusedId = visibleResults[clampedIndex]?.scholarship_id ?? null;
+
+  // Global keyboard triage: J/↓ next, K/↑ previous, S save, X dismiss.
+  // Disabled while the preview drawer is open so its own controls win.
+  useEffect(() => {
+    if (previewScholarship) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (isTypingTarget(e.target)) return;
+      if (visibleResults.length === 0) return;
+
+      const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+      const move = (delta: number) => {
+        e.preventDefault();
+        setSelectedCardIndex((prev) => {
+          const next = Math.min(
+            Math.max(0, Math.min(prev, visibleResults.length - 1) + delta),
+            visibleResults.length - 1,
+          );
+          const el = cardRefs.current.get(visibleResults[next].scholarship_id);
+          el?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+          return next;
+        });
+      };
+
+      const current = visibleResults[clampedIndex];
+      switch (key) {
+        case "ArrowDown":
+        case "j":
+          move(1);
+          break;
+        case "ArrowUp":
+        case "k":
+          move(-1);
+          break;
+        case "s":
+          if (!current || (current.is_locked && !isPremium)) return;
+          e.preventDefault();
+          if (tracking !== current.scholarship_id) void handleTrack(current.scholarship_id);
+          break;
+        case "x":
+          if (!current) return;
+          e.preventDefault();
+          void handleDismiss(current.scholarship_id, current.title);
+          break;
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [visibleResults, clampedIndex, previewScholarship, isPremium, tracking, handleTrack, handleDismiss]);
+
+  const registerCard = useCallback((id: string, el: HTMLElement | null) => {
+    if (el) cardRefs.current.set(id, el);
+    else cardRefs.current.delete(id);
+  }, []);
+
   if (visibleResults.length === 0) {
     return (
       <div className="rounded-2xl bg-cardBg p-8 text-center text-textSecondary">
@@ -121,10 +195,17 @@ export const ScholarshipFeed = ({ results, isPremium, profile, onTrack, onUnlock
   return (
     <div className="space-y-4">
       {/* Toolbar: result count + view mode toggle */}
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-slate-500">
-          {visibleResults.length} scholarship{visibleResults.length === 1 ? "" : "s"}
-        </p>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <p className="text-sm text-slate-500">
+            {visibleResults.length} scholarship{visibleResults.length === 1 ? "" : "s"}
+          </p>
+          <p className="hidden text-xs text-slate-400 font-mono sm:block" aria-hidden="true">
+            Press <kbd className="rounded border border-slate-200 bg-slate-50 px-1">S</kbd> to save,{" "}
+            <kbd className="rounded border border-slate-200 bg-slate-50 px-1">X</kbd> to dismiss,{" "}
+            <kbd className="rounded border border-slate-200 bg-slate-50 px-1">↓</kbd>/<kbd className="rounded border border-slate-200 bg-slate-50 px-1">↑</kbd> to navigate
+          </p>
+        </div>
         <div className="inline-flex p-1 rounded-xl bg-slate-100 border border-slate-200/80">
           <button
             onClick={() => setViewMode("cards")}
@@ -166,7 +247,7 @@ export const ScholarshipFeed = ({ results, isPremium, profile, onTrack, onUnlock
       </div>
 
       {viewMode === "cards"
-        ? visibleResults.map((s) => (
+        ? visibleResults.map((s, i) => (
             <ScholarshipCard
               key={s.scholarship_id}
               scholarship={s}
@@ -177,9 +258,12 @@ export const ScholarshipFeed = ({ results, isPremium, profile, onTrack, onUnlock
               onOpen={setPreviewScholarship}
               tracking={tracking === s.scholarship_id}
               fading={fadingIds.has(s.scholarship_id)}
+              focused={s.scholarship_id === focusedId}
+              onFocusCard={() => setSelectedCardIndex(i)}
+              registerRef={registerCard}
             />
           ))
-        : visibleResults.map((s) => (
+        : visibleResults.map((s, i) => (
             <ScholarshipListItem
               key={s.scholarship_id}
               scholarship={s}
@@ -190,6 +274,9 @@ export const ScholarshipFeed = ({ results, isPremium, profile, onTrack, onUnlock
               onOpen={setPreviewScholarship}
               tracking={tracking === s.scholarship_id}
               fading={fadingIds.has(s.scholarship_id)}
+              focused={s.scholarship_id === focusedId}
+              onFocusCard={() => setSelectedCardIndex(i)}
+              registerRef={registerCard}
             />
           ))}
 
@@ -235,6 +322,9 @@ function ScholarshipCard({
   onOpen,
   tracking,
   fading,
+  focused,
+  onFocusCard,
+  registerRef,
 }: {
   scholarship: MatchedScholarship;
   isPremium: boolean;
@@ -244,6 +334,9 @@ function ScholarshipCard({
   onOpen: (scholarship: MatchedScholarship) => void;
   tracking: boolean;
   fading: boolean;
+  focused: boolean;
+  onFocusCard: () => void;
+  registerRef: (id: string, el: HTMLElement | null) => void;
 }) {
   const [imgLoaded, setImgLoaded] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
@@ -269,7 +362,10 @@ function ScholarshipCard({
 
   return (
     <article
+      ref={(el) => registerRef(scholarship.scholarship_id, el)}
       onClick={openPreview}
+      onMouseEnter={onFocusCard}
+      onFocus={onFocusCard}
       onKeyDown={(e) => {
         if (!locked && (e.key === "Enter" || e.key === " ") && e.target === e.currentTarget) {
           e.preventDefault();
@@ -279,9 +375,12 @@ function ScholarshipCard({
       role={locked ? undefined : "button"}
       tabIndex={locked ? undefined : 0}
       aria-label={locked ? undefined : `View details for ${scholarship.title}`}
-      className={`bg-white/95 rounded-2xl border border-slate-200/90 shadow-[0_4px_20px_-4px_rgba(15,23,42,0.06)] hover:shadow-[0_12px_32px_-6px_rgba(74,143,231,0.18)] hover:-translate-y-1 hover:border-slate-300 transition-all duration-200 overflow-hidden flex flex-col relative ${
+      aria-current={focused ? "true" : undefined}
+      className={`bg-white/95 rounded-2xl border border-slate-200/90 shadow-[0_4px_20px_-4px_rgba(15,23,42,0.06)] hover:shadow-[0_12px_32px_-6px_rgba(74,143,231,0.18)] hover:-translate-y-1 hover:border-slate-300 transition-all duration-200 flex flex-col relative ${
         locked ? "ring-1 ring-textSecondary/10" : "cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-skyAqua"
-      } ${fading ? "opacity-0 scale-95 max-h-0 pointer-events-none" : "opacity-100"}`}
+      } ${focused && !locked ? "ring-2 ring-blueEnergy/60" : ""} ${
+        fading ? "opacity-0 scale-95 max-h-0 pointer-events-none overflow-hidden" : "opacity-100"
+      }`}
     >
       {/* Discipline banner image — explicit height + shimmer placeholder to prevent CLS */}
       <div className="relative h-24 w-full overflow-hidden rounded-t-2xl bg-slate-100">
@@ -389,15 +488,7 @@ function ScholarshipCard({
             )}
           </div>
           <div className="flex shrink-0 items-start gap-2">
-            <span
-              className={
-                scholarship.score >= 80
-                  ? "bg-aquamarine text-slate-950 font-bold px-3 py-1 rounded-full text-xs shadow-xs"
-                  : "bg-slate-100 text-slate-800 border border-slate-200 font-semibold px-3 py-1 rounded-full text-xs"
-              }
-            >
-              {scholarship.score}% Match
-            </span>
+            <ScorePopover scholarship={scholarship} label={`${scholarship.score}% Match`} />
             {/* Hide / dismiss button (Lucide EyeOff) */}
             <button
               onClick={(e) => {
@@ -468,16 +559,11 @@ function ScholarshipCard({
               </span>
             </div>
 
-            {/* Missing criteria — warm warning chips */}
+            {/* Missing criteria — clickable resolver chips */}
             {scholarship.missing_criteria.length > 0 && (
               <div className="mt-3 flex flex-wrap gap-2">
                 {scholarship.missing_criteria.map((c) => (
-                  <span
-                    key={c}
-                    className="bg-amber-50 text-amber-900 border border-amber-200/80 font-medium px-2.5 py-0.5 rounded-md text-xs flex items-center gap-1.5"
-                  >
-                    {c}
-                  </span>
+                  <GapChip key={c} criterion={c} portalUrl={scholarship.portal_url} />
                 ))}
               </div>
             )}
@@ -565,6 +651,9 @@ function ScholarshipListItem({
   onOpen,
   tracking,
   fading,
+  focused,
+  onFocusCard,
+  registerRef,
 }: {
   scholarship: MatchedScholarship;
   isPremium: boolean;
@@ -574,6 +663,9 @@ function ScholarshipListItem({
   onOpen: (scholarship: MatchedScholarship) => void;
   tracking: boolean;
   fading: boolean;
+  focused: boolean;
+  onFocusCard: () => void;
+  registerRef: (id: string, el: HTMLElement | null) => void;
 }) {
   const locked = scholarship.is_locked && !isPremium;
   const openPreview = () => {
@@ -593,7 +685,10 @@ function ScholarshipListItem({
 
   return (
     <article
+      ref={(el) => registerRef(scholarship.scholarship_id, el)}
       onClick={openPreview}
+      onMouseEnter={onFocusCard}
+      onFocus={onFocusCard}
       onKeyDown={(e) => {
         if (!locked && (e.key === "Enter" || e.key === " ") && e.target === e.currentTarget) {
           e.preventDefault();
@@ -603,9 +698,12 @@ function ScholarshipListItem({
       role={locked ? undefined : "button"}
       tabIndex={locked ? undefined : 0}
       aria-label={locked ? undefined : `View details for ${scholarship.title}`}
+      aria-current={focused ? "true" : undefined}
       className={`bg-white rounded-xl border border-slate-200/90 shadow-xs hover:border-slate-300 hover:shadow-sm transition-all duration-150 p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 group ${
         locked ? "" : "cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-skyAqua"
-      } ${fading ? "opacity-0 scale-95 max-h-0 pointer-events-none" : "opacity-100"}`}
+      } ${focused && !locked ? "ring-2 ring-blueEnergy/60" : ""} ${
+        fading ? "opacity-0 scale-95 max-h-0 pointer-events-none" : "opacity-100"
+      }`}
     >
       {locked ? (
         /* Paywalled list row — blurred with centered lock badge */
@@ -686,12 +784,7 @@ function ScholarshipListItem({
               {scholarship.missing_criteria.length > 0 && (
                 <div className="flex flex-wrap gap-1.5">
                   {scholarship.missing_criteria.slice(0, 3).map((c) => (
-                    <span
-                      key={c}
-                      className="bg-amber-50 text-amber-900 border border-amber-200/80 font-medium px-2.5 py-0.5 rounded-md text-xs"
-                    >
-                      {c}
-                    </span>
+                    <GapChip key={c} criterion={c} portalUrl={scholarship.portal_url} compact />
                   ))}
                   {scholarship.missing_criteria.length > 3 && (
                     <span className="text-xs text-slate-400">
@@ -705,15 +798,7 @@ function ScholarshipListItem({
 
           {/* Right column — score & actions */}
           <div className="flex shrink-0 items-center gap-3">
-            <span
-              className={
-                scholarship.score >= 80
-                  ? "bg-aquamarine text-slate-950 font-bold px-2.5 py-1 rounded-full text-xs shadow-xs"
-                  : "bg-slate-100 text-slate-800 border border-slate-200 font-semibold px-2.5 py-1 rounded-full text-xs"
-              }
-            >
-              {scholarship.score}%
-            </span>
+            <ScorePopover scholarship={scholarship} label={`${scholarship.score}%`} compact />
 
             <div className="flex items-center gap-2">
               {scholarship.portal_url && (
@@ -766,5 +851,215 @@ function ScholarshipListItem({
         </>
       )}
     </article>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// "Why am I seeing this?" score breakdown popover
+// ---------------------------------------------------------------------------
+const SCORE_BUCKET_META: Record<ScoreBucket, { label: string; max: number }> = {
+  gpa: { label: "GPA", max: 25 },
+  geo: { label: "Geography", max: 25 },
+  sai: { label: "Financial need", max: 25 },
+  affiliations: { label: "Affiliations", max: 25 },
+  local_boost: { label: "Local boost", max: 10 },
+};
+
+function ScorePopover({
+  scholarship,
+  label,
+  compact = false,
+}: {
+  scholarship: MatchedScholarship;
+  label: string;
+  compact?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const popoverId = useId();
+  const breakdown = scholarship.score_breakdown;
+
+  const bucketRows: { key: ScoreBucket; value: number }[] = breakdown
+    ? (Object.entries(SCORE_BUCKET_META)
+        .map(([key]) => ({
+          key: key as ScoreBucket,
+          value: breakdown[key as ScoreBucket] ?? 0,
+        }))
+        .filter((r) => r.value > 0))
+    : [];
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          setOpen((v) => !v);
+        }}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        aria-controls={popoverId}
+        aria-label="Why am I seeing this?"
+        title="Why am I seeing this?"
+        className={
+          compact
+            ? scholarship.score >= 80
+              ? "bg-aquamarine text-slate-950 font-bold px-2.5 py-1 rounded-full text-xs shadow-xs"
+              : "bg-slate-100 text-slate-800 border border-slate-200 font-semibold px-2.5 py-1 rounded-full text-xs"
+            : scholarship.score >= 80
+              ? "bg-aquamarine text-slate-950 font-bold px-3 py-1 rounded-full text-xs shadow-xs"
+              : "bg-slate-100 text-slate-800 border border-slate-200 font-semibold px-3 py-1 rounded-full text-xs"
+        }
+      >
+        {label}
+      </button>
+      {open && (
+        <>
+          {/* Click-away catcher */}
+          <div
+            className="fixed inset-0 z-40"
+            onClick={(e) => {
+              e.stopPropagation();
+              setOpen(false);
+            }}
+          />
+          <div
+            id={popoverId}
+            role="dialog"
+            onClick={(e) => e.stopPropagation()}
+            className="absolute right-0 top-full z-50 mt-2 w-64 rounded-xl border border-slate-200 bg-white p-3 shadow-xl"
+          >
+            <p className="font-serif text-sm font-semibold text-textPrimary">
+              Why am I seeing this?
+            </p>
+            <p className="mt-0.5 text-xs text-textSecondary">
+              Match score is based on your profile vs. scholarship criteria.
+            </p>
+            {bucketRows.length > 0 ? (
+              <ul className="mt-2 space-y-1.5">
+                {bucketRows.map(({ key, value }) => {
+                  const meta = SCORE_BUCKET_META[key];
+                  return (
+                    <li key={key} className="flex items-center justify-between gap-2 text-xs">
+                      <span className="text-slate-600">{meta.label}</span>
+                      <span className="flex items-center gap-1.5">
+                        <span className="h-1.5 w-16 overflow-hidden rounded-full bg-slate-100">
+                          <span
+                            className="block h-full rounded-full bg-blueEnergy"
+                            style={{ width: `${(value / meta.max) * 100}%` }}
+                          />
+                        </span>
+                        <span className="font-semibold text-textPrimary">
+                          +{value}
+                        </span>
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : (
+              <p className="mt-2 text-xs text-slate-500">
+                Detailed breakdown unavailable for this result.
+              </p>
+            )}
+            <p className="mt-2 border-t border-slate-100 pt-2 text-[11px] text-slate-400">
+              Total: <span className="font-semibold text-textPrimary">{scholarship.score}</span>/100
+            </p>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Missing-criteria resolver chip — opens a popover with a CTA to address gap
+// ---------------------------------------------------------------------------
+function GapChip({
+  criterion,
+  portalUrl,
+  compact = false,
+}: {
+  criterion: string;
+  portalUrl?: string | null;
+  compact?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const popoverId = useId();
+
+  // Heuristic resolver suggestion based on the criterion text
+  const suggestion = (() => {
+    const c = criterion.toLowerCase();
+    if (c.includes("gpa")) {
+      return "Confirm your GPA in Profile settings — higher GPAs unlock more awards.";
+    }
+    if (c.includes("financial need") || c.includes("sai")) {
+      return "Complete the FAFSA/SAI field in Profile to demonstrate financial need.";
+    }
+    if (c.includes("resident") || c.includes("area")) {
+      return "Update your state/metro residence in Profile to verify eligibility.";
+    }
+    if (c.includes("affiliation")) {
+      return "Add professional affiliations in Profile to match identity-based awards.";
+    }
+    if (c.includes("tag")) {
+      return "Add hobbies/interests in Profile to surface more preferenced awards.";
+    }
+    return "Review your profile details to confirm eligibility for this criterion.";
+  })();
+
+  return (
+    <div className="relative inline-flex">
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          setOpen((v) => !v);
+        }}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        aria-controls={popoverId}
+        title="How to resolve this gap"
+        className={
+          compact
+            ? "bg-amber-50 text-amber-900 border border-amber-200/80 font-medium px-2.5 py-0.5 rounded-md text-xs hover:bg-amber-100"
+            : "bg-amber-50 text-amber-900 border border-amber-200/80 font-medium px-2.5 py-0.5 rounded-md text-xs flex items-center gap-1.5 hover:bg-amber-100"
+        }
+      >
+        {criterion}
+      </button>
+      {open && (
+        <>
+          <div
+            className="fixed inset-0 z-40"
+            onClick={(e) => {
+              e.stopPropagation();
+              setOpen(false);
+            }}
+          />
+          <div
+            id={popoverId}
+            role="dialog"
+            onClick={(e) => e.stopPropagation()}
+            className="absolute left-0 top-full z-50 mt-1 w-64 rounded-xl border border-slate-200 bg-white p-3 shadow-xl"
+          >
+            <p className="font-serif text-sm font-semibold text-textPrimary">
+              Resolve this gap
+            </p>
+            <p className="mt-1 text-xs text-textSecondary">{suggestion}</p>
+            {portalUrl && (
+              <a
+                href={portalUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                className="mt-2 inline-block rounded-full bg-blueEnergy px-3 py-1 text-xs font-semibold text-white hover:opacity-90"
+              >
+                Open provider site
+              </a>
+            )}
+          </div>
+        </>
+      )}
+    </div>
   );
 }
