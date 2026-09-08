@@ -12,6 +12,7 @@ import { KanbanBoard } from "@/components/KanbanBoard";
 import { DeadlineCalendar } from "@/components/DeadlineCalendar";
 import { CollegeFinancialPlanner } from "@/components/CollegeFinancialPlanner";
 import { UpgradeModal } from "@/components/UpgradeModal";
+import { InteractiveTour, notifyTourSave } from "@/components/InteractiveTour";
 import { api, setAuthToken } from "@/lib/api";
 import { supabase } from "@/lib/supabase";
 import type {
@@ -430,6 +431,7 @@ export default function Home() {
               <TabButton
                 active={tab === "kanban"}
                 onClick={() => setTab("kanban")}
+                data-tour="kanban-tab"
               >
                 My Applications
               </TabButton>
@@ -503,6 +505,8 @@ export default function Home() {
                       onTrack={() => {
                         // Refresh kanban count silently
                         loadKanban();
+                        // Notify the interactive tour that a save action fired
+                        notifyTourSave();
                       }}
                     />
                   </>
@@ -542,6 +546,12 @@ export default function Home() {
             )}
           </div>
         }
+      />
+
+      <InteractiveTour
+        shouldStart={!loading && !!feed && !profile?.has_completed_tour}
+        tab={tab}
+        onSwitchTab={setTab}
       />
 
       {showOnboarding && (
@@ -611,10 +621,12 @@ function TabButton({
   active,
   onClick,
   children,
+  ...rest
 }: {
   active: boolean;
   onClick: () => void;
   children: React.ReactNode;
+  "data-tour"?: string;
 }) {
   return (
     <button
@@ -624,6 +636,7 @@ function TabButton({
           ? "bg-crayolaBlue text-surfaceBg"
           : "text-textSecondary hover:text-textPrimary"
       }`}
+      {...rest}
     >
       {children}
     </button>

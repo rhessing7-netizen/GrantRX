@@ -261,6 +261,7 @@ export const ScholarshipFeed = ({ results, isPremium, profile, onTrack, onUnlock
               focused={s.scholarship_id === focusedId}
               onFocusCard={() => setSelectedCardIndex(i)}
               registerRef={registerCard}
+              index={i}
             />
           ))
         : visibleResults.map((s, i) => (
@@ -325,6 +326,7 @@ function ScholarshipCard({
   focused,
   onFocusCard,
   registerRef,
+  index = 0,
 }: {
   scholarship: MatchedScholarship;
   isPremium: boolean;
@@ -337,6 +339,7 @@ function ScholarshipCard({
   focused: boolean;
   onFocusCard: () => void;
   registerRef: (id: string, el: HTMLElement | null) => void;
+  index?: number;
 }) {
   const [imgLoaded, setImgLoaded] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
@@ -363,6 +366,7 @@ function ScholarshipCard({
   return (
     <article
       ref={(el) => registerRef(scholarship.scholarship_id, el)}
+      data-tour={index === 0 ? "match-card" : undefined}
       onClick={openPreview}
       onMouseEnter={onFocusCard}
       onFocus={onFocusCard}
@@ -582,6 +586,7 @@ function ScholarshipCard({
                 </a>
               )}
               <button
+                data-tour={index === 0 ? "save-btn" : undefined}
                 onClick={(e) => {
                   e.stopPropagation();
                   onTrack(scholarship.scholarship_id);

@@ -6,6 +6,7 @@ import type { Profile, Usage } from "@/lib/types";
 import { DISCIPLINE_LABELS } from "@/lib/types";
 import { TOP_20_METROS } from "@/lib/constants/metros";
 import { api } from "@/lib/api";
+import { startProductTour } from "@/components/InteractiveTour";
 
 export type LeftPanelProps = {
   profile: Profile | null;
@@ -254,7 +255,7 @@ export function LeftPanel({
             )}
 
             {/* Profile Strength meter */}
-            <div className="mt-4">
+            <div className="mt-4" data-tour="profile-strength">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-medium text-textSecondary">
                   Profile Strength
@@ -325,6 +326,14 @@ export function LeftPanel({
           </div>
         )}
       </section>
+
+      {/* Product Walkthrough restart */}
+      <button
+        onClick={startProductTour}
+        className="w-full rounded-lg bg-slate-100 hover:bg-slate-200/80 text-slate-600 font-medium border border-slate-200/70 px-4 py-2 text-xs transition"
+      >
+        Product Walkthrough
+      </button>
 
       {/* Search — frosted glass */}
       <section className="bg-white/90 backdrop-blur-xl rounded-2xl border border-slate-200/90 shadow-sm p-6 space-y-6">

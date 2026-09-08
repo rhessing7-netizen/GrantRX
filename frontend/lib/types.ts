@@ -39,6 +39,7 @@ export interface Profile {
   privacy_accepted_at: string | null;
   marketing_opt_in: boolean;
   marketing_opt_in_at: string | null;
+  has_completed_tour: boolean;
   searches_used_this_week: number;
   search_cycle_reset_at: string | null;
   feed_token: string | null;
@@ -89,6 +90,7 @@ export interface ProfileUpdate {
   terms_accepted?: boolean;
   privacy_accepted?: boolean;
   marketing_opt_in?: boolean;
+  has_completed_tour?: boolean;
 }
 
 export interface MatchedScholarship {

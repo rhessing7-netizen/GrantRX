@@ -18,6 +18,7 @@ import {
 } from "@dnd-kit/core";
 import type { AppStatus, UserScholarship } from "@/lib/types";
 import { api } from "@/lib/api";
+import { notifyTourKanbanAction } from "@/components/InteractiveTour";
 import { ApplicationDrawer } from "./ApplicationDrawer";
 
 const COLUMNS: { id: AppStatus; label: string; accent: string; emptyHint: string }[] = [
@@ -601,9 +602,26 @@ function KanbanCard({
               </p>
             )}
           </div>
-          <div className="flex shrink-0 items-center gap-2">
+          <div className="flex shrink-0 items-center gap-2" data-tour="kanban-actions">
+            {scholarship?.portal_url && (
+              <a
+                href={scholarship.portal_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs text-crayolaBlue hover:underline"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  notifyTourKanbanAction();
+                }}
+              >
+                Apply
+              </a>
+            )}
             <button
-              onClick={() => onOpenDrawer(item)}
+              onClick={() => {
+                onOpenDrawer(item);
+                notifyTourKanbanAction();
+              }}
               className="text-xs text-crayolaBlue hover:underline"
             >
               Vault

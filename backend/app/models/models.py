@@ -71,6 +71,7 @@ class Profile(Base):
     privacy_accepted_at = Column(DateTime(timezone=True), nullable=True)
     marketing_opt_in = Column(Boolean, default=False)
     marketing_opt_in_at = Column(DateTime(timezone=True), nullable=True)
+    has_completed_tour = Column(Boolean, default=False)
     created_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
 

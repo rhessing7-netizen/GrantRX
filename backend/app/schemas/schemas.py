@@ -77,6 +77,7 @@ class ProfileUpdate(BaseModel):
     terms_accepted: Optional[bool] = None
     privacy_accepted: Optional[bool] = None
     marketing_opt_in: Optional[bool] = None
+    has_completed_tour: Optional[bool] = None
 
 
 class ProfileOut(ProfileBase):
@@ -89,6 +90,7 @@ class ProfileOut(ProfileBase):
     privacy_accepted_at: Optional[datetime] = None
     marketing_opt_in: bool = False
     marketing_opt_in_at: Optional[datetime] = None
+    has_completed_tour: bool = False
     searches_used_this_week: int = 0
     search_cycle_reset_at: Optional[datetime] = None
     feed_token: Optional[str] = None

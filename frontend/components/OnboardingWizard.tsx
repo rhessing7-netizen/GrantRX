@@ -243,6 +243,7 @@ export function OnboardingWizard({ onComplete, onCancel, existingProfile }: Onbo
         privacy_accepted_at: null,
         marketing_opt_in: false,
         marketing_opt_in_at: null,
+        has_completed_tour: false,
         searches_used_this_week: 0,
         search_cycle_reset_at: null,
         feed_token: null,
