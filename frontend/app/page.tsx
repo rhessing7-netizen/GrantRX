@@ -343,6 +343,21 @@ export default function Home() {
     setShowOnboarding(false);
     loadProfileAndUsage();
     loadFeed();  // Initial load — does not consume a search
+
+    // If the new user hasn't completed the product tour, launch it once the
+    // feed renders. The tour component listens for this event and will only
+    // start when the match-card element is present in the DOM.
+    const tourCompleted =
+      typeof window !== "undefined" &&
+      localStorage.getItem("grantrx_tour_completed") === "true";
+    if (!p.has_completed_tour && !tourCompleted) {
+      // Defer slightly so loadFeed() has a chance to populate the DOM.
+      setTimeout(() => {
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new CustomEvent("grantrx:tour:start"));
+        }
+      }, 1200);
+    }
   };
 
   const handleAuthSuccess = (p: Profile | null) => {
@@ -552,6 +567,7 @@ export default function Home() {
         shouldStart={!loading && !!feed && !profile?.has_completed_tour}
         tab={tab}
         onSwitchTab={setTab}
+        profile={profile}
       />
 
       {showOnboarding && (

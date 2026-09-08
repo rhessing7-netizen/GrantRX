@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { driver, type Driver } from "driver.js";
 import "driver.js/dist/driver.css";
 import { api } from "@/lib/api";
+import type { Profile } from "@/lib/types";
 
 type Tab = "discover" | "kanban" | "calendar" | "planner";
 
@@ -14,6 +15,8 @@ export type InteractiveTourProps = {
   tab: Tab;
   /** Switch the main tab (used by Step 3 to jump to My Applications). */
   onSwitchTab: (tab: Tab) => void;
+  /** Authenticated user profile. The tour never auto-starts for guests. */
+  profile: Profile | null;
 };
 
 const TOUR_KEY = "grantrx_tour_completed";
@@ -100,7 +103,7 @@ function persistCompletion() {
   });
 }
 
-export function InteractiveTour({ shouldStart, tab, onSwitchTab }: InteractiveTourProps) {
+export function InteractiveTour({ shouldStart, tab, onSwitchTab, profile }: InteractiveTourProps) {
   const driverRef = useRef<Driver | null>(null);
   const [active, setActive] = useState(false);
   const saveListenerRef = useRef<((e: Event) => void) | null>(null);
@@ -242,9 +245,13 @@ export function InteractiveTour({ shouldStart, tab, onSwitchTab }: InteractiveTo
     driverObj.drive();
   };
 
-  // Auto-start 600ms after the feed loads (if not already completed).
+  // Auto-start 600ms after the feed loads — ONLY for authenticated users who
+  // have not yet completed the tour. Guests never trigger the auto-tour.
   useEffect(() => {
     if (!shouldStart) return;
+    // Strict profile guard: require an authenticated profile with an ID.
+    if (!profile || !profile.id) return;
+    if (profile.has_completed_tour) return;
     if (typeof window !== "undefined" && localStorage.getItem(TOUR_KEY) === "true") return;
     const timer = setTimeout(() => {
       // Verify the first target element exists before starting.
@@ -254,7 +261,7 @@ export function InteractiveTour({ shouldStart, tab, onSwitchTab }: InteractiveTo
     }, 600);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shouldStart]);
+  }, [shouldStart, profile]);
 
   // Listen for manual restart requests (from the LeftPanel button).
   useEffect(() => {
