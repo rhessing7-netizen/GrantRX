@@ -35,6 +35,8 @@ from .schemas.schemas import (
     FinancialPlannerOut,
     MatchedFeedOut,
     MatchedScholarshipOut,
+    MatchPreviewOut,
+    MatchPreviewRequest,
     PortalUrlResponse,
     ProfileCreate,
     ProfileOut,
@@ -45,6 +47,10 @@ from .schemas.schemas import (
     ScholarshipReportOut,
     StudentCollegeBudgetBase,
     StudentCollegeBudgetUpdate,
+    SupportChatRequest,
+    SupportChatResponse,
+    SupportEscalateRequest,
+    SupportEscalateResponse,
     UsageOut,
     UserScholarshipCreate,
     UserScholarshipOut,
@@ -72,6 +78,7 @@ from .services.outline_service import (
     EssayOutlineResponse,
     generate_essay_outline,
 )
+from .services.support_service import escalate as escalate_support, handle_chat
 
 logger = logging.getLogger(__name__)
 
@@ -380,6 +387,43 @@ def ingest_sources(user: User = Depends(get_current_user)):
 # ---------------------------------------------------------------------------
 # Matching engine + tier-gated feed
 # ---------------------------------------------------------------------------
+
+
+@app.post("/api/scholarships/match-preview", response_model=MatchPreviewOut)
+def preview_match_count(
+    body: MatchPreviewRequest,
+    db: Session = Depends(get_db),
+):
+    """Live matching projection for the onboarding wizard.
+
+    Runs the real matcher (including discipline/credential hard gates)
+    against a transient, never-persisted Profile built from the partial
+    onboarding form, and returns the number of eligible grants plus the
+    summed award pool. Public: the wizard runs before a profile exists.
+    """
+    transient = Profile(
+        disciplines=body.disciplines,
+        target_credentials=body.target_credentials,
+        primary_discipline=body.primary_discipline,
+        target_credential=body.target_credential,
+        clinical_phase=body.clinical_phase,
+        gpa=body.gpa,
+        state_residence=body.state_residence,
+        metro_area=body.metro_area,
+        sai_score=body.sai_score,
+        first_gen=body.first_gen,
+        minority_flag=body.minority_flag,
+        professional_affiliations=body.professional_affiliations,
+        hobbies=body.hobbies,
+    )
+    scholarships = (
+        db.query(Scholarship).filter(Scholarship.is_archived == False).all()  # noqa: E712
+    )
+    results = match_scholarships(transient, scholarships)
+    return MatchPreviewOut(
+        projected_count=len(results),
+        projected_funding_total=sum(r.award_amount or 0 for r in results),
+    )
 
 
 @app.get("/api/scholarships/matched", response_model=MatchedFeedOut)
@@ -1176,3 +1220,73 @@ async def generate_outline(
             detail="Essay outline service unavailable. Please try again later.",
         )
     return outline
+
+
+# ---------------------------------------------------------------------------
+# In-app AI Support Assistant
+# ---------------------------------------------------------------------------
+
+
+@app.post("/api/v1/support/chat", response_model=SupportChatResponse)
+async def support_chat(
+    body: SupportChatRequest,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Process one turn of the in-app AI support assistant.
+
+    Enforces a 4-turn limit per conversation with terminal email escalation.
+    Jailbreak and off-topic queries are rejected before reaching the LLM.
+    """
+    profile = db.query(Profile).filter(Profile.id == user.id).first()
+    tier = profile.subscription_tier if profile else "free"
+    user_email = profile.email if profile and profile.email else (user.email or "unknown@grantrx.app")
+
+    result = await handle_chat(
+        db=db,
+        user_id=str(user.id),
+        user_email=user_email,
+        tier=str(tier),
+        message=body.message,
+        conversation_id=body.conversation_id,
+    )
+    return SupportChatResponse(**result)
+
+
+@app.post("/api/v1/support/escalate", response_model=SupportEscalateResponse)
+async def support_escalate(
+    body: SupportEscalateRequest,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Explicitly trigger human email escalation before exhausting turns."""
+    profile = db.query(Profile).filter(Profile.id == user.id).first()
+    tier = profile.subscription_tier if profile else "free"
+    user_email = profile.email if profile and profile.email else (user.email or "unknown@grantrx.app")
+
+    # Reconstruct a minimal transcript from the most recent ticket if present.
+    from .models.models import SupportTicket
+
+    prior = (
+        db.query(SupportTicket)
+        .filter(SupportTicket.user_id == user.id)
+        .order_by(SupportTicket.created_at.desc())
+        .first()
+    )
+    transcript = list(prior.transcript or []) if prior else [
+        {"role": "user", "content": "User requested human support."}
+    ]
+
+    ticket = escalate_support(
+        db=db,
+        user_id=str(user.id),
+        user_email=user_email,
+        tier=str(tier),
+        transcript=transcript,
+        subject=body.subject,
+    )
+    return SupportEscalateResponse(
+        ticket_id=str(ticket.id),
+        is_escalated=True,
+        message="A support ticket and email transcript have been sent to our team.",
+    )

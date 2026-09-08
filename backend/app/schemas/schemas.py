@@ -1,6 +1,6 @@
 from datetime import date, datetime
 from enum import Enum
-from typing import List, Optional
+from typing import Dict, List, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -232,6 +232,33 @@ class MatchedScholarshipOut(BaseModel):
     max_sai: Optional[float] = None
     state_restrictions: List[str] = []
     is_general_major: bool = False
+    # Per-bucket score composition (keys: gpa, geo, sai, affiliations,
+    # local_boost). Powers the "Why am I seeing this?" popover.
+    score_breakdown: Dict[str, int] = {}
+
+
+class MatchPreviewRequest(BaseModel):
+    """Partial profile submitted by the onboarding wizard for a live
+    projection of how many grants (and how much funding) would match."""
+
+    disciplines: List[str] = []
+    target_credentials: List[str] = []
+    primary_discipline: Optional[str] = None
+    target_credential: Optional[str] = None
+    clinical_phase: Optional[str] = None
+    gpa: Optional[float] = Field(None, ge=0.0, le=4.0)
+    state_residence: Optional[str] = Field(None, max_length=2)
+    metro_area: Optional[str] = None
+    sai_score: Optional[int] = None
+    first_gen: bool = False
+    minority_flag: bool = False
+    professional_affiliations: List[str] = []
+    hobbies: List[str] = []
+
+
+class MatchPreviewOut(BaseModel):
+    projected_count: int
+    projected_funding_total: int
 
 
 class MatchedFeedOut(BaseModel):
@@ -388,3 +415,33 @@ class FinancialPlannerOut(BaseModel):
     three_x_cushion: int  # 3 * COA
     five_x_safety_buffer: int  # 5 * COA
     cushion_progress_pct: float  # funded / 3x COA * 100
+
+
+# ---------------------------------------------------------------------------
+# In-app AI Support Assistant
+# ---------------------------------------------------------------------------
+
+
+class SupportChatRequest(BaseModel):
+    message: str
+    conversation_id: Optional[str] = None
+
+
+class SupportChatResponse(BaseModel):
+    reply: str
+    conversation_id: str
+    turn_count: int
+    turns_remaining: int
+    is_escalated: bool
+    message: str
+
+
+class SupportEscalateRequest(BaseModel):
+    conversation_id: Optional[str] = None
+    subject: Optional[str] = None
+
+
+class SupportEscalateResponse(BaseModel):
+    ticket_id: str
+    is_escalated: bool
+    message: str

@@ -16,6 +16,8 @@ PUBLIC_PATHS = {
     "/docs",
     "/openapi.json",
     "/redoc",
+    # Onboarding live-matching projection runs before a profile/session exists
+    "/api/scholarships/match-preview",
 }
 
 PUBLIC_PREFIXES = (

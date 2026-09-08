@@ -100,6 +100,9 @@ class MatchResult:
     max_sai: Optional[float] = None
     state_restrictions: List[str] = field(default_factory=list)
     is_general_major: bool = False
+    # Per-bucket score composition (see score_breakdown). Empty dict for
+    # payloads produced before this field existed.
+    score_breakdown: dict[str, int] = field(default_factory=dict)
 
 
 # ---------------------------------------------------------------------------
@@ -421,6 +424,66 @@ def _geo_match(profile: Profile, scholarship: Scholarship) -> bool:
     return True
 
 
+# Score bucket keys — stable identifiers surfaced to the frontend so the
+# "Why am I seeing this?" breakdown reflects the real scoring weights.
+BUCKET_GPA = "gpa"
+BUCKET_GEO = "geo"
+BUCKET_SAI = "sai"
+BUCKET_AFFIL = "affiliations"
+BUCKET_LOCAL = "local_boost"
+BUCKET_WEIGHT = 25
+LOCAL_BOOST_WEIGHT = 10
+
+
+def score_breakdown(profile: Profile, scholarship: Scholarship) -> dict[str, int]:
+    """Return the per-bucket score composition for a single scholarship.
+
+    Keys are the BUCKET_* constants; values are the points actually awarded
+    (0 or the bucket weight). Summing the values (capped at 100) yields the
+    same number as :func:`score_scholarship`.
+    """
+    breakdown: dict[str, int] = {
+        BUCKET_GPA: 0,
+        BUCKET_GEO: 0,
+        BUCKET_SAI: 0,
+        BUCKET_AFFIL: 0,
+        BUCKET_LOCAL: 0,
+    }
+
+    # Bucket 1: GPA (+25%)
+    if _gpa_met(profile, scholarship):
+        breakdown[BUCKET_GPA] = BUCKET_WEIGHT
+
+    # Bucket 2: Geographic match (+25%)
+    # Metro takes precedence when populated; otherwise state matching.
+    has_metro_restriction = bool(scholarship.metro_restrictions)
+    geo_matched = False
+    if has_metro_restriction:
+        if _metro_match(profile, scholarship):
+            geo_matched = True
+    else:
+        if _state_met(profile, scholarship):
+            geo_matched = True
+    if geo_matched:
+        breakdown[BUCKET_GEO] = BUCKET_WEIGHT
+
+    # Bucket 3: Financial need / SAI (+25%)
+    if _sai_met(profile, scholarship):
+        breakdown[BUCKET_SAI] = BUCKET_WEIGHT
+
+    # Bucket 4: Affiliations / Identity / Tags (+25%)
+    if _affiliations_and_identity_overlap(profile, scholarship):
+        breakdown[BUCKET_AFFIL] = BUCKET_WEIGHT
+
+    # Local relevance boost: +10% for low-competition awards when the student
+    # matches the geographic restriction (state, county, or metro).
+    competition_level = getattr(scholarship, "competition_level", "medium") or "medium"
+    if competition_level == "low" and geo_matched:
+        breakdown[BUCKET_LOCAL] = LOCAL_BOOST_WEIGHT
+
+    return breakdown
+
+
 def score_scholarship(profile: Profile, scholarship: Scholarship) -> tuple[int, List[str]]:
     """Return (score 0-100, missing_criteria) for a single scholarship.
 
@@ -437,43 +500,10 @@ def score_scholarship(profile: Profile, scholarship: Scholarship) -> tuple[int, 
       - Awarded when competition_level == 'low' AND the student matches the
         geographic restriction (state, county, or metro).
     """
-    score = 0
     missing: List[str] = []
 
-    # Bucket 1: GPA (+25%)
-    if _gpa_met(profile, scholarship):
-        score += 25
-
-    # Bucket 2: Geographic match (+25%)
-    # Metro takes precedence when populated; otherwise state matching.
-    has_metro_restriction = bool(scholarship.metro_restrictions)
-    geo_matched = False
-    if has_metro_restriction:
-        if _metro_match(profile, scholarship):
-            score += 25
-            geo_matched = True
-    else:
-        if _state_met(profile, scholarship):
-            score += 25
-            geo_matched = True
-
-    # Bucket 3: Financial need / SAI (+25%)
-    if _sai_met(profile, scholarship):
-        score += 25
-
-    # Bucket 4: Affiliations / Identity / Tags (+25%)
-    if _affiliations_and_identity_overlap(profile, scholarship):
-        score += 25
-
-    # Local relevance boost: +10% for low-competition awards when the student
-    # matches the geographic restriction (state, county, or metro).
-    competition_level = getattr(scholarship, "competition_level", "medium") or "medium"
-    if competition_level == "low" and geo_matched:
-        score += 10
-
     # Cap at 100
-    if score > 100:
-        score = 100
+    score = min(100, sum(score_breakdown(profile, scholarship).values()))
 
     if score < 100:
         missing = _missing_criteria(profile, scholarship)
@@ -539,6 +569,7 @@ def match_scholarships(
             continue
 
         score, missing = score_scholarship(profile, s)
+        breakdown = score_breakdown(profile, s)
 
         results.append(
             MatchResult(
@@ -564,6 +595,7 @@ def match_scholarships(
                 max_sai=_opt_float(s.max_sai),
                 state_restrictions=_str_list(s.state_restrictions),
                 is_general_major=getattr(s, "is_general_major", False) is True,
+                score_breakdown=breakdown,
             )
         )
 

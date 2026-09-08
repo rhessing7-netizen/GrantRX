@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Fraunces, Sora } from "next/font/google";
 import "./globals.css";
+import { SupportAssistantDrawer } from "@/components/SupportAssistantDrawer";
 
 export const dynamic = 'force-dynamic';
 
@@ -34,6 +35,7 @@ export default function RootLayout({
     >
       <body className="min-h-full bg-gradient-to-br from-[#F8FAFC] via-[#F1F5F9] to-[#E2E8F0]/40 text-slate-900 font-sans antialiased">
         {children}
+        <SupportAssistantDrawer />
       </body>
     </html>
   );

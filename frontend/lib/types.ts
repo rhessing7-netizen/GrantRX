@@ -121,6 +121,33 @@ export interface MatchedScholarship {
   max_sai?: number | null;
   state_restrictions?: string[];
   is_general_major?: boolean;
+  /** Per-bucket score composition from the matcher. Keys: gpa, geo, sai,
+   *  affiliations, local_boost. Values are the points actually awarded. */
+  score_breakdown?: ScoreBreakdown;
+}
+
+export type ScoreBucket = "gpa" | "geo" | "sai" | "affiliations" | "local_boost";
+export type ScoreBreakdown = Partial<Record<ScoreBucket, number>>;
+
+export interface MatchPreviewRequest {
+  disciplines?: string[];
+  target_credentials?: string[];
+  primary_discipline?: string;
+  target_credential?: string;
+  clinical_phase?: string;
+  gpa?: number | null;
+  state_residence?: string;
+  metro_area?: string;
+  sai_score?: number | null;
+  first_gen?: boolean;
+  minority_flag?: boolean;
+  professional_affiliations?: string[];
+  hobbies?: string[];
+}
+
+export interface MatchPreview {
+  projected_count: number;
+  projected_funding_total: number;
 }
 
 export interface MatchedFeed {
@@ -422,4 +449,28 @@ export interface EssayOutlineResponse {
   part_3_academic_citation: EssayNarrativeSection;
   part_4_future_service: EssayNarrativeSection;
   checklist: string[];
+}
+
+// ---------------------------------------------------------------------------
+// In-app AI Support Assistant
+// ---------------------------------------------------------------------------
+
+export interface SupportMessage {
+  role: "user" | "assistant";
+  content: string;
+}
+
+export interface SupportChatResponse {
+  reply: string;
+  conversation_id: string;
+  turn_count: number;
+  turns_remaining: number;
+  is_escalated: boolean;
+  message: string;
+}
+
+export interface SupportEscalateResponse {
+  ticket_id: string;
+  is_escalated: boolean;
+  message: string;
 }

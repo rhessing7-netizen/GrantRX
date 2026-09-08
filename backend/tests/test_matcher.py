@@ -23,6 +23,7 @@ from app.services.matcher import (
     _normalize_metro_value,
     is_discipline_eligible,
     match_scholarships,
+    score_breakdown,
     score_scholarship,
 )
 
@@ -100,6 +101,43 @@ def _make_scholarship(**kwargs):
     for k, v in defaults.items():
         setattr(obj, k, v)
     return obj
+
+
+# ---------------------------------------------------------------------------
+# Tests: score_breakdown
+# ---------------------------------------------------------------------------
+
+class TestScoreBreakdown:
+    def test_breakdown_sums_to_score(self):
+        """Per-bucket breakdown must always reconcile with the headline score."""
+        profile = _make_profile(gpa=3.5, state_residence="NY", first_gen=True)
+        scholarship = _make_scholarship(
+            min_gpa=3.0, state_restrictions=["CA"], matching_tags=["first_gen"],
+        )
+        score, _ = score_scholarship(profile, scholarship)
+        breakdown = score_breakdown(profile, scholarship)
+        assert min(100, sum(breakdown.values())) == score
+        assert set(breakdown) == {"gpa", "geo", "sai", "affiliations", "local_boost"}
+        assert breakdown["gpa"] == 25
+        assert breakdown["geo"] == 0  # NY student, CA-only award
+        assert breakdown["sai"] == 25  # no max_sai restriction
+        assert breakdown["affiliations"] == 25
+
+    def test_local_boost_only_with_geo_match(self):
+        """The +10 local boost requires competition_level='low' AND geo match."""
+        profile = _make_profile(state_residence="OH")
+        matched = _make_scholarship(state_restrictions=["OH"], competition_level="low")
+        unmatched = _make_scholarship(state_restrictions=["PA"], competition_level="low")
+        assert score_breakdown(profile, matched)["local_boost"] == 10
+        assert score_breakdown(profile, unmatched)["local_boost"] == 0
+
+    def test_match_results_carry_breakdown(self):
+        """match_scholarships() attaches the breakdown to every MatchResult."""
+        profile = _make_profile(disciplines=["pharmacy"], gpa=3.9)
+        scholarship = _make_scholarship(eligible_disciplines=["pharmacy"], min_gpa=3.0)
+        [result] = match_scholarships(profile, [scholarship])
+        assert result.score_breakdown["gpa"] == 25
+        assert min(100, sum(result.score_breakdown.values())) == result.score
 
 
 # ---------------------------------------------------------------------------

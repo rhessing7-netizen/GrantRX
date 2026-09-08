@@ -7,10 +7,14 @@ import type {
   FinancialPlanner,
   MatchedFeed,
   MatchedScholarship,
+  MatchPreview,
+  MatchPreviewRequest,
   Profile,
   ProfileCreate,
   ProfileUpdate,
   StudentCollegeBudgetUpdate,
+  SupportChatResponse,
+  SupportEscalateResponse,
   Usage,
   UserScholarship,
   UserScholarshipCreate,
@@ -77,12 +81,20 @@ async function request<T>(
 
   let resp: Response;
   try {
+    const timeoutSignal = AbortSignal.timeout(15000);
     resp = await fetch(url, {
       ...options,
       headers: { ...authHeaders(), ...(options.headers ?? {}) },
-      signal: AbortSignal.timeout(15000),
+      // Honor a caller-supplied signal (e.g. debounced previews) alongside
+      // the global 15s timeout.
+      signal: options.signal
+        ? AbortSignal.any([options.signal, timeoutSignal])
+        : timeoutSignal,
     });
   } catch (err) {
+    // Caller-initiated cancellation is not an error condition — rethrow as-is
+    // so callers can distinguish it from network failures.
+    if (err instanceof Error && err.name === "AbortError") throw err;
     // Network error, timeout, or DNS failure
     const e = new Error(
       err instanceof Error && err.name === "TimeoutError"
@@ -284,6 +296,14 @@ export const api = {
   },
   getUsage: () => request<Usage>("/api/user/usage"),
 
+  // Onboarding live-matching projection (public — runs before a profile exists)
+  previewMatchCount: (data: MatchPreviewRequest, signal?: AbortSignal) =>
+    request<MatchPreview>("/api/scholarships/match-preview", {
+      method: "POST",
+      body: JSON.stringify(data),
+      signal,
+    }),
+
   // Feed curation (hide/dismiss)
   dismissScholarship: (id: string) =>
     request<{ status: string; scholarship_id: string }>(
@@ -435,4 +455,16 @@ export const api = {
         body: JSON.stringify(payload),
       },
     ),
+
+  // In-app AI Support Assistant
+  supportChat: (message: string, conversationId?: string) =>
+    request<SupportChatResponse>("/api/v1/support/chat", {
+      method: "POST",
+      body: JSON.stringify({ message, conversation_id: conversationId }),
+    }),
+  supportEscalate: (conversationId?: string, subject?: string) =>
+    request<SupportEscalateResponse>("/api/v1/support/escalate", {
+      method: "POST",
+      body: JSON.stringify({ conversation_id: conversationId, subject }),
+    }),
 };

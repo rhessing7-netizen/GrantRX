@@ -226,3 +226,31 @@ class CrawlerSeed(Base):
     last_crawled_at = Column(DateTime(timezone=True), nullable=True)
     discovered_from_url = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
+
+
+class SupportConversation(Base):
+    """In-app AI support chat session with turn counter and escalation state."""
+
+    __tablename__ = "support_conversations"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("profiles.id", ondelete="CASCADE"), nullable=True)
+    user_email = Column(Text, nullable=False)
+    turn_count = Column(Integer, default=0)
+    is_escalated = Column(Boolean, default=False)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
+
+
+class SupportTicket(Base):
+    """Persisted email-escalation ticket created on exhaustion or manual request."""
+
+    __tablename__ = "support_tickets"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("profiles.id", ondelete="CASCADE"), nullable=True)
+    user_email = Column(Text, nullable=False)
+    subject = Column(Text, nullable=False)
+    conversation_summary = Column(Text, nullable=False)
+    transcript = Column(JSONB, nullable=False)
+    status = Column(Text, default="open")  # open | resolved | in_progress
+    created_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
