@@ -343,6 +343,16 @@ def _to_db_dict(extract: ScholarshipExtract) -> dict:
         "is_local": extract.is_local,
         "competition_level": getattr(extract, "competition_level", "medium") or "medium",
         "target_community": extract.target_community,
+        # Employer tuition assistance, service-obligation, and vendor-platform fields
+        "funding_type": getattr(extract, "funding_type", "scholarship") or "scholarship",
+        "employment_required": bool(getattr(extract, "employment_required", False)),
+        "min_employment_tenure_months": getattr(extract, "min_employment_tenure_months", None),
+        "annual_benefit_cap": getattr(extract, "annual_benefit_cap", None),
+        "benefit_coverage_model": getattr(extract, "benefit_coverage_model", None),
+        "partner_network": getattr(extract, "partner_network", None),
+        "has_service_commitment": bool(getattr(extract, "has_service_commitment", False)),
+        "service_commitment_duration_months": getattr(extract, "service_commitment_duration_months", None),
+        "vendor_platform": getattr(extract, "vendor_platform", None),
         "updated_at": datetime.utcnow(),
     }
 
@@ -487,6 +497,109 @@ def _load_crawl_seeds(seeds_file: Optional[str]) -> List[str]:
         if url:
             seeds.append(url)
     return seeds
+
+
+async def run_dynamic_queue_pipeline(
+    *,
+    queue_limit: int = 20,
+    max_depth: int = 2,
+    max_pages_per_domain: int = 15,
+    dry_run: bool = False,
+    persist: bool = True,
+    limit_extract: Optional[int] = None,
+) -> dict:
+    """Run the crawl pipeline using seeds from the Supabase crawler_seeds queue.
+
+    Pulls the next batch of seeds from ``crawler_seeds``, runs the focused
+    crawler + LLM extraction, marks each seed as crawled/failed, and enqueues
+    any newly discovered directory hubs back into the queue.
+
+    Returns a summary dict with crawl stats, ingestion results, and queue
+    metadata.
+    """
+    from app.database import SessionLocal
+    from .seed_queue import enqueue_discovered_seeds, get_next_seed_batch, mark_seed_crawled
+
+    logger.info("Fetching %d seed(s) from Supabase crawler_seeds queue", queue_limit)
+    db = SessionLocal()
+    seed_batch: list[dict] = []
+    try:
+        seed_batch = get_next_seed_batch(db, limit=queue_limit)
+    finally:
+        db.close()
+
+    if not seed_batch:
+        logger.warning("No queued seeds found in crawler_seeds table — nothing to crawl.")
+        return {
+            "queue_size": 0,
+            "seeds_processed": 0,
+            "candidates": [],
+            "ingested": 0,
+            "skipped_duplicates": 0,
+            "extraction_failed": 0,
+            "discovered_hubs_enqueued": 0,
+        }
+
+    logger.info("Retrieved %d seed(s) from Supabase crawler_seeds queue", len(seed_batch))
+    for s in seed_batch:
+        logger.info(
+            "  [queue] %s (category=%s, priority=%d, status=%s, last_crawled=%s)",
+            s["url"], s["category"], s["priority"], s["status"],
+            s["last_crawled_at"] or "never",
+        )
+
+    seed_urls = [s["url"] for s in seed_batch]
+
+    # Run the standard crawl pipeline on the dynamic batch
+    summary = await run_crawl_pipeline(
+        seed_urls,
+        max_depth=max_depth,
+        max_pages_per_domain=max_pages_per_domain,
+        dry_run=dry_run,
+        persist=persist,
+        limit_extract=limit_extract,
+    )
+
+    # Mark seeds as crawled/failed and enqueue discovered hubs
+    discovered_hubs = summary.get("discovered_hubs", [])
+    hubs_enqueued = 0
+    db = SessionLocal()
+    try:
+        for s in seed_batch:
+            # A seed is considered "success" if the crawl didn't error out
+            # entirely.  Individual page 404s are tracked in stats.errors.
+            success = summary.get("errors", 0) < len(seed_urls)
+            if dry_run:
+                logger.info("[dry-run] Would mark seed %s as crawled (success=%s)", s["id"], success)
+            else:
+                mark_seed_crawled(db, s["id"], success=success)
+
+        # Enqueue newly discovered directory hubs
+        if discovered_hubs and not dry_run:
+            hubs_enqueued = 0
+            for hub_url in discovered_hubs:
+                # Determine the parent URL for this hub (best effort)
+                parent = next(
+                    (s["url"] for s in seed_batch),
+                    "dynamic_queue",
+                )
+                inserted = enqueue_discovered_seeds(
+                    db, [hub_url], parent_url=parent,
+                    detected_category="discovered_directory",
+                )
+                hubs_enqueued += inserted
+        elif discovered_hubs and dry_run:
+            logger.info("[dry-run] Would enqueue %d discovered hub(s):", len(discovered_hubs))
+            for h in discovered_hubs[:10]:
+                logger.info("  [dry-run] hub: %s", h)
+            hubs_enqueued = len(discovered_hubs)
+    finally:
+        db.close()
+
+    summary["queue_size"] = len(seed_batch)
+    summary["seeds_processed"] = len(seed_batch)
+    summary["discovered_hubs_enqueued"] = hubs_enqueued
+    return summary
 
 
 async def run_crawl_pipeline(
@@ -836,12 +949,39 @@ def main(argv: Optional[List[str]] = None) -> int:
         default=None,
         help="Cap LLM extraction to top N candidates by score (conserves API usage)",
     )
+    parser.add_argument(
+        "--dynamic-queue",
+        action="store_true",
+        help=(
+            "Pull the next seed batch from the Supabase crawler_seeds queue "
+            "instead of reading a static seeds.json file"
+        ),
+    )
+    parser.add_argument(
+        "--queue-limit",
+        type=int,
+        default=20,
+        help="Number of seeds to pull from the dynamic queue (default 20)",
+    )
     args = parser.parse_args(argv)
 
     _configure_logging(args.verbose)
 
     if args.schedule:
         asyncio.run(run_daily(at_hour=args.hour, at_minute=args.minute))
+        return 0
+
+    if args.dynamic_queue:
+        summary = asyncio.run(
+            run_dynamic_queue_pipeline(
+                queue_limit=args.queue_limit,
+                max_depth=args.max_depth,
+                max_pages_per_domain=args.max_pages,
+                dry_run=args.dry_run,
+                limit_extract=args.limit_extract,
+            )
+        )
+        print(json.dumps(summary, indent=2, default=str))
         return 0
 
     if args.crawl:

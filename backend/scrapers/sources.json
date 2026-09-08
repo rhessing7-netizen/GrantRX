@@ -150,5 +150,16 @@
   {"name": "Seattle Foundation", "url": "https://www.seattlefoundation.org/scholarships/", "category": "regional_foundation", "primary_discipline": "any", "state_restriction": "WA", "scraper_type": "playwright"},
   {"name": "The Greater Kanawha Valley Foundation", "url": "https://tgkvf.org/scholarships/", "category": "regional_foundation", "primary_discipline": "any", "state_restriction": "WV", "scraper_type": "llm_fallback"},
   {"name": "Greater Milwaukee Foundation", "url": "https://www.greatermilwaukeefoundation.org/scholarships/", "category": "regional_foundation", "primary_discipline": "any", "state_restriction": "WI", "scraper_type": "playwright"},
-  {"name": "Wyoming Community Foundation", "url": "https://wycf.org/scholarships/", "category": "regional_foundation", "primary_discipline": "any", "state_restriction": "WY", "scraper_type": "llm_fallback"}
+  {"name": "Wyoming Community Foundation", "url": "https://wycf.org/scholarships/", "category": "regional_foundation", "primary_discipline": "any", "state_restriction": "WY", "scraper_type": "playwright"},
+
+  {"name": "Cleveland Clinic Tuition Assistance Program", "url": "https://my.clevelandclinic.org/about/careers/benefits/tuition-assistance", "category": "employer_tuition_benefit", "primary_discipline": "any", "state_restriction": "OH", "scraper_type": "llm_fallback"},
+  {"name": "Kaiser Permanente Allied Health Pipeline", "url": "https://careers.kaiserpermanente.org/jobs/allied-health", "category": "clinical_employee_pipeline", "primary_discipline": "any", "state_restriction": "CA", "scraper_type": "llm_fallback"},
+  {"name": "VA Health Professional Education (NNEI/EISP)", "url": "https://www.va.gov/education/health-professional-training/", "category": "government_employee_benefit", "primary_discipline": "any", "scraper_type": "llm_fallback"},
+  {"name": "Indian Health Service Loan Repayment Program", "url": "https://www.ihs.gov/scholarship/loanrepayment/", "category": "government_employee_benefit", "primary_discipline": "any", "scraper_type": "llm_fallback"},
+  {"name": "Guild Education Employer Partner Network", "url": "https://www.guildeducation.com/partners", "category": "employer_tuition_benefit", "primary_discipline": "any", "scraper_type": "llm_fallback"},
+  {"name": "InStride Education Programs", "url": "https://www.instride.com/education-programs", "category": "employer_tuition_benefit", "primary_discipline": "any", "scraper_type": "llm_fallback"},
+  {"name": "Bright Horizons EdAssist Solutions", "url": "https://www.brighthorizons.com/clients/ed-assist", "category": "employer_tuition_benefit", "primary_discipline": "any", "scraper_type": "llm_fallback"},
+  {"name": "Duquesne University External Scholarships", "url": "https://www.duq.edu/financial-aid/scholarships-and-grants/external-scholarships", "category": "institutional_department", "primary_discipline": "any", "state_restriction": "PA", "scraper_type": "llm_fallback"},
+  {"name": "Ohio State University Outside Scholarships", "url": "https://oaa.osu.edu/scholarships-and-awards/outside-scholarships.html", "category": "institutional_department", "primary_discipline": "any", "state_restriction": "OH", "scraper_type": "llm_fallback"},
+  {"name": "University of Pittsburgh Outside Scholarships", "url": "https://www.pitt.edu/admissions/financial-aid/scholarships/outside-scholarships", "category": "institutional_department", "primary_discipline": "any", "state_restriction": "PA", "scraper_type": "llm_fallback"}
 ]

@@ -115,6 +115,16 @@ def _make_scholarship(**kwargs):
         "county_restrictions": [],
         "city_restrictions": [],
         "competition_level": "medium",
+        # Employer / service-obligation defaults
+        "funding_type": "scholarship",
+        "employment_required": False,
+        "min_employment_tenure_months": None,
+        "annual_benefit_cap": None,
+        "benefit_coverage_model": None,
+        "partner_network": None,
+        "has_service_commitment": False,
+        "service_commitment_duration_months": None,
+        "vendor_platform": None,
     }
     defaults.update(kwargs)
     obj = MagicMock()

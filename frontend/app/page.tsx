@@ -496,6 +496,7 @@ export default function Home() {
                     <ScholarshipFeed
                       results={filteredResults}
                       isPremium={isPremium}
+                      profile={profile}
                       onUnlock={() =>
                         openUpgrade("Unlock all scholarship results with Premium.")
                       }

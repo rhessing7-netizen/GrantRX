@@ -35,6 +35,12 @@ CATEGORIES = {
     "faith_based_community",
     "local_business",
     "institutional_department",
+    "university_listing",
+    # Employer tuition assistance & service-obligation categories
+    "employer_tuition_benefit",
+    "clinical_employee_pipeline",
+    "government_employee_benefit",
+    "accrediting_body",
 }
 
 SCRAPER_TYPES = {"deterministic", "playwright", "llm_fallback"}

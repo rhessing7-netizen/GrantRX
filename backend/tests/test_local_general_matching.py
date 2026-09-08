@@ -79,6 +79,16 @@ def _make_scholarship(**kwargs):
         "is_local": False,
         "competition_level": "medium",
         "target_community": None,
+        # Employer / service-obligation defaults
+        "funding_type": "scholarship",
+        "employment_required": False,
+        "min_employment_tenure_months": None,
+        "annual_benefit_cap": None,
+        "benefit_coverage_model": None,
+        "partner_network": None,
+        "has_service_commitment": False,
+        "service_commitment_duration_months": None,
+        "vendor_platform": None,
     }
     defaults.update(kwargs)
     obj = MagicMock()
@@ -252,9 +262,9 @@ class TestLowCompetitionBoost:
             is_local=True,
         )
         score, missing = score_scholarship(profile, scholarship)
-        # Base: credential(25) + gpa(20) + sai(20) + geo(15) + affiliations(0) = 80
-        # + local boost(10) = 90
-        assert score >= 90, f"Expected score >= 90 with local boost, got {score}"
+        # New 4x25% scoring: gpa(25) + geo(25) + sai(25) + affil(0) = 75
+        # + local boost(10) = 85
+        assert score >= 85, f"Expected score >= 85 with local boost, got {score}"
 
     def test_low_competition_no_geo_match_no_boost(self):
         """A low-competition award without geo match does NOT get the boost."""
@@ -271,9 +281,9 @@ class TestLowCompetitionBoost:
             is_local=True,
         )
         score, missing = score_scholarship(profile, scholarship)
-        # Base: credential(25) + gpa(20) + sai(20) + geo(0) + affiliations(0) = 65
+        # gpa(25) + geo(0) + sai(25) + affil(0) = 50
         # No local boost because geo doesn't match
-        assert score < 90, f"Expected score < 90 without geo match, got {score}"
+        assert score < 85, f"Expected score < 85 without geo match, got {score}"
         # Should have missing criteria about state restriction
         assert any("OH" in m for m in missing), f"Expected OH restriction in missing, got {missing}"
 
@@ -291,9 +301,9 @@ class TestLowCompetitionBoost:
             competition_level="medium",
         )
         score, missing = score_scholarship(profile, scholarship)
-        # Base: credential(25) + gpa(20) + sai(20) + geo(15) = 80
+        # gpa(25) + geo(25) + sai(25) + affil(0) = 75
         # No local boost because competition_level is medium
-        assert score == 80, f"Expected score 80 for medium competition, got {score}"
+        assert score == 75, f"Expected score 75 for medium competition, got {score}"
 
     def test_high_competition_national_no_boost(self):
         """A high-competition national award does NOT get the local boost."""
@@ -309,8 +319,8 @@ class TestLowCompetitionBoost:
             competition_level="high",
         )
         score, missing = score_scholarship(profile, scholarship)
-        # Base: credential(25) + gpa(20) + sai(20) + geo(15) = 80
-        assert score == 80, f"Expected score 80 for high competition, got {score}"
+        # gpa(25) + geo(25) + sai(25) + affil(0) = 75
+        assert score == 75, f"Expected score 75 for high competition, got {score}"
 
     def test_county_restricted_low_competition_in_feed(self):
         """A county-restricted low-competition award appears in the feed for
@@ -332,7 +342,7 @@ class TestLowCompetitionBoost:
         )
         results = match_scholarships(profile_in_state, [scholarship])
         assert len(results) == 1, "OH student should see OH-restricted scholarship"
-        assert results[0].score >= 90, f"Expected boosted score, got {results[0].score}"
+        assert results[0].score >= 85, f"Expected boosted score, got {results[0].score}"
 
     def test_county_restricted_does_not_match_out_of_state(self):
         """A county-restricted low-competition award should not match an
@@ -353,7 +363,7 @@ class TestLowCompetitionBoost:
         score, missing = score_scholarship(profile_out, scholarship)
         # Should have missing criteria about state restriction
         assert any("OH" in m for m in missing), f"Expected OH in missing criteria, got {missing}"
-        assert score < 90, f"Out-of-state student should not get local boost, got {score}"
+        assert score < 85, f"Out-of-state student should not get local boost, got {score}"
 
 
 # ---------------------------------------------------------------------------
@@ -380,7 +390,7 @@ class TestPipelineIntegration:
         )
         results = match_scholarships(profile, [scholarship])
         assert len(results) == 1
-        assert results[0].score >= 90
+        assert results[0].score >= 85
 
     def test_mixed_feed_general_and_specific(self):
         """A feed with both general and specific scholarships filters correctly."""

@@ -88,6 +88,63 @@ class ScholarshipExtract(BaseModel):
     provider_mission: Optional[str] = None
     provider_core_values: List[str] = []
 
+    # Employer tuition assistance, service-obligation, and vendor-platform fields
+    funding_type: str = Field(
+        default="scholarship",
+        description=(
+            "Funding mechanism: 'scholarship' (default), 'tuition_reimbursement', "
+            "'employer_sponsorship', 'loan_repayment', or 'service_contingent'."
+        ),
+    )
+    employment_required: bool = Field(
+        default=False,
+        description=(
+            "True if the applicant must be an employee or hired into an "
+            "apprentice/technician pipeline of the sponsoring employer."
+        ),
+    )
+    min_employment_tenure_months: Optional[int] = Field(
+        default=None,
+        description="Minimum months of employment required before benefit eligibility.",
+    )
+    annual_benefit_cap: Optional[int] = Field(
+        default=None,
+        description="Annual cap on the tuition benefit in whole US dollars, if any.",
+    )
+    benefit_coverage_model: Optional[str] = Field(
+        default=None,
+        description=(
+            "Coverage model: 'direct_bill' (employer pays school directly), "
+            "'reimbursement' (student pays, employer reimburses), or "
+            "'forgivable_loan' (loan forgiven over service/tenure)."
+        ),
+    )
+    partner_network: Optional[str] = Field(
+        default=None,
+        description=(
+            "Education-benefit partner network, e.g. 'guild', 'instride', "
+            "'edassist', or 'internal' if administered by the employer directly."
+        ),
+    )
+    has_service_commitment: bool = Field(
+        default=False,
+        description=(
+            "True if the recipient owes post-graduation work (e.g. 2 years "
+            "in a rural health clinic or hospital network)."
+        ),
+    )
+    service_commitment_duration_months: Optional[int] = Field(
+        default=None,
+        description="Length of the required post-graduation service commitment in months.",
+    )
+    vendor_platform: Optional[str] = Field(
+        default=None,
+        description=(
+            "Scholarship management platform hosting the application, e.g. "
+            "'academicworks', 'kaleidoscope', 'smarterselect', 'openwater'."
+        ),
+    )
+
     def is_critical_complete(self) -> bool:
         """Return True if all critical fields are populated and parseable."""
         return bool(self.title) and self.award_amount is not None and bool(self.deadline)

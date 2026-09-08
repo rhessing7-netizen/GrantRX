@@ -127,6 +127,16 @@ class ScholarshipBase(BaseModel):
     is_local: bool = False
     competition_level: str = "medium"
     target_community: Optional[str] = None
+    # Employer tuition assistance, service-obligation, and vendor-platform fields
+    funding_type: str = "scholarship"
+    employment_required: bool = False
+    min_employment_tenure_months: Optional[int] = None
+    annual_benefit_cap: Optional[int] = None
+    benefit_coverage_model: Optional[str] = None
+    partner_network: Optional[str] = None
+    has_service_commitment: bool = False
+    service_commitment_duration_months: Optional[int] = None
+    vendor_platform: Optional[str] = None
 
 
 class ScholarshipCreate(ScholarshipBase):
@@ -206,6 +216,22 @@ class MatchedScholarshipOut(BaseModel):
     masked_provider: Optional[str] = None
     metro_restrictions: List[str] = []
     eligible_disciplines: List[str] = []
+    # Employer / service-obligation informational fields (defaults keep
+    # existing feed payloads backward-compatible).
+    funding_type: str = "scholarship"
+    employment_required: bool = False
+    has_service_commitment: bool = False
+    annual_benefit_cap: Optional[int] = None
+    vendor_platform: Optional[str] = None
+    # Optional detail fields populated for the preview drawer. Defaults
+    # keep existing feed payloads backward-compatible.
+    provider_mission: Optional[str] = None
+    provider_core_values: List[str] = []
+    eligible_credentials: List[str] = []
+    min_gpa: Optional[float] = None
+    max_sai: Optional[float] = None
+    state_restrictions: List[str] = []
+    is_general_major: bool = False
 
 
 class MatchedFeedOut(BaseModel):

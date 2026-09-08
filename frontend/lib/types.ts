@@ -105,6 +105,22 @@ export interface MatchedScholarship {
   masked_provider: string | null;
   metro_restrictions: string[];
   eligible_disciplines?: string[];
+  // Employer / service-obligation informational fields (optional for
+  // backward compatibility with older feed payloads).
+  funding_type?: string;
+  employment_required?: boolean;
+  has_service_commitment?: boolean;
+  annual_benefit_cap?: number | null;
+  vendor_platform?: string | null;
+  // Optional detail fields populated for the preview drawer (backward
+  // compatible — older feed payloads simply omit them).
+  provider_mission?: string | null;
+  provider_core_values?: string[];
+  eligible_credentials?: string[];
+  min_gpa?: number | null;
+  max_sai?: number | null;
+  state_restrictions?: string[];
+  is_general_major?: boolean;
 }
 
 export interface MatchedFeed {
@@ -178,6 +194,13 @@ export interface ScholarshipOut {
   target_community: string | null;
   created_at: string | null;
   updated_at: string | null;
+  // Employer / service-obligation informational fields (optional for
+  // backward compatibility with older API payloads).
+  funding_type?: string;
+  employment_required?: boolean;
+  has_service_commitment?: boolean;
+  annual_benefit_cap?: number | null;
+  vendor_platform?: string | null;
 }
 
 export interface UserScholarshipCreate {

@@ -1,13 +1,16 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
-import type { MatchedScholarship } from "@/lib/types";
+import type { MatchedScholarship, Profile } from "@/lib/types";
 import { getMetroShortName } from "@/lib/constants/metros";
 import { api } from "@/lib/api";
+import { ApplicationDrawer } from "./ApplicationDrawer";
 
 export type ScholarshipFeedProps = {
   results: MatchedScholarship[];
   isPremium: boolean;
+  /** Student profile — used for the preview drawer's qualification breakdown. */
+  profile?: Profile | null;
   onTrack?: (scholarshipId: string) => void;
   onUnlock?: () => void;
 };
@@ -31,9 +34,11 @@ function getBannerUrl(disciplines: string[] | undefined): string {
   return DISCIPLINE_BANNERS[first] ?? FALLBACK_BANNER;
 }
 
-export const ScholarshipFeed = ({ results, isPremium, onTrack, onUnlock }: ScholarshipFeedProps) => {
+export const ScholarshipFeed = ({ results, isPremium, profile, onTrack, onUnlock }: ScholarshipFeedProps) => {
   const [tracking, setTracking] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"cards" | "list">("cards");
+  // Read-only preview drawer opened by clicking a card / list row
+  const [previewScholarship, setPreviewScholarship] = useState<MatchedScholarship | null>(null);
   // Feed curation: ids animating out, ids fully hidden, and undo toast state
   const [fadingIds, setFadingIds] = useState<Set<string>>(new Set());
   const [hiddenIds, setHiddenIds] = useState<Set<string>>(new Set());
@@ -169,6 +174,7 @@ export const ScholarshipFeed = ({ results, isPremium, onTrack, onUnlock }: Schol
               onTrack={handleTrack}
               onUnlock={onUnlock}
               onDismiss={handleDismiss}
+              onOpen={setPreviewScholarship}
               tracking={tracking === s.scholarship_id}
               fading={fadingIds.has(s.scholarship_id)}
             />
@@ -181,10 +187,26 @@ export const ScholarshipFeed = ({ results, isPremium, onTrack, onUnlock }: Schol
               onTrack={handleTrack}
               onUnlock={onUnlock}
               onDismiss={handleDismiss}
+              onOpen={setPreviewScholarship}
               tracking={tracking === s.scholarship_id}
               fading={fadingIds.has(s.scholarship_id)}
             />
           ))}
+
+      {/* Read-only preview drawer */}
+      <ApplicationDrawer
+        mode="preview"
+        scholarship={previewScholarship}
+        profile={profile}
+        isOpen={!!previewScholarship}
+        saving={!!previewScholarship && tracking === previewScholarship.scholarship_id}
+        onSave={async () => {
+          if (!previewScholarship) return;
+          await handleTrack(previewScholarship.scholarship_id);
+          setPreviewScholarship(null);
+        }}
+        onClose={() => setPreviewScholarship(null)}
+      />
 
       {/* Undo toast */}
       {undoToast && (
@@ -210,6 +232,7 @@ function ScholarshipCard({
   onTrack,
   onUnlock,
   onDismiss,
+  onOpen,
   tracking,
   fading,
 }: {
@@ -218,6 +241,7 @@ function ScholarshipCard({
   onTrack: (id: string) => void;
   onUnlock?: () => void;
   onDismiss: (id: string, title: string) => void;
+  onOpen: (scholarship: MatchedScholarship) => void;
   tracking: boolean;
   fading: boolean;
 }) {
@@ -239,10 +263,24 @@ function ScholarshipCard({
     }
   };
 
+  const openPreview = () => {
+    if (!locked) onOpen(scholarship);
+  };
+
   return (
     <article
+      onClick={openPreview}
+      onKeyDown={(e) => {
+        if (!locked && (e.key === "Enter" || e.key === " ") && e.target === e.currentTarget) {
+          e.preventDefault();
+          openPreview();
+        }
+      }}
+      role={locked ? undefined : "button"}
+      tabIndex={locked ? undefined : 0}
+      aria-label={locked ? undefined : `View details for ${scholarship.title}`}
       className={`bg-white/95 rounded-2xl border border-slate-200/90 shadow-[0_4px_20px_-4px_rgba(15,23,42,0.06)] hover:shadow-[0_12px_32px_-6px_rgba(74,143,231,0.18)] hover:-translate-y-1 hover:border-slate-300 transition-all duration-200 overflow-hidden flex flex-col relative ${
-        locked ? "ring-1 ring-textSecondary/10" : ""
+        locked ? "ring-1 ring-textSecondary/10" : "cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-skyAqua"
       } ${fading ? "opacity-0 scale-95 max-h-0 pointer-events-none" : "opacity-100"}`}
     >
       {/* Discipline banner image — explicit height + shimmer placeholder to prevent CLS */}
@@ -319,6 +357,34 @@ function ScholarshipCard({
                     ))}
                   </div>
                 )}
+                {/* Employer benefit & service-obligation chips */}
+                {(scholarship.has_service_commitment ||
+                  scholarship.funding_type === "tuition_reimbursement" ||
+                  scholarship.funding_type === "employer_sponsorship" ||
+                  scholarship.employment_required) && (
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {scholarship.has_service_commitment && (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-violet-100 px-2.5 py-1 text-xs font-semibold text-violet-800">
+                        <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 20 20">
+                          <path d="M9 12l2 2 4-4" />
+                          <path fillRule="evenodd" d="M3 10a7 7 0 1114 0 7 7 0 01-14 0zm7-5a5 5 0 100 10 5 5 0 000-10z" clipRule="evenodd" />
+                        </svg>
+                        Service Obligation
+                      </span>
+                    )}
+                    {(scholarship.funding_type === "tuition_reimbursement" ||
+                      scholarship.funding_type === "employer_sponsorship" ||
+                      scholarship.employment_required) && (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-800">
+                        <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 20 20">
+                          <path d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" />
+                          <path d="M7 8h6v2H7z" />
+                        </svg>
+                        Employer Benefit
+                      </span>
+                    )}
+                  </div>
+                )}
               </>
             )}
           </div>
@@ -334,7 +400,10 @@ function ScholarshipCard({
             </span>
             {/* Hide / dismiss button (Lucide EyeOff) */}
             <button
-              onClick={() => onDismiss(scholarship.scholarship_id, scholarship.title)}
+              onClick={(e) => {
+                e.stopPropagation();
+                onDismiss(scholarship.scholarship_id, scholarship.title);
+              }}
               className="rounded-lg p-1.5 text-textSecondary/40 transition hover:bg-slate-100 hover:text-textSecondary"
               aria-label="Hide this scholarship"
               title="Hide from my feed"
@@ -370,7 +439,10 @@ function ScholarshipCard({
               Upgrade to Premium for full details, provider info, and application links.
             </p>
             <button
-              onClick={onUnlock}
+              onClick={(e) => {
+                e.stopPropagation();
+                onUnlock?.();
+              }}
               className="mt-3 rounded-full bg-gradient-to-r from-aquamarine to-neonIce px-5 py-2 text-sm font-semibold text-textPrimary transition hover:opacity-90"
             >
               Unlock with Premium
@@ -417,13 +489,17 @@ function ScholarshipCard({
                   href={scholarship.portal_url}
                   target="_blank"
                   rel="noopener noreferrer"
+                  onClick={(e) => e.stopPropagation()}
                   className="rounded-full bg-crayolaBlue px-5 py-2 text-sm font-medium text-surfaceBg hover:bg-blueEnergy"
                 >
                   Apply
                 </a>
               )}
               <button
-                onClick={() => onTrack(scholarship.scholarship_id)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onTrack(scholarship.scholarship_id);
+                }}
                 disabled={tracking}
                 className="rounded-full border border-textSecondary/20 px-5 py-2 text-sm font-medium text-textSecondary hover:border-crayolaBlue hover:text-textPrimary disabled:opacity-50"
               >
@@ -431,8 +507,9 @@ function ScholarshipCard({
               </button>
             </div>
 
-            {/* Report inaccurate info */}
-            <div className="mt-3">
+            {/* Report inaccurate info — wrapper stops propagation so the
+                select/buttons never open the preview drawer */}
+            <div className="mt-3" onClick={(e) => e.stopPropagation()}>
               {reportSubmitted ? (
                 <p className="text-xs text-aquamarine">✓ Report submitted — thank you!</p>
               ) : reportOpen ? (
@@ -485,6 +562,7 @@ function ScholarshipListItem({
   onTrack,
   onUnlock,
   onDismiss,
+  onOpen,
   tracking,
   fading,
 }: {
@@ -493,10 +571,14 @@ function ScholarshipListItem({
   onTrack: (id: string) => void;
   onUnlock?: () => void;
   onDismiss: (id: string, title: string) => void;
+  onOpen: (scholarship: MatchedScholarship) => void;
   tracking: boolean;
   fading: boolean;
 }) {
   const locked = scholarship.is_locked && !isPremium;
+  const openPreview = () => {
+    if (!locked) onOpen(scholarship);
+  };
   const providerInitial = (scholarship.provider?.trim()?.charAt(0) || "G").toUpperCase();
   const firstDiscipline = scholarship.eligible_disciplines?.[0];
 
@@ -511,9 +593,19 @@ function ScholarshipListItem({
 
   return (
     <article
+      onClick={openPreview}
+      onKeyDown={(e) => {
+        if (!locked && (e.key === "Enter" || e.key === " ") && e.target === e.currentTarget) {
+          e.preventDefault();
+          openPreview();
+        }
+      }}
+      role={locked ? undefined : "button"}
+      tabIndex={locked ? undefined : 0}
+      aria-label={locked ? undefined : `View details for ${scholarship.title}`}
       className={`bg-white rounded-xl border border-slate-200/90 shadow-xs hover:border-slate-300 hover:shadow-sm transition-all duration-150 p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 group ${
-        fading ? "opacity-0 scale-95 max-h-0 pointer-events-none" : "opacity-100"
-      }`}
+        locked ? "" : "cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-skyAqua"
+      } ${fading ? "opacity-0 scale-95 max-h-0 pointer-events-none" : "opacity-100"}`}
     >
       {locked ? (
         /* Paywalled list row — blurred with centered lock badge */
@@ -530,7 +622,10 @@ function ScholarshipListItem({
               Pro Only
             </span>
             <button
-              onClick={onUnlock}
+              onClick={(e) => {
+                e.stopPropagation();
+                onUnlock?.();
+              }}
               className="rounded-full bg-gradient-to-r from-aquamarine to-neonIce px-4 py-1.5 text-xs font-semibold text-textPrimary transition hover:opacity-90"
             >
               Unlock with Premium
@@ -552,6 +647,18 @@ function ScholarshipListItem({
               {firstDiscipline && (
                 <span className="shrink-0 rounded-full bg-slate-100 border border-slate-200 px-2 py-0.5 text-[10px] font-medium text-slate-600 capitalize">
                   {firstDiscipline.replace(/_/g, " ")}
+                </span>
+              )}
+              {scholarship.has_service_commitment && (
+                <span className="shrink-0 rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-semibold text-violet-800">
+                  Service Obligation
+                </span>
+              )}
+              {(scholarship.funding_type === "tuition_reimbursement" ||
+                scholarship.funding_type === "employer_sponsorship" ||
+                scholarship.employment_required) && (
+                <span className="shrink-0 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-800">
+                  Employer Benefit
                 </span>
               )}
             </div>
@@ -614,20 +721,27 @@ function ScholarshipListItem({
                   href={scholarship.portal_url}
                   target="_blank"
                   rel="noopener noreferrer"
+                  onClick={(e) => e.stopPropagation()}
                   className="rounded-full bg-blueEnergy hover:bg-[#3b7ed6] text-white font-medium px-4 py-1.5 text-xs transition-colors"
                 >
                   Apply
                 </a>
               )}
               <button
-                onClick={() => onTrack(scholarship.scholarship_id)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onTrack(scholarship.scholarship_id);
+                }}
                 disabled={tracking}
                 className="rounded-full border border-slate-200 px-4 py-1.5 text-xs font-medium text-slate-600 hover:border-slate-300 hover:text-slate-900 disabled:opacity-50 transition"
               >
                 {tracking ? "Saving\u2026" : "Save"}
               </button>
               <button
-                onClick={() => onDismiss(scholarship.scholarship_id, scholarship.title)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDismiss(scholarship.scholarship_id, scholarship.title);
+                }}
                 className="rounded-lg p-1.5 text-slate-300 transition hover:bg-slate-100 hover:text-slate-600 opacity-0 group-hover:opacity-100"
                 aria-label="Hide this scholarship"
                 title="Hide from my feed"

@@ -54,6 +54,29 @@ PATH_KEYWORDS = [
     "loan_repayment",
     "apply",
     "funding",
+    # University outside aid portals
+    "outside-scholarships",
+    "outside_scholarships",
+    "external-scholarships",
+    "external_scholarships",
+    "external-aid",
+    "external_aid",
+    "private-donor",
+    "private_donor",
+    "outside-awards",
+    "outside_awards",
+    # Employer / corporate education benefits
+    "education-benefit",
+    "education_benefit",
+    "tuition-reimbursement",
+    "tuition_reimbursement",
+    "career-choice",
+    "career_choice",
+    "guild-education",
+    "service-commitment",
+    "service_commitment",
+    # AcademicWorks opportunity portals
+    "opportunities",
 ]
 
 # Content keywords — pages must contain enough of these to be relevant
@@ -133,6 +156,19 @@ CONTENT_KEYWORDS = [
     "fellowship",
     "grant",
     "loan repayment",
+    # University outside aid portals
+    "outside scholarships",
+    "external aid",
+    "external scholarships",
+    "private donor",
+    "outside awards",
+    # Employer / corporate education benefits
+    "tuition assistance",
+    "education benefit",
+    "tuition reimbursement",
+    "career choice",
+    "guild education",
+    "service commitment",
 ]
 
 # ---------------------------------------------------------------------------
@@ -166,6 +202,25 @@ LOCAL_QUALIFIER_TERMS = [
     "unrestricted",
 ]
 
+# Employer / outside-aid qualifier terms — detect institutional outside
+# scholarship portals and clinical employer education benefits. When any of
+# these appear in page text, the candidate gets a +3 relevance boost to
+# surface university external aid pages and employer tuition programs.
+EMPLOYER_OUTSIDE_AID_TERMS = [
+    "outside scholarships",
+    "external aid",
+    "private donor",
+    "external scholarships",
+    "outside awards",
+    "tuition assistance",
+    "education benefit",
+    "tuition reimbursement",
+    "career choice",
+    "guild education",
+    "service commitment",
+    "loan repayment",
+]
+
 # State name -> 2-letter code mapping for residency extraction
 _STATE_NAME_TO_CODE = {
     "ohio": "OH",
@@ -177,6 +232,9 @@ REGIONAL_BOOST_PER_HIT = 3
 
 # Boost applied when local qualifier terms are detected (county, rotary, etc.)
 LOCAL_QUALIFIER_BOOST = 3
+
+# Boost applied when employer / outside-aid qualifier terms are detected.
+EMPLOYER_OUTSIDE_AID_BOOST = 3
 
 # Boost applied when a Top-20 metro area is detected in page text
 METRO_BOOST = 4
@@ -260,6 +318,9 @@ class CrawlStats:
     candidates_found: int = 0
     errors: int = 0
     domains_visited: Set[str] = field(default_factory=set)
+    # Newly discovered directory-hub URLs collected during traversal.
+    # These are candidate seeds for the autonomous crawler_seeds queue.
+    discovered_hubs: List[str] = field(default_factory=list)
 
     def summary(self) -> dict:
         return {
@@ -269,6 +330,7 @@ class CrawlStats:
             "candidates_found": self.candidates_found,
             "errors": self.errors,
             "domains_visited": list(self.domains_visited),
+            "discovered_hubs": list(self.discovered_hubs),
         }
 
 
@@ -392,6 +454,13 @@ class ScholarshipCrawler:
                         if self._should_follow(link, url):
                             self._queue.append((link, depth + 1, seed_url))
                             self._stats.links_followed += 1
+                            # Collect potential seed hubs for the autonomous
+                            # crawler_seeds queue.  Only directory-style pages
+                            # (not individual application forms or file
+                            # downloads) are collected.
+                            if self._is_hub_candidate(link, url):
+                                if link not in self._stats.discovered_hubs:
+                                    self._stats.discovered_hubs.append(link)
                         else:
                             self._stats.links_rejected += 1
 
@@ -494,6 +563,18 @@ class ScholarshipCrawler:
                 if term not in regional_keywords:
                     regional_keywords.append(term)
 
+        # Employer / outside-aid qualifier boost — award +3 when the page
+        # mentions institutional outside awards or clinical employer education
+        # benefits (tuition assistance, tuition reimbursement, guild education,
+        # service commitment, etc.). This surfaces university external aid
+        # portals and employer tuition assistance programs.
+        employer_outside_hits = [t for t in EMPLOYER_OUTSIDE_AID_TERMS if t in lower]
+        if employer_outside_hits:
+            regional_score += EMPLOYER_OUTSIDE_AID_BOOST
+            for term in employer_outside_hits:
+                if term not in regional_keywords:
+                    regional_keywords.append(term)
+
         # Top-20 metro area detection — award a +4 boost when candidate page
         # text matches any top-20 county or metro keyword, and attach detected
         # metro keys to regional_keywords so downstream LLM prompts receive
@@ -581,9 +662,79 @@ class ScholarshipCrawler:
         if url_domain == parent_domain:
             return True
 
+        # Always follow AcademicWorks opportunity portals (external links to
+        # *.academicworks.com/opportunities are high-yield scholarship listings
+        # hosted by universities and community foundations).
+        if url_domain.endswith(".academicworks.com") and "/opportunities" in path.lower():
+            return True
+
         # For external links, only follow if path contains a keyword
         path_lower = path.lower()
         return any(kw in path_lower for kw in PATH_KEYWORDS)
+
+    def _is_hub_candidate(self, url: str, parent_url: str) -> bool:
+        """Decide whether a discovered link is a potential seed hub.
+
+        Returns True for directory-style pages (foundation scholarship
+        listings, university outside-aid portals, employer tuition-benefit
+        pages, AcademicWorks opportunity portals).  Excludes individual
+        application forms, static image/PDF downloads, and blocked domains.
+        """
+        # Reject bad file extensions
+        path = urlparse(url).path.lower()
+        for ext in REJECTED_EXTENSIONS:
+            if path.endswith(ext):
+                return False
+
+        # Reject non-http(s)
+        scheme = urlparse(url).scheme
+        if scheme not in ("http", "https"):
+            return False
+
+        # Reject blocked mega-aggregator domains
+        url_domain = self._get_domain(url)
+        if url_domain in BLOCKED_DOMAINS:
+            return False
+
+        # Reject social media and login/app-form domains
+        social_domains = {
+            "facebook.com", "twitter.com", "x.com", "instagram.com",
+            "linkedin.com", "youtube.com", "tiktok.com", "pinterest.com",
+            "reddit.com",
+        }
+        if url_domain in social_domains:
+            return False
+
+        # Reject individual application form / non-hub pages
+        non_hub_patterns = [
+            "/apply/", "/application", "/login", "/register", "/signup",
+            "/account", "/cart", "/checkout", "/donate", "/payment",
+        ]
+        if any(pattern in path for pattern in non_hub_patterns):
+            return False
+
+        # Accept AcademicWorks opportunity portals (external to parent)
+        if url_domain.endswith(".academicworks.com") and "/opportunities" in path:
+            return True
+
+        # Accept links with hub-style path patterns
+        hub_patterns = [
+            "/scholarship", "/scholarships", "/grant", "/grants",
+            "/fellowship", "/fellowships", "/financial-aid", "/financial_aid",
+            "/outside-scholarship", "/outside_scholarship",
+            "/external-scholarship", "/external_scholarship",
+            "/external-aid", "/external_aid",
+            "/private-donor", "/private_donor",
+            "/outside-awards", "/outside_awards",
+            "/tuition-assistance", "/tuition_assistance",
+            "/tuition-reimbursement", "/tuition_reimbursement",
+            "/education-benefit", "/education_benefit",
+            "/career-choice", "/career_choice",
+            "/loan-repayment", "/loan_repayment",
+            "/service-commitment", "/service_commitment",
+            "/opportunities", "/awards", "/funding",
+        ]
+        return any(pattern in path for pattern in hub_patterns)
 
     @staticmethod
     def _normalize_url(url: str) -> Optional[str]:

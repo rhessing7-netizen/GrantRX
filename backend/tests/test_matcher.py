@@ -21,6 +21,7 @@ from app.services.matcher import (
     MatchResult,
     _metro_match,
     _normalize_metro_value,
+    is_discipline_eligible,
     match_scholarships,
     score_scholarship,
 )
@@ -83,6 +84,16 @@ def _make_scholarship(**kwargs):
         "is_local": False,
         "competition_level": "medium",
         "target_community": None,
+        # Employer / service-obligation defaults
+        "funding_type": "scholarship",
+        "employment_required": False,
+        "min_employment_tenure_months": None,
+        "annual_benefit_cap": None,
+        "benefit_coverage_model": None,
+        "partner_network": None,
+        "has_service_commitment": False,
+        "service_commitment_duration_months": None,
+        "vendor_platform": None,
     }
     defaults.update(kwargs)
     obj = MagicMock()
@@ -97,7 +108,7 @@ def _make_scholarship(**kwargs):
 
 class TestScoreScholarship:
     def test_perfect_match_all_criteria_met(self):
-        """A scholarship where the user meets every criterion should score high."""
+        """A scholarship where the user meets every criterion should score 100."""
         profile = _make_profile(
             disciplines=["pharmacy"],
             primary_discipline="pharmacy",
@@ -110,9 +121,10 @@ class TestScoreScholarship:
             eligible_disciplines=["pharmacy"],
             min_gpa=3.0,
             state_restrictions=["CA"],
+            matching_tags=["first_gen", "minority"],
         )
         score, missing = score_scholarship(profile, scholarship)
-        assert score >= 80, f"Expected score >= 80 for perfect match, got {score}"
+        assert score == 100, f"Expected score 100 for perfect match, got {score}"
         assert len(missing) == 0, f"Expected no missing criteria, got {missing}"
 
     def test_partial_match_some_criteria_met(self):
@@ -129,7 +141,8 @@ class TestScoreScholarship:
             state_restrictions=["CA"],  # User is in NY, not CA
         )
         score, missing = score_scholarship(profile, scholarship)
-        assert 40 <= score < 100, f"Expected moderate score, got {score}"
+        # GPA(25) + geo(0) + SAI(25) + affil(0) = 50
+        assert 25 <= score < 100, f"Expected moderate score, got {score}"
         # State restriction should be in missing criteria
         assert any("state" in m.lower() or "CA" in m or "residence" in m.lower() for m in missing)
 
@@ -164,6 +177,75 @@ class TestScoreScholarship:
         scholarship = _make_scholarship(min_gpa=3.5)
         score, missing = score_scholarship(profile, scholarship)
         assert any("gpa" in m.lower() for m in missing), f"Expected GPA in missing, got {missing}"
+
+
+# ---------------------------------------------------------------------------
+# Tests: is_discipline_eligible (hard gate)
+# ---------------------------------------------------------------------------
+
+class TestIsDisciplineEligible:
+    def test_empty_disciplines_passes_all(self):
+        """Scholarships with empty eligible_disciplines pass everyone."""
+        profile = _make_profile(disciplines=["pharmacy"])
+        scholarship = _make_scholarship(eligible_disciplines=[])
+        assert is_discipline_eligible(profile, scholarship) is True
+
+    def test_any_in_disciplines_passes_all(self):
+        """Scholarships with 'any' in eligible_disciplines pass everyone."""
+        profile = _make_profile(disciplines=["pharmacy"])
+        scholarship = _make_scholarship(eligible_disciplines=["any"])
+        assert is_discipline_eligible(profile, scholarship) is True
+
+    def test_matching_discipline_passes(self):
+        """User discipline matching scholarship discipline passes."""
+        profile = _make_profile(disciplines=["pharmacy"])
+        scholarship = _make_scholarship(eligible_disciplines=["pharmacy"])
+        assert is_discipline_eligible(profile, scholarship) is True
+
+    def test_non_matching_discipline_fails(self):
+        """User discipline not matching scholarship discipline fails hard."""
+        profile = _make_profile(disciplines=["nursing"])
+        scholarship = _make_scholarship(eligible_disciplines=["pharmacy"])
+        assert is_discipline_eligible(profile, scholarship) is False
+
+    def test_no_user_disciplines_passes(self):
+        """User with no disciplines passes (unrestricted fallback)."""
+        profile = _make_profile(disciplines=[])
+        scholarship = _make_scholarship(eligible_disciplines=["pharmacy"])
+        assert is_discipline_eligible(profile, scholarship) is True
+
+    def test_matching_credential_passes(self):
+        """User credential matching scholarship credential passes."""
+        profile = _make_profile(target_credentials=["PharmD"])
+        scholarship = _make_scholarship(eligible_credentials=["PharmD"])
+        assert is_discipline_eligible(profile, scholarship) is True
+
+    def test_non_matching_credential_fails(self):
+        """User credential not matching scholarship credential fails hard."""
+        profile = _make_profile(target_credentials=["BSN"])
+        scholarship = _make_scholarship(eligible_credentials=["PharmD"])
+        assert is_discipline_eligible(profile, scholarship) is False
+
+    def test_no_user_credentials_passes(self):
+        """User with no credentials passes credential gate."""
+        profile = _make_profile(target_credentials=[])
+        scholarship = _make_scholarship(eligible_credentials=["PharmD"])
+        assert is_discipline_eligible(profile, scholarship) is True
+
+    def test_empty_scholarship_credentials_passes(self):
+        """Scholarship with no credential restriction passes everyone."""
+        profile = _make_profile(target_credentials=["PharmD"])
+        scholarship = _make_scholarship(eligible_credentials=[])
+        assert is_discipline_eligible(profile, scholarship) is True
+
+    def test_discipline_match_credential_mismatch_fails(self):
+        """Discipline matches but credential doesn't -> fails hard."""
+        profile = _make_profile(disciplines=["pharmacy"], target_credentials=["BSN"])
+        scholarship = _make_scholarship(
+            eligible_disciplines=["pharmacy"],
+            eligible_credentials=["PharmD"],
+        )
+        assert is_discipline_eligible(profile, scholarship) is False
 
 
 # ---------------------------------------------------------------------------

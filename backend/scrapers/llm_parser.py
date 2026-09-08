@@ -172,6 +172,80 @@ class LLMScholarship(BaseModel):
             "'University of Michigan'). Null if not local or not specified."
         ),
     )
+    funding_type: str = Field(
+        default="scholarship",
+        description=(
+            "Funding mechanism. Use 'tuition_reimbursement' or 'employer_sponsorship' "
+            "if tied to employment; 'loan_repayment' if it repays existing loans; "
+            "'service_contingent' if it requires clinical service after graduation; "
+            "otherwise 'scholarship' (the default)."
+        ),
+    )
+    employment_required: bool = Field(
+        default=False,
+        description=(
+            "True if the applicant must be a current employee of the sponsoring "
+            "organization, or must be hired into an apprentice/technician pipeline "
+            "as a condition of the award."
+        ),
+    )
+    min_employment_tenure_months: Optional[int] = Field(
+        None,
+        description=(
+            "Minimum months of continuous employment required before the tuition "
+            "benefit is available. Null if not specified or not employment-based."
+        ),
+    )
+    annual_benefit_cap: Optional[int] = Field(
+        None,
+        description=(
+            "Annual cap on the tuition benefit in whole US dollars (e.g. 5250 for "
+            "IRS Section 127 plans). Null if no cap is stated."
+        ),
+    )
+    benefit_coverage_model: Optional[str] = Field(
+        None,
+        description=(
+            "Coverage model: 'direct_bill' (employer pays the institution directly), "
+            "'reimbursement' (student pays upfront, employer reimburses on completion), "
+            "or 'forgivable_loan' (loan forgiven over a service/tenure period). "
+            "Null if not specified."
+        ),
+    )
+    partner_network: Optional[str] = Field(
+        None,
+        description=(
+            "Education-benefit partner network administering the program, e.g. "
+            "'guild' (Guild Education), 'instride' (InStride), 'edassist' "
+            "(EdAssist/Bright Horizons), or 'internal' if administered by the "
+            "employer directly. Null if not applicable."
+        ),
+    )
+    has_service_commitment: bool = Field(
+        default=False,
+        description=(
+            "True if the recipient owes post-graduation work in exchange for the "
+            "award (e.g. 2 years in a rural health clinic, Indian Health Service, "
+            "or a hospital network). False for unrestricted scholarships."
+        ),
+    )
+    service_commitment_duration_months: Optional[int] = Field(
+        None,
+        description=(
+            "Length of the required post-graduation service commitment in months "
+            "(e.g. 24 for a 2-year commitment). Null if no service commitment."
+        ),
+    )
+    vendor_platform: Optional[str] = Field(
+        None,
+        description=(
+            "Scholarship management platform hosting the application. Detect from "
+            "the URL or page text: 'academicworks' if hosted on *.academicworks.com, "
+            "'kaleidoscope' if hosted on kaleidoscope.com, 'smarterselect' if on "
+            "smarterselect.com, 'openwater' if on openwater.com. Null if not "
+            "determinable or if hosted on a custom domain."
+        ),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -237,6 +311,44 @@ SYSTEM_PROMPT = (
     "- Target community: If is_local is true, specify the municipality, county, "
     "  high school, or organization name (e.g. 'Cleveland, OH', 'Cuyahoga County', "
     "  'Rotary District 6650'). Null if not local or not specified.\n"
+    "- Funding type: Classify the funding mechanism:\n"
+    "  * 'scholarship' (default) — a traditional grant or scholarship with no "
+    "    employment or service obligation.\n"
+    "  * 'tuition_reimbursement' — employer reimburses tuition after successful "
+    "    course completion (e.g. IRS Section 127 plans, $5,250 annual cap).\n"
+    "  * 'employer_sponsorship' — employer pays the institution directly or "
+    "    covers tuition upfront as part of a hiring/apprenticeship pipeline.\n"
+    "  * 'loan_repayment' — program repays existing student loans (e.g. NHSC LRP).\n"
+    "  * 'service_contingent' — award requires post-graduation clinical service "
+    "    (e.g. IHS, rural health, hospital network commitment).\n"
+    "- Employment required: Set to true if the applicant must be a current employee "
+    "  of the sponsoring organization, or must be hired into an apprentice or "
+    "  technician pipeline as a condition of receiving the benefit.\n"
+    "- Min employment tenure months: If employment is required, extract the minimum "
+    "  months of continuous employment before the benefit is available. Null if not "
+    "  specified or not employment-based.\n"
+    "- Annual benefit cap: Extract the annual dollar cap on the tuition benefit "
+    "  (e.g. 5250 for IRS Section 127). Null if no cap is stated.\n"
+    "- Benefit coverage model: Classify as 'direct_bill' (employer pays school "
+    "  directly), 'reimbursement' (student pays, employer reimburses), or "
+    "  'forgivable_loan' (loan forgiven over service/tenure). Null if not specified.\n"
+    "- Partner network: Identify the education-benefit partner network if "
+    "  applicable: 'guild' (Guild Education), 'instride' (InStride), 'edassist' "
+    "  (EdAssist/Bright Horizons), or 'internal' if administered by the employer "
+    "  directly. Null if not applicable.\n"
+    "- Has service commitment: Set to true if the recipient owes post-graduation "
+    "  work in exchange for the award (e.g. 2 years in a rural health clinic, "
+    "  Indian Health Service, or a hospital network). False for unrestricted awards.\n"
+    "- Service commitment duration months: If has_service_commitment is true, "
+    "  extract the length of the required service in months (e.g. 24 for 2 years). "
+    "  Null if no service commitment.\n"
+    "- Vendor platform: Detect if the application is hosted on a known scholarship "
+    "  management platform:\n"
+    "  * 'academicworks' if the URL is on *.academicworks.com\n"
+    "  * 'kaleidoscope' if on kaleidoscope.com\n"
+    "  * 'smarterselect' if on smarterselect.com\n"
+    "  * 'openwater' if on openwater.com\n"
+    "  Null if hosted on a custom domain or not determinable.\n"
     "If a field is not present, return null or an empty list as appropriate. "
     "Do not invent values."
 )
@@ -397,4 +509,13 @@ async def extract_with_llm(html: str, url: str) -> Optional[ScholarshipExtract]:
         is_local=result.is_local,
         competition_level=result.competition_level or "medium",
         target_community=result.target_community,
+        funding_type=getattr(result, "funding_type", "scholarship") or "scholarship",
+        employment_required=bool(getattr(result, "employment_required", False)),
+        min_employment_tenure_months=getattr(result, "min_employment_tenure_months", None),
+        annual_benefit_cap=getattr(result, "annual_benefit_cap", None),
+        benefit_coverage_model=getattr(result, "benefit_coverage_model", None),
+        partner_network=getattr(result, "partner_network", None),
+        has_service_commitment=bool(getattr(result, "has_service_commitment", False)),
+        service_commitment_duration_months=getattr(result, "service_commitment_duration_months", None),
+        vendor_platform=getattr(result, "vendor_platform", None),
     )

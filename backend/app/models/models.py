@@ -108,6 +108,16 @@ class Scholarship(Base):
     is_local = Column(Boolean, default=False, index=True)
     competition_level = Column(String, default="medium", index=True)
     target_community = Column(String, nullable=True)
+    # Employer tuition assistance, service-obligation, and vendor-platform fields
+    funding_type = Column(String, default="scholarship", index=True)
+    employment_required = Column(Boolean, default=False, index=True)
+    min_employment_tenure_months = Column(Integer, nullable=True)
+    annual_benefit_cap = Column(Integer, nullable=True)
+    benefit_coverage_model = Column(String, nullable=True)
+    partner_network = Column(String, nullable=True)
+    has_service_commitment = Column(Boolean, default=False, index=True)
+    service_commitment_duration_months = Column(Integer, nullable=True)
+    vendor_platform = Column(String, nullable=True)
     created_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
 
@@ -193,4 +203,26 @@ class CancellationFeedback(Base):
     reason = Column(Text, nullable=False)  # won_scholarship | too_expensive | not_enough_opportunities | finished_cycle | other
     award_amount = Column(Integer, nullable=True)
     comments = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
+
+
+class CrawlerSeed(Base):
+    """Autonomous crawler seed queue.
+
+    Stores both manually curated seeds (from seeds.json) and dynamically
+    discovered directory hubs. The crawler pulls the next batch from this
+    table and enqueues newly discovered hub URLs during traversal.
+    """
+
+    __tablename__ = "crawler_seeds"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    url = Column(Text, unique=True, nullable=False)
+    source_name = Column(Text, nullable=True)
+    category = Column(Text, default="discovered_directory")
+    priority = Column(Integer, default=1)
+    status = Column(Text, default="queued")  # queued | crawled | failed | ignored
+    error_count = Column(Integer, default=0)
+    last_crawled_at = Column(DateTime(timezone=True), nullable=True)
+    discovered_from_url = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)

@@ -3,7 +3,8 @@
     "url": "https://www.clevelandfoundation.org/scholarships/",
     "name": "The Cleveland Foundation",
     "region": "OH",
-    "category": "community_foundation"
+    "category": "regional_foundation",
+    "scraper_type": "playwright"
   },
   {
     "url": "https://www.akroncf.org/students-scholarships/",
@@ -66,10 +67,11 @@
     "category": "academic_institution"
   },
   {
-    "url": "https://pittsburghfoundation.org/scholarships",
+    "url": "https://pittsburghfoundation.org/scholarshipsearch",
     "name": "The Pittsburgh Foundation",
     "region": "PA",
-    "category": "community_foundation"
+    "category": "regional_foundation",
+    "scraper_type": "playwright"
   },
   {
     "url": "https://www.philafound.org/students/scholarships/",
@@ -111,7 +113,8 @@
     "url": "https://www.duq.edu/admissions-and-aid/tuition-and-financial-aid/types-of-aid/scholarships/external-scholarships.php",
     "name": "Duquesne University External Health Scholarships",
     "region": "PA",
-    "category": "academic_institution"
+    "category": "university_listing",
+    "scraper_type": "deterministic"
   },
   {
     "url": "https://www.pharmacy.pitt.edu/admissions-and-aid/scholarships-and-financial-aid",
@@ -239,5 +242,89 @@
     "name": "Central Florida Foundation",
     "region": "FL",
     "category": "community_foundation"
+  },
+  {
+    "url": "https://www.duq.edu/financial-aid/scholarships-and-grants/external-scholarships",
+    "name": "Duquesne University — External Scholarships",
+    "region": "PA",
+    "category": "academic_institution"
+  },
+  {
+    "url": "https://oaa.osu.edu/scholarships-and-awards/outside-scholarships.html",
+    "name": "Ohio State University — Outside Scholarships",
+    "region": "OH",
+    "category": "academic_institution"
+  },
+  {
+    "url": "https://www.pitt.edu/admissions/financial-aid/scholarships/outside-scholarships",
+    "name": "University of Pittsburgh — Outside Scholarships",
+    "region": "PA",
+    "category": "academic_institution"
+  },
+  {
+    "url": "https://my.clevelandclinic.org/about/careers/students-and-new-grads/aspire-program",
+    "name": "Cleveland Clinic ASPIRE Program",
+    "region": "OH",
+    "category": "employer_tuition_benefit"
+  },
+  {
+    "url": "https://my.clevelandclinic.org/about/careers/benefits/tuition-assistance",
+    "name": "Cleveland Clinic Tuition Assistance",
+    "region": "OH",
+    "category": "employer_tuition_benefit"
+  },
+  {
+    "url": "https://careers.kaiserpermanente.org/jobs/allied-health",
+    "name": "Kaiser Permanente — Allied Health Pipeline",
+    "region": "CA",
+    "category": "clinical_employee_pipeline"
+  },
+  {
+    "url": "https://www.va.gov/education/health-professional-training/",
+    "name": "VA Health Professional Education (NNEI / EISP / VANEEP)",
+    "region": "US",
+    "category": "government_employee_benefit"
+  },
+  {
+    "url": "https://www.ihs.gov/scholarship/loanrepayment/",
+    "name": "Indian Health Service Loan Repayment Program",
+    "region": "US",
+    "category": "government_employee_benefit"
+  },
+  {
+    "url": "https://www.nhsf.org/scholarships/",
+    "name": "National Health Service Corps Scholarships",
+    "region": "US",
+    "category": "government_employee_benefit"
+  },
+  {
+    "url": "https://www.americorps.gov/for-organizations/funding-opportunities",
+    "name": "AmeriCorps Funding Opportunities",
+    "region": "US",
+    "category": "government_employee_benefit"
+  },
+  {
+    "url": "https://www.guildeducation.com/partners",
+    "name": "Guild Education — Employer Partner Network",
+    "region": "US",
+    "category": "employer_tuition_benefit"
+  },
+  {
+    "url": "https://www.instride.com/education-programs",
+    "name": "InStride — Education Programs",
+    "region": "US",
+    "category": "employer_tuition_benefit"
+  },
+  {
+    "url": "https://www.brighthorizons.com/clients/ed-assist",
+    "name": "Bright Horizons EdAssist Solutions",
+    "region": "US",
+    "category": "employer_tuition_benefit"
+  },
+  {
+    "url": "https://www.academicworks.com/",
+    "name": "AcademicWorks — Platform Discovery",
+    "region": "US",
+    "category": "accrediting_body"
   }
 ]
