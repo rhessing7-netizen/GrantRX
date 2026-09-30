@@ -100,6 +100,13 @@ class EmailOctopusProvider:
     Upserts contacts via ``PUT /lists/{list_id}/contacts/{email_md5}`` —
     the digest-keyed PUT is idempotent, so duplicate signups and sync retries
     never create duplicate contacts or explode.
+
+    Double opt-in: the Founding Waitlist list is configured for double opt-in,
+    and this adapter preserves it by OMITTING ``status`` from the payload.
+    Per the EmailOctopus API, an omitted status defaults to PENDING on a
+    double-opt-in list, which triggers the list's own confirmation email;
+    EmailOctopus flips the contact to SUBSCRIBED only after the subscriber
+    confirms. EdFintia never marks a contact subscribed directly.
     """
 
     name = "emailoctopus"
@@ -132,7 +139,13 @@ class EmailOctopusProvider:
             # credential out of URLs and therefore out of HTTP logs.
             "api_key": self._api_key,
             "email_address": normalized,
-            "status": "subscribed",
+            # `status` is deliberately OMITTED: on a double-opt-in list an
+            # omitted status creates the contact as PENDING and fires the
+            # list's own confirmation flow — sending "subscribed" would bypass
+            # it. On the upsert path (existing contact), omitting status also
+            # leaves the contact's current state untouched, so retries and
+            # resubmissions can never regress a confirmed subscriber to
+            # pending or resubscribe an unsubscribed contact.
             "fields": {"FirstName": first_name, **(fields or {})},
             "tags": {tag: True for tag in tags},
         }

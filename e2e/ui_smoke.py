@@ -96,6 +96,36 @@ def main() -> int:
                       "early-access list" in t or "watch your inbox" in t.lower() or "on the list" in t.lower(),
                       t[:120].replace("\n", " "))
 
+        # Full submit + duplicate resubmit — the same email must return a
+        # friendly already-registered/success state, never an error.
+        def fill_and_submit():
+            page.locator("input[name=first_name]").first.fill("E2E")
+            page.locator("input[name=email]").first.fill("e2e-ui-check@e2e.test")
+            aud = page.locator("select[name=audience_type]")
+            if aud.count():
+                aud.first.select_option("student")
+            cb = page.locator("input[name=consent], input[type=checkbox]")
+            for i in range(cb.count()):
+                if not cb.nth(i).is_checked():
+                    cb.nth(i).check()
+            page.locator("button[type=submit]").first.click()
+            page.wait_for_timeout(2000)
+
+        fill_and_submit()
+        t = page_text(page)
+        check("full early-access submit reaches success state",
+              "on the list" in t.lower() or "early-access list" in t.lower(),
+              t[:120].replace("\n", " "))
+        page.reload(wait_until="domcontentloaded")
+        page.wait_for_timeout(800)
+        fill_and_submit()
+        t = page_text(page)
+        check("duplicate signup shows friendly already-registered state",
+              ("already" in t.lower() or "on the list" in t.lower())
+              and "something went wrong" not in t.lower()
+              and "error" not in t.lower(),
+              t[:160].replace("\n", " "))
+
         print("\n== Home: anonymous + demo flow ==")
         page.goto(BASE + "/", wait_until="domcontentloaded")
         page.wait_for_timeout(2500)

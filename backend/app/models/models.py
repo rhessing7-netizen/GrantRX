@@ -438,7 +438,10 @@ class WaitlistLead(Base):
     consent_timestamp = Column(DateTime(timezone=True), nullable=False)
     consent_source = Column(Text, nullable=False)
     # Email-marketing provider sync state (EmailOctopus adapter, R3).
-    # pending | synced | failed | skipped (provider unconfigured)
+    # pending | synced | failed | skipped (provider unconfigured). 'synced'
+    # means handed to the provider — under the list's double opt-in the
+    # subscriber may still be awaiting EmailOctopus confirmation, a state the
+    # provider owns; EdFintia never tracks EO-side confirmation.
     provider_sync_status = Column(Text, nullable=False, default="pending", index=True)
     provider_synced_at = Column(DateTime(timezone=True), nullable=True)
     provider_last_error = Column(Text, nullable=True)

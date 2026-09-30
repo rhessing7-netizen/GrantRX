@@ -478,6 +478,28 @@ class TestProviderSync:
         assert resp.status_code == 201
         assert db.added[0].provider_sync_status == "skipped"
 
+    def test_duplicate_upserts_idempotently_not_reenrolled(self, client):
+        """A duplicate signup performs the SAME digest-keyed upsert — the
+        EmailOctopus PUT targets the md5 contact key, so it updates the single
+        existing contact rather than creating a second one or re-triggering
+        list enrollment."""
+        lead = _existing_lead()
+        db = FakeWaitlistSession(leads=[lead])
+        _override_db(db)
+        provider = MagicMock()
+        provider.subscribe_or_update.return_value = ProviderSyncResult(status="synced")
+
+        with patch("app.main.get_email_marketing_provider", return_value=provider):
+            resp = client.post("/api/v1/early-access", json=_payload())
+
+        assert resp.status_code == 200
+        assert resp.json()["already_registered"] is True
+        assert db.added == []
+        provider.subscribe_or_update.assert_called_once()
+        assert provider.subscribe_or_update.call_args.kwargs["email"] == "jamie@example.com"
+        # Still synced — the upsert cannot downgrade a healthy subscription.
+        assert lead.provider_sync_status == "synced"
+
     def test_response_never_leaks_provider_details(self, client):
         db = FakeWaitlistSession()
         _override_db(db)
@@ -520,6 +542,21 @@ class TestEmailOctopusAdapter:
         assert body["email_address"] == "jamie@example.com"
         assert body["fields"]["FirstName"] == "Jamie"
         assert body["tags"] == {"WAITLIST": True, "STUDENT": True}
+        # Double opt-in: status is NEVER sent. On the DOI-configured Founding
+        # Waitlist list an omitted status creates the contact as PENDING and
+        # fires EmailOctopus's own confirmation email; on the update path it
+        # leaves an existing contact's status untouched.
+        assert "status" not in body
+
+    def test_upsert_never_bypasses_double_opt_in(self):
+        """Regression guard: no call path may force SUBSCRIBED, which would
+        bypass the list's double-opt-in confirmation."""
+        provider = EmailOctopusProvider(api_key="k", list_id="l")
+        fake_resp = MagicMock(status_code=200)
+        fake_resp.json.return_value = {}
+        with patch("app.services.email_marketing.requests.put", return_value=fake_resp) as put:
+            provider.subscribe_or_update(email="a@b.com", first_name="A", tags=["WAITLIST"])
+        assert put.call_args.kwargs["json"].get("status") is None
 
     def test_non_2xx_returns_failed(self):
         provider = EmailOctopusProvider(api_key="k", list_id="l")
