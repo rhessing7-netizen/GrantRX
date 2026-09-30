@@ -25,6 +25,7 @@ from sqlalchemy.orm import joinedload
 from ..database import SessionLocal
 from ..models.models import Profile, Scholarship, UserScholarship
 from ..services.lifecycle import ARCHIVED, current_status
+from ..services.unsubscribe_tokens import build_unsubscribe_url
 
 from ..config import APP_URL, DIGEST_FROM_EMAIL
 
@@ -56,6 +57,7 @@ class DigestPayload:
     user_email: str
     user_name: Optional[str]
     entries: List[DigestEntry] = field(default_factory=list)
+    unsubscribe_url: Optional[str] = None
 
     @property
     def subject(self) -> str:
@@ -84,6 +86,13 @@ class DigestPayload:
         lines.append("Stay on track!")
         lines.append("")
         lines.append("— The EdFintia Team")
+        if self.unsubscribe_url:
+            lines.append("")
+            lines.append(
+                "You're receiving this email because you opted in to EdFintia "
+                "deadline reminders."
+            )
+            lines.append(f"Unsubscribe: {self.unsubscribe_url}")
         return "\n".join(lines)
 
 
@@ -157,11 +166,21 @@ def build_digests(db, now: Optional[date] = None) -> List[DigestPayload]:
         if entries:
             # Sort by days remaining ascending (most urgent first)
             entries.sort(key=lambda e: e.days_remaining)
+            unsubscribe_url = build_unsubscribe_url(str(user.id))
+            if not unsubscribe_url:
+                # Fail closed: never send marketing email that lacks a
+                # functional unsubscribe link (CAN-SPAM / privacy policy).
+                raise RuntimeError(
+                    "Cannot mint unsubscribe tokens — set "
+                    "MARKETING_UNSUBSCRIBE_SECRET (or SUPABASE_JWT_SECRET). "
+                    "Digest send aborted."
+                )
             digests.append(
                 DigestPayload(
                     user_email=user.email,
                     user_name=user.full_name,
                     entries=entries,
+                    unsubscribe_url=unsubscribe_url,
                 )
             )
 

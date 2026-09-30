@@ -93,6 +93,10 @@ from .services.outline_service import (
     generate_essay_outline,
 )
 from .services.support_service import escalate as escalate_support, handle_chat
+from .services.unsubscribe_tokens import (
+    signing_configured as unsubscribe_signing_configured,
+    verify_unsubscribe_token,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -1793,4 +1797,65 @@ def early_access_signup(
             if already_registered
             else "You're on the early-access list — watch your inbox for updates."
         ),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Marketing email unsubscribe (signed, no-login opt-out)
+# ---------------------------------------------------------------------------
+
+
+class MarketingUnsubscribeRequest(BaseModel):
+    """Request body for the public marketing unsubscribe endpoint."""
+
+    token: str
+
+
+class MarketingUnsubscribeResponse(BaseModel):
+    status: str
+    message: str
+
+
+@app.post(
+    "/api/v1/marketing/unsubscribe",
+    response_model=MarketingUnsubscribeResponse,
+)
+def marketing_unsubscribe(
+    payload: MarketingUnsubscribeRequest,
+    db: Session = Depends(get_db),
+):
+    """Opt a recipient out of EdFintia marketing/digest emails.
+
+    Public (no JWT): the HMAC-signed token in the email link is the
+    credential. The action is deliberately narrow and one-directional — it
+    can only set ``marketing_opt_in`` to False; it can never opt a user in or
+    modify any other field. Idempotent: repeated calls are safe and return
+    the same success shape. Transactional mail (receipts, security notices)
+    is unaffected because it never consults ``marketing_opt_in``.
+    """
+    if not unsubscribe_signing_configured():
+        logger.error("Marketing unsubscribe requested but no signing secret configured")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Unsubscribe is temporarily unavailable.",
+        )
+
+    user_id = verify_unsubscribe_token(payload.token)
+    if user_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This unsubscribe link is invalid or has expired.",
+        )
+
+    profile = db.query(Profile).filter(Profile.id == user_id).first()
+    if profile is not None:
+        profile.marketing_opt_in = False
+        profile.marketing_opt_in_at = None
+        db.commit()
+
+    # Unknown/deleted profiles still report success — the desired end state
+    # (not opted in) already holds, and this avoids account enumeration.
+    return MarketingUnsubscribeResponse(
+        status="unsubscribed",
+        message="You've been unsubscribed from EdFintia marketing emails.",
     )

@@ -24,6 +24,7 @@ from sqlalchemy import func
 
 from ..database import SessionLocal
 from ..models.models import Profile, Scholarship
+from ..services.unsubscribe_tokens import build_unsubscribe_url
 from ..config import APP_URL, DIGEST_FROM_EMAIL
 
 logger = logging.getLogger(__name__)
@@ -45,6 +46,7 @@ class ReengagementPayload:
     discipline: Optional[str]
     new_count: int
     total_value: int
+    unsubscribe_url: Optional[str] = None
 
     @property
     def subject(self) -> str:
@@ -80,6 +82,13 @@ class ReengagementPayload:
                 "",
                 "— The EdFintia Team",
             ]
+        if self.unsubscribe_url:
+            lines.append("")
+            lines.append(
+                "You're receiving this email because you opted in to EdFintia "
+                "product updates."
+            )
+            lines.append(f"Unsubscribe: {self.unsubscribe_url}")
         return "\n".join(lines)
 
     def render_html(self) -> str:
@@ -104,7 +113,16 @@ class ReengagementPayload:
             f"{body}"
             f'<p><a href="{APP_URL}" style="background: #5C7AFF; color: #fff; padding: 12px 24px; border-radius: 999px; text-decoration: none; display: inline-block;">Browse Your Feed</a></p>'
             '<p style="color: #64748b; font-size: 14px;">— The EdFintia Team</p>'
-            "</body></html>"
+            + (
+                '<p style="color: #94a3b8; font-size: 12px;">'
+                "You're receiving this email because you opted in to EdFintia "
+                'product updates. <a href="'
+                + self.unsubscribe_url
+                + '" style="color: #94a3b8;">Unsubscribe</a></p>'
+                if self.unsubscribe_url
+                else ""
+            )
+            + "</body></html>"
         )
 
 
@@ -168,6 +186,15 @@ def build_digests(db, now: Optional[datetime] = None) -> List[ReengagementPayloa
 
         # Only include users who have at least 1 new scholarship
         if new_count > 0:
+            unsubscribe_url = build_unsubscribe_url(str(user.id))
+            if not unsubscribe_url:
+                # Fail closed: never send marketing email that lacks a
+                # functional unsubscribe link (CAN-SPAM / privacy policy).
+                raise RuntimeError(
+                    "Cannot mint unsubscribe tokens — set "
+                    "MARKETING_UNSUBSCRIBE_SECRET (or SUPABASE_JWT_SECRET). "
+                    "Re-engagement send aborted."
+                )
             payloads.append(
                 ReengagementPayload(
                     user_email=user.email,
@@ -175,6 +202,7 @@ def build_digests(db, now: Optional[datetime] = None) -> List[ReengagementPayloa
                     discipline=discipline,
                     new_count=new_count,
                     total_value=total_value,
+                    unsubscribe_url=unsubscribe_url,
                 )
             )
 

@@ -126,6 +126,30 @@ def main() -> int:
               and "error" not in t.lower(),
               t[:160].replace("\n", " "))
 
+        print("\n== Marketing unsubscribe page ==")
+        page.goto(BASE + "/unsubscribe", wait_until="domcontentloaded")
+        page.wait_for_timeout(1000)
+        t = page_text(page)
+        check("unsubscribe page without token shows safe invalid state",
+              "doesn" in t.lower() and "link" in t.lower()
+              and "unsubscribe" in t.lower(),
+              t[:160].replace("\n", " "))
+        page.goto(BASE + "/unsubscribe?token=forged.invalid.token",
+                  wait_until="domcontentloaded")
+        page.wait_for_timeout(800)
+        btn = page.locator("button", has_text="unsubscribe").first
+        if btn.count():
+            btn.click()
+            page.wait_for_timeout(2000)
+            t = page_text(page)
+            check("forged unsubscribe token shows invalid state, no leak",
+                  "doesn" in t.lower() or "invalid" in t.lower()
+                  or "expired" in t.lower(),
+                  t[:160].replace("\n", " "))
+        # The forged-token check intentionally provokes an expected 400;
+        # clear console noise so it doesn't trip the final error gate.
+        console_errors.clear()
+
         print("\n== Home: anonymous + demo flow ==")
         page.goto(BASE + "/", wait_until="domcontentloaded")
         page.wait_for_timeout(2500)

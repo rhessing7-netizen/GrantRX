@@ -20,6 +20,9 @@ PUBLIC_PATHS = {
     "/api/scholarships/match-preview",
     # Public early-access / waitlist signup (pre-launch, no account required)
     "/api/v1/early-access",
+    # Signed marketing unsubscribe — the email link IS the credential;
+    # recipients must be able to opt out without logging in first.
+    "/api/v1/marketing/unsubscribe",
 }
 
 PUBLIC_PREFIXES = (

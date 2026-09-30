@@ -333,6 +333,16 @@ export const api = {
       body: JSON.stringify(data),
     }),
 
+  // Marketing email unsubscribe (public — the signed token is the credential)
+  unsubscribeMarketing: (token: string) =>
+    request<{ status: string; message: string }>(
+      "/api/v1/marketing/unsubscribe",
+      {
+        method: "POST",
+        body: JSON.stringify({ token }),
+      },
+    ),
+
   // In-app AI Support Assistant
   supportChat: (message: string, conversationId?: string) =>
     request<SupportChatResponse>("/api/v1/support/chat", {

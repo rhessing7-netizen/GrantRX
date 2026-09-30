@@ -15,6 +15,16 @@ import pytest
 from app.workers.deadline_digest import DigestPayload, build_digests
 
 
+@pytest.fixture(autouse=True)
+def _unsubscribe_signing():
+    """Digest payloads require a signing secret for unsubscribe links."""
+    import os
+    from unittest.mock import patch
+
+    with patch.dict(os.environ, {"MARKETING_UNSUBSCRIBE_SECRET": "test-unsub-secret"}):
+        yield
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

@@ -35,7 +35,14 @@ from app.workers.reengagement_digest import (
 
 @pytest.fixture(autouse=True)
 def dev_env():
-    with patch.dict(os.environ, {"ENVIRONMENT": "development"}):
+    with patch.dict(
+        os.environ,
+        {
+            "ENVIRONMENT": "development",
+            # Re-engagement payloads require a signing secret for unsubscribe links.
+            "MARKETING_UNSUBSCRIBE_SECRET": "test-unsub-secret",
+        },
+    ):
         yield
 
 
