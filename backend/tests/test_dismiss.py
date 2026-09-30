@@ -87,6 +87,13 @@ def _make_scholarship(**kwargs):
         "has_service_commitment": False,
         "service_commitment_duration_months": None,
         "vendor_platform": None,
+        "source_url": None,
+        "extraction_method": None,
+        "verified_fields": {},
+        "verified_at": None,
+
+        # Provenance defaults (migration 020 columns)
+        "verification_status": "legacy_unverified",
     }
     defaults.update(kwargs)
     obj = MagicMock()
@@ -127,8 +134,8 @@ def dev_env():
 
 
 @pytest.fixture
-def client():
-    yield TestClient(app)
+def client(authenticated_client_factory):
+    yield authenticated_client_factory(app)
     app.dependency_overrides.clear()
 
 
@@ -204,6 +211,7 @@ class TestUndismiss:
         """Undismissing a dismissed scholarship clears the flag."""
         existing = MagicMock()
         existing.is_dismissed = True
+        existing.dismiss_only = False  # real tracking row, not dismiss-only
         db = _make_db(
             profile=_make_profile(),
             scholarships=[],

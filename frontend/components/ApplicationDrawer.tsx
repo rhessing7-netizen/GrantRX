@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type {
   ChecklistItem,
   EssayOutlineResponse,
@@ -110,29 +110,38 @@ function DrawerShell({
   onClose: () => void;
   children: React.ReactNode;
 }) {
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [onClose]);
+
   return (
     <div
-      className="fixed inset-0 z-50 flex justify-end bg-textPrimary/40 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex justify-end bg-text/40 backdrop-blur-sm"
       onClick={onClose}
     >
       <div
-        className="h-full w-full max-w-md overflow-y-auto bg-surfaceBg shadow-2xl"
+        className="h-full w-full max-w-md overflow-y-auto bg-surface shadow-2xl"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
+        aria-label={title}
       >
-        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-textSecondary/10 bg-surfaceBg/95 px-6 py-4 backdrop-blur">
+        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-textMuted/10 bg-surface/95 px-6 py-4 backdrop-blur">
           <div className="min-w-0">
-            <h2 className="font-serif text-lg font-semibold text-textPrimary truncate">
+            <h2 className="font-serif text-lg font-semibold text-text truncate">
               {title}
             </h2>
             {subtitle && (
-              <p className="text-xs text-textSecondary truncate">{subtitle}</p>
+              <p className="text-xs text-textMuted truncate">{subtitle}</p>
             )}
           </div>
           <button
             onClick={onClose}
-            className="ml-3 shrink-0 rounded-lg p-1.5 text-textSecondary hover:bg-slate-100 hover:text-textPrimary"
+            className="ml-3 shrink-0 rounded-lg p-1.5 text-textMuted hover:bg-surfaceSubtle hover:text-text"
             aria-label="Close"
           >
             <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
@@ -152,8 +161,8 @@ function DrawerShell({
 
 type CheckStatus = "met" | "unmet" | "unknown";
 
-function formatDeadline(deadline: string): { label: string; daysLeft: number | null } {
-  if (!deadline) return { label: "Rolling", daysLeft: null };
+function formatDeadline(deadline: string | null): { label: string; daysLeft: number | null } {
+  if (!deadline) return { label: "No deadline listed", daysLeft: null };
   const d = new Date(deadline);
   if (isNaN(d.getTime())) return { label: deadline, daysLeft: null };
   const label = d.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
@@ -185,11 +194,21 @@ function buildQualificationChecks(s: MatchedScholarship, profile: Profile | null
           : "unmet";
 
   const geoRestricted = states.length > 0 || metros.length > 0;
+  const userState = profile?.state_residence?.toUpperCase();
+  const userMetro = profile?.metro_area;
+  const geoMatch =
+    (!!userState &&
+      states.some((st) => st.toUpperCase() === userState)) ||
+    (!!userMetro && metros.includes(userMetro));
   const geoStatus: CheckStatus = has("restricted to")
     ? "unmet"
-    : geoRestricted && !profile?.state_residence && !profile?.metro_area
-      ? "unknown"
-      : "met";
+    : !geoRestricted
+      ? "met"
+      : !userState && !userMetro
+        ? "unknown"
+        : geoMatch
+          ? "met"
+          : "unmet";
 
   const saiStatus: CheckStatus = has("sai") || has("financial need")
     ? "unmet"
@@ -197,7 +216,9 @@ function buildQualificationChecks(s: MatchedScholarship, profile: Profile | null
       ? "met"
       : profile?.sai_score == null
         ? "unknown"
-        : "met";
+        : profile.sai_score <= s.max_sai
+          ? "met"
+          : "unmet";
 
   // Discipline & credential are hard gates on the server — anything in the
   // feed already passed them, so both rows are always "met". The labels
@@ -208,9 +229,9 @@ function buildQualificationChecks(s: MatchedScholarship, profile: Profile | null
     disciplines.some((d) => d.toLowerCase() === "any");
   const disciplineLabel = disciplineUnrestricted
     ? "Discipline: Open to all majors / unrestricted"
-    : `Discipline: Matched your track (${
-        profile?.primary_discipline ? humanize(profile.primary_discipline) : "Clinical"
-      })`;
+    : profile?.primary_discipline
+      ? `Discipline: Matched your track (${humanize(profile.primary_discipline)})`
+      : "Discipline: Matched your field of study";
 
   const credentialUnrestricted = credentials.length === 0;
   const credentialLabel = credentialUnrestricted
@@ -264,7 +285,7 @@ function buildQualificationChecks(s: MatchedScholarship, profile: Profile | null
 function CheckIcon({ status }: { status: CheckStatus }) {
   if (status === "met") {
     return (
-      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-aquamarine text-textPrimary">
+      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-accentSoft text-text">
         <svg className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
         </svg>
@@ -273,7 +294,7 @@ function CheckIcon({ status }: { status: CheckStatus }) {
   }
   if (status === "unmet") {
     return (
-      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700 border border-amber-300">
+      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-warningSoft text-warning border border-warning/40">
         <svg className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v4m0 4h.01" />
         </svg>
@@ -281,7 +302,7 @@ function CheckIcon({ status }: { status: CheckStatus }) {
     );
   }
   return (
-    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-500 border border-slate-200">
+    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-surfaceSubtle text-textMuted border border-border">
       <svg className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" d="M12 17h.01M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3" />
       </svg>
@@ -314,17 +335,17 @@ function PreviewDrawer({
     <DrawerShell title={s.title} subtitle={s.provider} onClose={onClose}>
       <div className="space-y-6 px-6 py-5">
         {/* Narrative header */}
-        <section className="rounded-2xl bg-gradient-to-br from-skyAqua/15 via-neonIce/10 to-aquamarine/15 border border-skyAqua/20 p-4">
+        <section className="rounded-2xl bg-gradient-to-br from-accent/15 via-accent/10 to-accentSoft/15 border border-accent/20 p-4">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-xs font-semibold uppercase tracking-wider text-textSecondary">
+              <p className="text-xs font-semibold uppercase tracking-wider text-textMuted">
                 {s.funding_type ? humanize(s.funding_type) : "Scholarship"}
               </p>
-              <p className="mt-1 font-serif text-2xl font-bold text-textPrimary">
-                {s.award_amount > 0 ? `$${s.award_amount.toLocaleString()}` : "Varies"}
+              <p className="mt-1 font-serif text-2xl font-bold text-text">
+                {s.award_amount != null && s.award_amount > 0 ? `$${s.award_amount.toLocaleString()}` : "Varies"}
               </p>
               {s.annual_benefit_cap != null && (
-                <p className="text-xs text-textSecondary">
+                <p className="text-xs text-textMuted">
                   Annual cap ${s.annual_benefit_cap.toLocaleString()}
                 </p>
               )}
@@ -332,8 +353,8 @@ function PreviewDrawer({
             <span
               className={
                 s.score >= 80
-                  ? "bg-aquamarine text-slate-950 font-bold px-3 py-1 rounded-full text-xs shadow-xs shrink-0"
-                  : "bg-white text-slate-800 border border-slate-200 font-semibold px-3 py-1 rounded-full text-xs shrink-0"
+                  ? "bg-accentSoft text-text font-bold px-3 py-1 rounded-full text-xs shadow-xs shrink-0"
+                  : "bg-white text-text border border-border font-semibold px-3 py-1 rounded-full text-xs shrink-0"
               }
             >
               {s.score}% Match
@@ -342,44 +363,52 @@ function PreviewDrawer({
           {(s.has_service_commitment || isEmployerBenefit) && (
             <div className="mt-3 flex flex-wrap gap-1.5">
               {s.has_service_commitment && (
-                <span className="rounded-full bg-violet-100 px-2.5 py-1 text-xs font-semibold text-violet-800">
+                <span className="rounded-full bg-accentSoft px-2.5 py-1 text-xs font-semibold text-secondary">
                   Service Obligation
                 </span>
               )}
               {isEmployerBenefit && (
-                <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-800">
+                <span className="rounded-full bg-successSoft px-2.5 py-1 text-xs font-semibold text-success">
                   Employer Benefit
                 </span>
               )}
               {s.vendor_platform && (
-                <span className="rounded-full bg-slate-100 border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-700">
+                <span className="rounded-full bg-surfaceSubtle border border-border px-2.5 py-1 text-xs font-medium text-text">
                   via {s.vendor_platform}
                 </span>
               )}
             </div>
           )}
+          {/* Source-evidence trust state — "Source verified" only when key
+              facts were independently located in the fetched source page.
+              Eligibility criteria are not independently verified. */}
+          <p className="mt-2 text-xs text-textMuted/70">
+            {s.verification_status === "verified"
+              ? "Source verified — key facts (title, award, deadline, GPA) confirmed on the source page."
+              : "Verification pending — facts not yet independently confirmed against the source."}
+          </p>
         </section>
 
         {/* Urgency & deadline */}
         <section>
-          <h3 className="mb-2 font-serif text-sm font-semibold text-textPrimary">
+          <h3 className="mb-2 font-serif text-sm font-semibold text-text">
             Deadline
           </h3>
-          <div className="flex items-center justify-between rounded-xl border border-textSecondary/10 bg-cardBg px-4 py-3">
+          <div className="flex items-center justify-between rounded-xl border border-textMuted/10 bg-surfaceSubtle px-4 py-3">
             <div>
-              <p className="text-sm font-semibold text-textPrimary">{deadlineLabel}</p>
+              <p className="text-sm font-semibold text-text">{deadlineLabel}</p>
               {daysLeft !== null && daysLeft < 0 && (
-                <p className="text-xs text-textSecondary">This cycle has closed</p>
+                <p className="text-xs text-textMuted">This cycle has closed</p>
               )}
             </div>
             {daysLeft !== null && daysLeft >= 0 && (
               <span
                 className={`rounded-full px-3 py-1 text-xs font-bold ${
                   daysLeft <= 7
-                    ? "bg-amber-100 text-amber-800 border border-amber-200"
+                    ? "bg-warningSoft text-warning border border-warning/30"
                     : daysLeft <= 30
-                      ? "bg-skyAqua/20 text-textPrimary"
-                      : "bg-slate-100 text-slate-700"
+                      ? "bg-accent/20 text-text"
+                      : "bg-surfaceSubtle text-text"
                 }`}
               >
                 {daysLeft === 0 ? "Due today" : `${daysLeft} day${daysLeft === 1 ? "" : "s"} left`}
@@ -391,13 +420,13 @@ function PreviewDrawer({
         {/* Provider alignment & mission */}
         {(s.provider_mission || (s.provider_core_values?.length ?? 0) > 0) && (
           <section>
-            <h3 className="mb-2 font-serif text-sm font-semibold text-textPrimary">
+            <h3 className="mb-2 font-serif text-sm font-semibold text-text">
               Provider Alignment &amp; Mission
             </h3>
             {s.provider_mission && (
-              <div className="rounded-xl bg-blueEnergy/5 border border-blueEnergy/15 px-4 py-3">
-                <p className="text-xs font-medium text-blueEnergy">Mission</p>
-                <p className="mt-1 text-sm leading-relaxed text-textSecondary">
+              <div className="rounded-xl bg-secondary/5 border border-secondary/15 px-4 py-3">
+                <p className="text-xs font-medium text-secondary">Mission</p>
+                <p className="mt-1 text-sm leading-relaxed text-textMuted">
                   {s.provider_mission}
                 </p>
               </div>
@@ -407,7 +436,7 @@ function PreviewDrawer({
                 {s.provider_core_values!.map((v) => (
                   <span
                     key={v}
-                    className="rounded-full bg-aquamarine/15 border border-aquamarine/30 px-2.5 py-1 text-xs text-textPrimary"
+                    className="rounded-full bg-accentSoft/15 border border-accentSoft/30 px-2.5 py-1 text-xs text-text"
                   >
                     {v}
                   </span>
@@ -419,7 +448,7 @@ function PreviewDrawer({
 
         {/* Target disciplines & credentials */}
         <section>
-          <h3 className="mb-2 font-serif text-sm font-semibold text-textPrimary">
+          <h3 className="mb-2 font-serif text-sm font-semibold text-text">
             Target Disciplines &amp; Credentials
           </h3>
           <div className="flex flex-wrap gap-1.5">
@@ -427,13 +456,13 @@ function PreviewDrawer({
               s.eligible_disciplines!.map((d) => (
                 <span
                   key={d}
-                  className="rounded-full bg-crayolaBlue/10 border border-crayolaBlue/20 px-2.5 py-1 text-xs font-medium capitalize text-textPrimary"
+                  className="rounded-full bg-primary/10 border border-primary/20 px-2.5 py-1 text-xs font-medium capitalize text-text"
                 >
                   {humanize(d)}
                 </span>
               ))
             ) : (
-              <span className="text-xs text-textSecondary">Open to all healthcare disciplines</span>
+              <span className="text-xs text-textMuted">Open to all healthcare disciplines</span>
             )}
           </div>
           {(s.eligible_credentials?.length ?? 0) > 0 && (
@@ -441,7 +470,7 @@ function PreviewDrawer({
               {s.eligible_credentials!.map((c) => (
                 <span
                   key={c}
-                  className="rounded-full bg-slate-100 border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-700"
+                  className="rounded-full bg-surfaceSubtle border border-border px-2.5 py-1 text-xs font-medium text-text"
                 >
                   {c}
                 </span>
@@ -452,16 +481,16 @@ function PreviewDrawer({
 
         {/* Match qualification breakdown */}
         <section>
-          <h3 className="mb-2 font-serif text-sm font-semibold text-textPrimary">
+          <h3 className="mb-2 font-serif text-sm font-semibold text-text">
             Match Qualification Breakdown
           </h3>
-          <div className="divide-y divide-textSecondary/10 rounded-xl border border-textSecondary/10 bg-cardBg">
+          <div className="divide-y divide-textMuted/10 rounded-xl border border-textMuted/10 bg-surfaceSubtle">
             {checks.map((c) => (
               <div key={c.label} className="flex items-start gap-3 px-4 py-2.5">
                 <CheckIcon status={c.status} />
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium text-textPrimary">{c.label}</p>
-                  <p className="text-xs text-textSecondary">{c.detail}</p>
+                  <p className="text-sm font-medium text-text">{c.label}</p>
+                  <p className="text-xs text-textMuted">{c.detail}</p>
                 </div>
               </div>
             ))}
@@ -471,7 +500,7 @@ function PreviewDrawer({
               {unmet.map((c) => (
                 <span
                   key={c}
-                  className="bg-amber-50 text-amber-900 border border-amber-200/80 font-medium px-2.5 py-0.5 rounded-md text-xs"
+                  className="bg-warningSoft text-warning border border-warning/30/80 font-medium px-2.5 py-0.5 rounded-md text-xs"
                 >
                   {c}
                 </span>
@@ -481,13 +510,13 @@ function PreviewDrawer({
         </section>
 
         {/* Actions */}
-        <div className="sticky bottom-0 -mx-6 flex items-center gap-3 border-t border-textSecondary/10 bg-surfaceBg/95 px-6 py-3 backdrop-blur">
+        <div className="sticky bottom-0 -mx-6 flex flex-wrap items-center gap-3 border-t border-textMuted/10 bg-surface/95 px-6 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur">
           {s.portal_url && (
             <a
               href={s.portal_url}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex-1 rounded-full bg-crayolaBlue px-5 py-2.5 text-center text-sm font-semibold text-surfaceBg transition hover:bg-blueEnergy"
+              className="min-w-[120px] flex-1 rounded-full bg-primary px-5 py-2.5 text-center text-sm font-semibold text-surface transition hover:bg-secondary"
             >
               Apply on Provider Site
             </a>
@@ -495,9 +524,9 @@ function PreviewDrawer({
           <button
             onClick={onSave}
             disabled={saving || !onSave}
-            className="flex-1 rounded-full bg-gradient-to-r from-aquamarine to-neonIce px-5 py-2.5 text-sm font-bold text-textPrimary transition hover:opacity-90 disabled:opacity-50"
+            className="min-w-[120px] flex-1 rounded-full bg-gradient-to-r from-accentSoft to-accent px-5 py-2.5 text-sm font-bold text-text transition hover:opacity-90 disabled:opacity-50"
           >
-            {saving ? "Saving…" : "Save to Kanban"}
+            {saving ? "Saving…" : "Save to My Applications"}
           </button>
         </div>
       </div>
@@ -525,6 +554,7 @@ function VaultDrawer({
   );
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState<number | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   // New document form state
   const [docName, setDocName] = useState("");
@@ -540,6 +570,7 @@ function VaultDrawer({
   const [reportNotes, setReportNotes] = useState("");
   const [reportSubmitting, setReportSubmitting] = useState(false);
   const [reportSubmitted, setReportSubmitted] = useState(false);
+  const [reportError, setReportError] = useState<string | null>(null);
 
   // AI Statement Coach state
   const [coachOpen, setCoachOpen] = useState(false);
@@ -552,7 +583,7 @@ function VaultDrawer({
   const [academicTopics, setAcademicTopics] = useState("");
 
   const scholarship = item.scholarship;
-  const title = scholarship?.title ?? "Scholarship";
+  const title = scholarship?.title ?? "Opportunity";
   const provider = scholarship?.provider ?? "";
   const amount = scholarship?.award_amount;
   const deadline = scholarship?.deadline ?? "";
@@ -596,6 +627,7 @@ function VaultDrawer({
 
   const handleSave = async () => {
     setSaving(true);
+    setSaveError(null);
     try {
       await api.updateTracking(item.id, {
         application_notes: appNotes || null,
@@ -605,6 +637,8 @@ function VaultDrawer({
       setSavedAt(Date.now());
       onChanged();
       setTimeout(() => setSavedAt(null), 2000);
+    } catch {
+      setSaveError("Couldn't save your changes — please try again.");
     } finally {
       setSaving(false);
     }
@@ -622,8 +656,10 @@ function VaultDrawer({
         academic_topics_of_interest: academicTopics || undefined,
       });
       setOutline(result);
-    } catch (err) {
-      setOutlineError(err instanceof Error ? err.message : "Failed to generate outline");
+    } catch {
+      setOutlineError(
+        "Couldn't generate an outline right now. Please try again in a moment.",
+      );
     } finally {
       setOutlineLoading(false);
     }
@@ -653,7 +689,7 @@ function VaultDrawer({
       setReportOpen(false);
       setReportNotes("");
     } catch {
-      // Silently fail — reporting is best-effort
+      setReportError("Couldn't submit the report — please try again.");
     } finally {
       setReportSubmitting(false);
     }
@@ -666,29 +702,30 @@ function VaultDrawer({
     <DrawerShell title={title} subtitle={provider || undefined} onClose={onClose}>
       <div className="space-y-6 px-6 py-5">
         {/* Quick facts */}
-        <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-textSecondary">
+        <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-textMuted">
           {amount != null && (
             <span>
               Award:{" "}
-              <span className="font-semibold text-textPrimary">
+              <span className="font-semibold text-text">
                 ${amount.toLocaleString()}
               </span>
             </span>
           )}
-          {deadline && <span>Deadline: <span className="font-medium text-textPrimary">{deadline}</span></span>}
+          {deadline && <span>Deadline: <span className="font-medium text-text">{deadline}</span></span>}
         </div>
 
         {/* Report inaccurate info */}
         <div className="text-right">
           {reportSubmitted ? (
-            <p className="text-xs text-aquamarine">✓ Report submitted — thank you!</p>
+            <p className="text-xs text-accentSoft">✓ Report submitted — thank you!</p>
           ) : reportOpen ? (
-            <div className="space-y-2 rounded-xl border border-textSecondary/15 bg-cardBg px-3 py-2 text-left">
-              <p className="text-xs font-medium text-textPrimary">Report inaccurate info</p>
+            <div className="space-y-2 rounded-xl border border-textMuted/15 bg-surfaceSubtle px-3 py-2 text-left">
+              <p className="text-xs font-medium text-text">Report inaccurate info</p>
               <select
                 value={reportReason}
                 onChange={(e) => setReportReason(e.target.value as typeof reportReason)}
-                className="w-full rounded-lg border border-textSecondary/20 px-2.5 py-1.5 text-xs text-textPrimary"
+                aria-label="Report reason"
+                className="w-full rounded-lg border border-textMuted/20 px-2.5 py-1.5 text-xs text-text"
               >
                 <option value="broken_link">Broken application link</option>
                 <option value="inaccurate_deadline">Inaccurate deadline</option>
@@ -699,19 +736,23 @@ function VaultDrawer({
                 value={reportNotes}
                 onChange={(e) => setReportNotes(e.target.value)}
                 placeholder="Additional notes (optional)"
-                className="w-full rounded-lg border border-textSecondary/20 px-2.5 py-1.5 text-xs text-textPrimary"
+                aria-label="Additional report notes"
+                className="w-full rounded-lg border border-textMuted/20 px-2.5 py-1.5 text-xs text-text"
               />
+              {reportError && (
+                <p role="alert" className="text-xs text-danger">{reportError}</p>
+              )}
               <div className="flex gap-2">
                 <button
                   onClick={() => setReportOpen(false)}
-                  className="flex-1 rounded-lg border border-textSecondary/20 px-3 py-1.5 text-xs text-textSecondary"
+                  className="flex-1 rounded-lg border border-textMuted/20 px-3 py-1.5 text-xs text-textMuted"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleReportSubmit}
                   disabled={reportSubmitting}
-                  className="flex-1 rounded-lg bg-crayolaBlue px-3 py-1.5 text-xs font-medium text-surfaceBg disabled:opacity-50"
+                  className="flex-1 rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-surface disabled:opacity-50"
                 >
                   {reportSubmitting ? "Submitting…" : "Submit"}
                 </button>
@@ -720,7 +761,7 @@ function VaultDrawer({
           ) : (
             <button
               onClick={() => setReportOpen(true)}
-              className="text-xs text-textSecondary/50 hover:text-crayolaBlue hover:underline"
+              className="text-xs text-textMuted/50 hover:text-primary hover:underline"
             >
               ⚑ Report inaccurate info
             </button>
@@ -729,51 +770,52 @@ function VaultDrawer({
 
         {/* Application Notes */}
         <section>
-          <h3 className="mb-2 font-serif text-sm font-semibold text-textPrimary">
+          <h3 className="mb-2 font-serif text-sm font-semibold text-text">
             Application Notes
           </h3>
           <textarea
             value={appNotes}
             onChange={(e) => setAppNotes(e.target.value)}
+            aria-label="Application notes"
             placeholder="Jot down essay ideas, contact names, submission steps…"
             rows={4}
-            className="w-full rounded-xl border border-textSecondary/20 px-3 py-2 text-sm text-textPrimary placeholder:text-textSecondary/40 focus:border-crayolaBlue focus:outline-none"
+            className="w-full rounded-xl border border-textMuted/20 px-3 py-2 text-sm text-text placeholder:text-textMuted/40 focus:border-primary focus:outline-none"
           />
         </section>
 
-        {/* Document Vault */}
+        {/* Documents */}
         <section>
-          <h3 className="mb-2 font-serif text-sm font-semibold text-textPrimary">
-            Document Vault
+          <h3 className="mb-2 font-serif text-sm font-semibold text-text">
+            Documents
           </h3>
           <div className="space-y-2">
             {documents.length === 0 && (
-              <p className="text-xs text-textSecondary/60">
+              <p className="text-xs text-textMuted/60">
                 No documents linked yet. Add Google Drive, Dropbox, or file links below.
               </p>
             )}
             {documents.map((doc, idx) => (
               <div
                 key={idx}
-                className="flex items-center justify-between rounded-xl border border-textSecondary/10 bg-cardBg px-3 py-2"
+                className="flex items-center justify-between rounded-xl border border-textMuted/10 bg-surfaceSubtle px-3 py-2"
               >
                 <div className="min-w-0 flex-1">
                   <a
                     href={doc.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="block truncate text-sm font-medium text-crayolaBlue hover:underline"
+                    className="block truncate text-sm font-medium text-primary hover:underline"
                   >
                     {doc.name}
                   </a>
-                  <p className="text-xs text-textSecondary">
+                  <p className="text-xs text-textMuted">
                     {doc.type}
                     {doc.uploaded_at && ` · ${doc.uploaded_at.slice(0, 10)}`}
                   </p>
                 </div>
                 <button
                   onClick={() => handleRemoveDocument(idx)}
-                  className="ml-2 shrink-0 text-textSecondary/40 hover:text-red-500"
+                  className="ml-2 shrink-0 text-textMuted/40 hover:text-danger"
                   aria-label="Remove document"
                 >
                   <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
@@ -785,26 +827,29 @@ function VaultDrawer({
           </div>
 
           {/* Add document form */}
-          <div className="mt-3 space-y-2 rounded-xl border border-dashed border-textSecondary/15 p-3">
+          <div className="mt-3 space-y-2 rounded-xl border border-dashed border-textMuted/15 p-3">
             <input
               type="text"
               value={docName}
               onChange={(e) => setDocName(e.target.value)}
               placeholder="Document name (e.g., Personal Statement v2)"
-              className="w-full rounded-lg border border-textSecondary/20 px-2.5 py-1.5 text-xs text-textPrimary"
+              aria-label="Document name"
+              className="w-full rounded-lg border border-textMuted/20 px-2.5 py-1.5 text-xs text-text"
             />
             <input
               type="url"
               value={docUrl}
               onChange={(e) => setDocUrl(e.target.value)}
               placeholder="https://drive.google.com/…"
-              className="w-full rounded-lg border border-textSecondary/20 px-2.5 py-1.5 text-xs text-textPrimary"
+              aria-label="Document link URL"
+              className="w-full rounded-lg border border-textMuted/20 px-2.5 py-1.5 text-xs text-text"
             />
             <div className="flex gap-2">
               <select
                 value={docType}
                 onChange={(e) => setDocType(e.target.value)}
-                className="flex-1 rounded-lg border border-textSecondary/20 px-2.5 py-1.5 text-xs text-textPrimary"
+                aria-label="Document type"
+                className="flex-1 rounded-lg border border-textMuted/20 px-2.5 py-1.5 text-xs text-text"
               >
                 {DOC_TYPES.map((t) => (
                   <option key={t} value={t}>{t}</option>
@@ -813,7 +858,7 @@ function VaultDrawer({
               <button
                 onClick={handleAddDocument}
                 disabled={!docName.trim() || !docUrl.trim()}
-                className="rounded-lg bg-crayolaBlue px-3 py-1.5 text-xs font-medium text-surfaceBg disabled:opacity-40"
+                className="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-surface disabled:opacity-40"
               >
                 Add
               </button>
@@ -824,16 +869,16 @@ function VaultDrawer({
         {/* Checklist */}
         <section>
           <div className="mb-2 flex items-center justify-between">
-            <h3 className="font-serif text-sm font-semibold text-textPrimary">
+            <h3 className="font-serif text-sm font-semibold text-text">
               Checklist
             </h3>
-            <span className="text-xs text-textSecondary">
+            <span className="text-xs text-textMuted">
               {completedCount}/{checklist.length} · {checklistProgress}%
             </span>
           </div>
-          <div className="mb-2 h-1.5 overflow-hidden rounded-full bg-slate-100">
+          <div className="mb-2 h-1.5 overflow-hidden rounded-full bg-surfaceSubtle">
             <div
-              className="h-full rounded-full bg-gradient-to-r from-skyAqua to-aquamarine transition-all duration-300"
+              className="h-full rounded-full bg-gradient-to-r from-accent to-accentSoft transition-all duration-300"
               style={{ width: `${checklistProgress}%` }}
             />
           </div>
@@ -841,14 +886,14 @@ function VaultDrawer({
             {checklist.map((c) => (
               <div
                 key={c.id}
-                className="flex items-center gap-2.5 rounded-lg px-2 py-1.5 hover:bg-cardBg"
+                className="flex items-center gap-2.5 rounded-lg px-2 py-1.5 hover:bg-surfaceSubtle"
               >
                 <button
                   onClick={() => toggleChecklistItem(c.id)}
                   className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition ${
                     c.completed
-                      ? "border-aquamarine bg-aquamarine text-textPrimary"
-                      : "border-textSecondary/30 hover:border-crayolaBlue"
+                      ? "border-accentSoft bg-accentSoft text-text"
+                      : "border-textMuted/30 hover:border-primary"
                   }`}
                   aria-label={c.completed ? "Mark incomplete" : "Mark complete"}
                 >
@@ -860,14 +905,14 @@ function VaultDrawer({
                 </button>
                 <span
                   className={`flex-1 text-sm ${
-                    c.completed ? "text-textSecondary line-through" : "text-textPrimary"
+                    c.completed ? "text-textMuted line-through" : "text-text"
                   }`}
                 >
                   {c.text}
                 </span>
                 <button
                   onClick={() => handleRemoveChecklistItem(c.id)}
-                  className="shrink-0 text-textSecondary/30 hover:text-red-500"
+                  className="shrink-0 text-textMuted/30 hover:text-danger"
                   aria-label="Remove item"
                 >
                   <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
@@ -885,12 +930,13 @@ function VaultDrawer({
               onChange={(e) => setNewChecklistText(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleAddChecklistItem()}
               placeholder="Add checklist item…"
-              className="flex-1 rounded-lg border border-textSecondary/20 px-2.5 py-1.5 text-xs text-textPrimary"
+              aria-label="New checklist item"
+              className="flex-1 rounded-lg border border-textMuted/20 px-2.5 py-1.5 text-xs text-text"
             />
             <button
               onClick={handleAddChecklistItem}
               disabled={!newChecklistText.trim()}
-              className="rounded-lg border border-textSecondary/20 px-3 py-1.5 text-xs font-medium text-textSecondary disabled:opacity-40"
+              className="rounded-lg border border-textMuted/20 px-3 py-1.5 text-xs font-medium text-textMuted disabled:opacity-40"
             >
               Add
             </button>
@@ -904,21 +950,21 @@ function VaultDrawer({
             className="flex w-full items-center justify-between py-2"
           >
             <div className="flex items-center gap-2">
-              <svg className="h-4 w-4 text-crayolaBlue" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <svg className="h-4 w-4 text-primary" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.5.8a2 2 0 11-3.473 0l.5-.8z" />
               </svg>
-              <h3 className="font-serif text-sm font-semibold text-textPrimary">
+              <h3 className="font-serif text-sm font-semibold text-text">
                 AI Statement Coach
               </h3>
             </div>
-            <svg className={`h-4 w-4 text-textSecondary transition-transform ${coachOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+            <svg className={`h-4 w-4 text-textMuted transition-transform ${coachOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
             </svg>
           </button>
 
           {/* Academic honesty disclaimer — always visible */}
-          <div className="mt-2 bg-amber-50/70 border border-amber-200/60 rounded-xl p-3 text-xs text-amber-900">
-            GrantRx Statement Coach is an educational brainstorming and
+          <div className="mt-2 bg-warningSoft/70 border border-warning/30 rounded-xl p-3 text-xs text-warning">
+            EdFintia Statement Coach is an educational brainstorming and
             outlining tool. It does not write essays for you, submit
             materials on your behalf, or guarantee award selection. Always
             abide by your institution&apos;s academic honesty policies.
@@ -928,15 +974,15 @@ function VaultDrawer({
             <div className="mt-3 space-y-4">
               {/* Provider mission & core values */}
               {scholarship?.provider_mission && (
-                <div className="rounded-xl bg-blueEnergy/5 border border-blueEnergy/15 px-3 py-2">
-                  <p className="text-xs font-medium text-blueEnergy">Provider Mission</p>
-                  <p className="mt-1 text-xs text-textSecondary">{scholarship.provider_mission}</p>
+                <div className="rounded-xl bg-secondary/5 border border-secondary/15 px-3 py-2">
+                  <p className="text-xs font-medium text-secondary">Provider Mission</p>
+                  <p className="mt-1 text-xs text-textMuted">{scholarship.provider_mission}</p>
                 </div>
               )}
               {scholarship?.provider_core_values && scholarship.provider_core_values.length > 0 && (
                 <div className="flex flex-wrap gap-1.5">
                   {scholarship.provider_core_values.map((v) => (
-                    <span key={v} className="rounded-full bg-aquamarine/15 border border-aquamarine/30 px-2 py-0.5 text-xs text-textPrimary">
+                    <span key={v} className="rounded-full bg-accentSoft/15 border border-accentSoft/30 px-2 py-0.5 text-xs text-text">
                       {v}
                     </span>
                   ))}
@@ -950,28 +996,32 @@ function VaultDrawer({
                   value={essayPrompt}
                   onChange={(e) => setEssayPrompt(e.target.value)}
                   placeholder="Essay prompt / topic (optional)"
-                  className="w-full rounded-lg border border-textSecondary/20 px-2.5 py-1.5 text-xs text-textPrimary"
+                  aria-label="Essay prompt or topic"
+                  className="w-full rounded-lg border border-textMuted/20 px-2.5 py-1.5 text-xs text-text"
                 />
                 <textarea
                   value={livedExperience}
                   onChange={(e) => setLivedExperience(e.target.value)}
                   placeholder="Personal upbringing & lived experience notes…"
+                  aria-label="Personal upbringing and lived experience notes"
                   rows={2}
-                  className="w-full rounded-lg border border-textSecondary/20 px-2.5 py-1.5 text-xs text-textPrimary"
+                  className="w-full rounded-lg border border-textMuted/20 px-2.5 py-1.5 text-xs text-text"
                 />
                 <textarea
                   value={workExperience}
                   onChange={(e) => setWorkExperience(e.target.value)}
                   placeholder="Work / clinical / volunteer experience…"
+                  aria-label="Work, clinical, or volunteer experience"
                   rows={2}
-                  className="w-full rounded-lg border border-textSecondary/20 px-2.5 py-1.5 text-xs text-textPrimary"
+                  className="w-full rounded-lg border border-textMuted/20 px-2.5 py-1.5 text-xs text-text"
                 />
                 <textarea
                   value={academicTopics}
                   onChange={(e) => setAcademicTopics(e.target.value)}
                   placeholder="Academic / research topics of interest…"
+                  aria-label="Academic or research topics of interest"
                   rows={2}
-                  className="w-full rounded-lg border border-textSecondary/20 px-2.5 py-1.5 text-xs text-textPrimary"
+                  className="w-full rounded-lg border border-textMuted/20 px-2.5 py-1.5 text-xs text-text"
                 />
               </div>
 
@@ -979,7 +1029,7 @@ function VaultDrawer({
               <button
                 onClick={handleGenerateOutline}
                 disabled={outlineLoading}
-                className="flex w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-crayolaBlue to-blueEnergy px-4 py-2 text-xs font-semibold text-surfaceBg transition hover:opacity-90 disabled:opacity-50"
+                className="flex w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-primary to-secondary px-4 py-2 text-xs font-semibold text-surface transition hover:opacity-90 disabled:opacity-50"
               >
                 {outlineLoading ? (
                   <>
@@ -995,20 +1045,20 @@ function VaultDrawer({
               </button>
 
               {outlineError && (
-                <p className="text-xs text-red-600">{outlineError}</p>
+                <p className="text-xs text-danger">{outlineError}</p>
               )}
 
               {/* Generated outline */}
               {outline && (
                 <div className="space-y-3">
                   {/* Theme & mission alignment */}
-                  <div className="rounded-xl bg-surfaceBg px-3 py-2">
-                    <p className="text-xs font-semibold text-textPrimary">Suggested Theme</p>
-                    <p className="mt-0.5 text-xs text-textSecondary">{outline.suggested_theme}</p>
+                  <div className="rounded-xl bg-surface px-3 py-2">
+                    <p className="text-xs font-semibold text-text">Suggested Theme</p>
+                    <p className="mt-0.5 text-xs text-textMuted">{outline.suggested_theme}</p>
                   </div>
-                  <div className="rounded-xl bg-blueEnergy/5 border border-blueEnergy/15 px-3 py-2">
-                    <p className="text-xs font-semibold text-blueEnergy">Mission Alignment</p>
-                    <p className="mt-0.5 text-xs text-textSecondary">{outline.mission_alignment_angle}</p>
+                  <div className="rounded-xl bg-secondary/5 border border-secondary/15 px-3 py-2">
+                    <p className="text-xs font-semibold text-secondary">Mission Alignment</p>
+                    <p className="mt-0.5 text-xs text-textMuted">{outline.mission_alignment_angle}</p>
                   </div>
 
                   {/* 4 narrative sections */}
@@ -1018,15 +1068,15 @@ function VaultDrawer({
                     { label: "3. Academic Foundation", section: outline.part_3_academic_citation },
                     { label: "4. Future Service", section: outline.part_4_future_service },
                   ].map(({ label, section }) => (
-                    <div key={label} className="rounded-xl border border-textSecondary/10 px-3 py-2">
+                    <div key={label} className="rounded-xl border border-textMuted/10 px-3 py-2">
                       <div className="flex items-center justify-between">
-                        <p className="text-xs font-semibold text-textPrimary">{label}</p>
-                        <span className="text-xs text-textSecondary">~{section.estimated_word_count} words</span>
+                        <p className="text-xs font-semibold text-text">{label}</p>
+                        <span className="text-xs text-textMuted">~{section.estimated_word_count} words</span>
                       </div>
                       {section.talking_points.length > 0 && (
                         <ul className="mt-1.5 space-y-0.5">
                           {section.talking_points.map((tp, i) => (
-                            <li key={i} className="text-xs text-textSecondary">
+                            <li key={i} className="text-xs text-textMuted">
                               • {tp}
                             </li>
                           ))}
@@ -1035,7 +1085,7 @@ function VaultDrawer({
                       {section.coaching_tips.length > 0 && (
                         <div className="mt-1.5 space-y-0.5">
                           {section.coaching_tips.map((tip, i) => (
-                            <p key={i} className="text-xs italic text-blueEnergy/70">
+                            <p key={i} className="text-xs italic text-secondary/70">
                               💡 {tip}
                             </p>
                           ))}
@@ -1046,11 +1096,11 @@ function VaultDrawer({
 
                   {/* Checklist */}
                   {outline.checklist.length > 0 && (
-                    <div className="rounded-xl bg-aquamarine/5 border border-aquamarine/20 px-3 py-2">
-                      <p className="text-xs font-semibold text-textPrimary">Pre-Submission Checklist</p>
+                    <div className="rounded-xl bg-accentSoft/5 border border-accentSoft/20 px-3 py-2">
+                      <p className="text-xs font-semibold text-text">Pre-Submission Checklist</p>
                       <ul className="mt-1 space-y-0.5">
                         {outline.checklist.map((c, i) => (
-                          <li key={i} className="text-xs text-textSecondary">☐ {c}</li>
+                          <li key={i} className="text-xs text-textMuted">☐ {c}</li>
                         ))}
                       </ul>
                     </div>
@@ -1059,7 +1109,7 @@ function VaultDrawer({
                   {/* Append to notes */}
                   <button
                     onClick={handleAppendOutline}
-                    className="w-full rounded-full border border-crayolaBlue px-4 py-2 text-xs font-medium text-crayolaBlue hover:bg-crayolaBlue/5"
+                    className="w-full rounded-full border border-primary px-4 py-2 text-xs font-medium text-primary hover:bg-primary/5"
                   >
                     Append Outline to Notes
                   </button>
@@ -1070,20 +1120,23 @@ function VaultDrawer({
         </section>
 
         {/* Save bar */}
-        <div className="sticky bottom-0 -mx-6 flex items-center justify-end gap-3 border-t border-textSecondary/10 bg-surfaceBg/95 px-6 py-3 backdrop-blur">
+        <div className="sticky bottom-0 -mx-6 flex flex-wrap items-center justify-end gap-3 border-t border-textMuted/10 bg-surface/95 px-6 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur">
+          {saveError && (
+            <span role="alert" className="text-xs text-danger">{saveError}</span>
+          )}
           {savedAt && (
-            <span className="text-xs text-aquamarine">✓ Saved</span>
+            <span className="text-xs text-accentSoft">✓ Saved</span>
           )}
           <button
             onClick={onClose}
-            className="rounded-full border border-textSecondary/20 px-4 py-2 text-sm font-medium text-textSecondary hover:text-textPrimary"
+            className="rounded-full border border-textMuted/20 px-4 py-2 text-sm font-medium text-textMuted hover:text-text"
           >
             Close
           </button>
           <button
             onClick={handleSave}
             disabled={saving}
-            className="flex items-center gap-2 rounded-full bg-gradient-to-r from-aquamarine to-neonIce px-5 py-2 text-sm font-bold text-textPrimary transition hover:opacity-90 disabled:opacity-50"
+            className="flex items-center gap-2 rounded-full bg-gradient-to-r from-accentSoft to-accent px-5 py-2 text-sm font-bold text-text transition hover:opacity-90 disabled:opacity-50"
           >
             {saving ? (
               <>
@@ -1094,7 +1147,7 @@ function VaultDrawer({
                 Saving…
               </>
             ) : (
-              "Save Vault"
+              "Save"
             )}
           </button>
         </div>

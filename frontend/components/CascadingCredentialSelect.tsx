@@ -21,7 +21,7 @@ export function CascadingCredentialSelect({
 
   return (
     <div className="space-y-3">
-      <label className="block text-sm font-medium text-textSecondary">
+      <label className="block text-sm font-medium text-textMuted">
         {label}
       </label>
 
@@ -31,9 +31,16 @@ export function CascadingCredentialSelect({
         onChange={(e) => {
           const level = e.target.value as DegreeLevel | "";
           onLevelChange(level);
-          onCredentialChange("");
+          // Clear the credential only when it isn't valid for the new level —
+          // never silently drop a previously saved selection.
+          if (
+            selectedCredential &&
+            (!level || !CREDENTIALS_BY_LEVEL[level].includes(selectedCredential))
+          ) {
+            onCredentialChange("");
+          }
         }}
-        className="w-full rounded-xl border border-textSecondary/20 bg-surfaceBg px-4 py-2.5 text-textPrimary"
+        className="w-full rounded-xl border border-textMuted/20 bg-surface px-4 py-2.5 text-text"
       >
         <option value="">Select degree level…</option>
         {DEGREE_LEVELS.map((lvl) => (
@@ -48,7 +55,7 @@ export function CascadingCredentialSelect({
         <select
           value={selectedCredential}
           onChange={(e) => onCredentialChange(e.target.value)}
-          className="w-full rounded-xl border border-textSecondary/20 bg-surfaceBg px-4 py-2.5 text-textPrimary transition"
+          className="w-full rounded-xl border border-textMuted/20 bg-surface px-4 py-2.5 text-text transition"
         >
           <option value="">Select specific credential…</option>
           {credentials.map((cred) => (

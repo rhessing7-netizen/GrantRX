@@ -1,10 +1,7 @@
-export type ClinicalDiscipline =
-  | "pharmacy"
-  | "medicine"
-  | "nursing"
-  | "therapeutics_rehab"
-  | "diagnostic_imaging"
-  | "public_health_emergency";
+// C8: field-of-study values are canonical codes from the backend taxonomy
+// registry (scrapers/utils/taxonomy.py) — no longer a closed 6-value enum.
+// Kept as a named alias so existing annotations compile unchanged.
+export type ClinicalDiscipline = string;
 
 export type AppStatus =
   | "saved"
@@ -51,20 +48,20 @@ export interface Profile {
 export interface ProfileCreate {
   disciplines?: string[];
   target_credentials?: string[];
-  primary_discipline?: ClinicalDiscipline;
-  target_credential?: string;
-  clinical_phase?: string;
+  primary_discipline?: ClinicalDiscipline | null;
+  target_credential?: string | null;
+  clinical_phase?: string | null;
   gpa?: number | null;
-  state_residence?: string;
-  metro_area?: string;
+  state_residence?: string | null;
+  metro_area?: string | null;
   sai_score?: number | null;
   first_gen?: boolean;
   minority_flag?: boolean;
   professional_affiliations?: string[];
   hobbies?: string[];
-  subscription_tier?: SubscriptionTier;
-  full_name?: string;
-  email?: string;
+  // subscription_tier is server-controlled (Stripe) — not client-writable.
+  full_name?: string | null;
+  email?: string | null;
   terms_accepted?: boolean;
   privacy_accepted?: boolean;
   marketing_opt_in?: boolean;
@@ -73,20 +70,20 @@ export interface ProfileCreate {
 export interface ProfileUpdate {
   disciplines?: string[];
   target_credentials?: string[];
-  primary_discipline?: ClinicalDiscipline;
-  target_credential?: string;
-  clinical_phase?: string;
+  primary_discipline?: ClinicalDiscipline | null;
+  target_credential?: string | null;
+  clinical_phase?: string | null;
   gpa?: number | null;
-  state_residence?: string;
-  metro_area?: string;
+  state_residence?: string | null;
+  metro_area?: string | null;
   sai_score?: number | null;
   first_gen?: boolean;
   minority_flag?: boolean;
   professional_affiliations?: string[];
   hobbies?: string[];
-  subscription_tier?: SubscriptionTier;
-  full_name?: string;
-  email?: string;
+  // subscription_tier is server-controlled (Stripe) — not client-writable.
+  full_name?: string | null;
+  email?: string | null;
   terms_accepted?: boolean;
   privacy_accepted?: boolean;
   marketing_opt_in?: boolean;
@@ -98,8 +95,8 @@ export interface MatchedScholarship {
   title: string;
   provider: string;
   portal_url: string;
-  award_amount: number;
-  deadline: string;
+  award_amount: number | null;
+  deadline: string | null;
   score: number;
   missing_criteria: string[];
   is_locked: boolean;
@@ -126,6 +123,10 @@ export interface MatchedScholarship {
   /** Per-bucket score composition from the matcher. Keys: gpa, geo, sai,
    *  affiliations, local_boost. Values are the points actually awarded. */
   score_breakdown?: ScoreBreakdown;
+  /** Source-evidence verification state. "verified" = asserted facts were
+   *  independently located in the source; anything else is unverified/
+   *  pending review. Server-owned — never presented as verified otherwise. */
+  verification_status?: string;
 }
 
 export type ScoreBucket = "gpa" | "geo" | "sai" | "affiliations" | "local_boost";
@@ -134,12 +135,12 @@ export type ScoreBreakdown = Partial<Record<ScoreBucket, number>>;
 export interface MatchPreviewRequest {
   disciplines?: string[];
   target_credentials?: string[];
-  primary_discipline?: string;
-  target_credential?: string;
-  clinical_phase?: string;
+  primary_discipline?: string | null;
+  target_credential?: string | null;
+  clinical_phase?: string | null;
   gpa?: number | null;
-  state_residence?: string;
-  metro_area?: string;
+  state_residence?: string | null;
+  metro_area?: string | null;
   sai_score?: number | null;
   first_gen?: boolean;
   minority_flag?: boolean;
@@ -189,6 +190,7 @@ export interface UserScholarship {
   user_id: string;
   scholarship_id: string;
   status: AppStatus;
+  is_dismissed?: boolean;
   custom_deadline_reminder: string | null;
   user_notes: string | null;
   application_notes: string | null;
@@ -230,6 +232,12 @@ export interface ScholarshipOut {
   has_service_commitment?: boolean;
   annual_benefit_cap?: number | null;
   vendor_platform?: string | null;
+  // Source provenance & verification state (server-owned).
+  source_url?: string | null;
+  extraction_method?: string | null;
+  verification_status?: string;
+  verified_fields?: Record<string, string>;
+  verified_at?: string | null;
 }
 
 export interface UserScholarshipCreate {
@@ -255,9 +263,42 @@ export const DISCIPLINE_LABELS: Record<ClinicalDiscipline, string> = {
   pharmacy: "Pharmacy",
   medicine: "Medicine",
   nursing: "Nursing",
+  dentistry: "Dentistry",
+  dental_hygiene: "Dental Hygiene",
+  physician_assistant: "Physician Assistant",
   therapeutics_rehab: "Therapeutics & Rehab",
   diagnostic_imaging: "Diagnostic Imaging",
   public_health_emergency: "Public Health & Emergency",
+  health_professions: "Health Professions",
+  stem: "STEM",
+  biological_sciences: "Biological Sciences",
+  physical_sciences: "Physical Sciences",
+  environmental_science: "Environmental Science",
+  computer_science: "Computer Science",
+  engineering: "Engineering",
+  mathematics: "Mathematics",
+  business: "Business",
+  business_administration: "Business Administration",
+  accounting: "Accounting",
+  finance: "Finance",
+  marketing: "Marketing",
+  economics: "Economics",
+  education: "Education",
+  teaching_education: "Teaching & Education",
+  social_sciences: "Social Sciences",
+  psychology: "Psychology",
+  social_work: "Social Work",
+  criminal_justice: "Criminal Justice",
+  political_science: "Political Science",
+  humanities: "Humanities",
+  arts: "Arts",
+  communications: "Communications",
+  public_service: "Public Service",
+  public_administration: "Public Administration",
+  trades_technical: "Trades & Technical",
+  agriculture: "Agriculture",
+  law: "Law",
+  interdisciplinary: "Interdisciplinary / General",
 };
 
 // ---------------------------------------------------------------------------
@@ -474,5 +515,50 @@ export interface SupportChatResponse {
 export interface SupportEscalateResponse {
   ticket_id: string;
   is_escalated: boolean;
+  message: string;
+}
+
+// ---------------------------------------------------------------------------
+// Early Access / Waitlist (R3)
+// ---------------------------------------------------------------------------
+
+export type EarlyAccessAudienceType =
+  | "student"
+  | "parent"
+  | "college_staff"
+  | "counselor"
+  | "scholarship_organization"
+  | "other";
+
+export type EarlyAccessEducationType =
+  | "undergraduate"
+  | "graduate"
+  | "professional"
+  | "trade"
+  | "other";
+
+export interface EarlyAccessSignupRequest {
+  first_name: string;
+  email: string;
+  audience_type: EarlyAccessAudienceType;
+  education_type?: EarlyAccessEducationType | null;
+  /** Explicit marketing/early-access consent — required, never pre-checked. */
+  consent: boolean;
+  consent_source?: string;
+  // First-touch acquisition attribution captured from the landing URL.
+  referral_source?: string | null;
+  referral_code?: string | null;
+  referred_by?: string | null;
+  utm_source?: string | null;
+  utm_medium?: string | null;
+  utm_campaign?: string | null;
+  utm_content?: string | null;
+  utm_term?: string | null;
+  landing_page?: string | null;
+}
+
+export interface EarlyAccessSignupResponse {
+  status: string;
+  already_registered: boolean;
   message: string;
 }

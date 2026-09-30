@@ -18,6 +18,8 @@ PUBLIC_PATHS = {
     "/redoc",
     # Onboarding live-matching projection runs before a profile/session exists
     "/api/scholarships/match-preview",
+    # Public early-access / waitlist signup (pre-launch, no account required)
+    "/api/v1/early-access",
 }
 
 PUBLIC_PREFIXES = (
@@ -36,7 +38,9 @@ DEMO_USER_EMAIL = "demo@grantrx.local"
 
 def _is_dev_mode() -> bool:
     """Check if the server is running in development mode."""
-    return os.getenv("ENVIRONMENT", "development").lower() in ("development", "dev", "test", "testing")
+    environment = os.getenv("ENVIRONMENT", "production").lower()
+    allow_demo = os.getenv("ALLOW_DEMO_AUTH", "false").lower() in ("1", "true", "yes")
+    return environment in ("development", "dev", "test", "testing") and allow_demo
 
 
 class User:

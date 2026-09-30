@@ -78,8 +78,12 @@ export function CollegeFinancialPlanner() {
     }
   }, []);
 
+  // Deferred to a microtask so loadPlanner's synchronous setLoading does not
+  // run inside the effect body.
   useEffect(() => {
-    loadPlanner();
+    queueMicrotask(() => {
+      void loadPlanner();
+    });
   }, [loadPlanner]);
 
   const handleSave = async () => {
@@ -141,26 +145,39 @@ export function CollegeFinancialPlanner() {
   );
   const localCOA = localDirect + localLiving;
 
-  // Use live local values if available, fall back to server data
-  const totalDirect = planner ? planner.total_direct_educational : localDirect;
-  const totalLiving = planner ? planner.total_living_personal : localLiving;
-  const totalCOA = planner ? planner.total_annual_expenses : localCOA;
-  const totalIncome = planner ? planner.total_non_loan_income : localIncome;
+  // Live local computation — mirrors backend `_compute_financial_planner` so
+  // the dashboard updates as the user edits, before hitting Save.
   const plannedScholarships = planner?.total_planned_scholarships ?? 0;
-  const netUnfunded = planner?.net_unfunded_annual ?? Math.max(0, localCOA - localIncome);
-  const totalDebt = planner?.estimated_total_debt ?? 0;
-  const monthlyPayment = planner?.monthly_loan_payment ?? 0;
-  const lifetimeInterest = planner?.total_lifetime_interest ?? 0;
-  const threeXCushion = planner?.three_x_cushion ?? totalCOA * 3;
-  const cushionPct = planner?.cushion_progress_pct ?? 0;
+  const totalDirect = localDirect;
+  const totalLiving = localLiving;
+  const totalCOA = localCOA;
+  const totalIncome = localIncome;
+  const netUnfunded = Math.max(0, totalCOA - (plannedScholarships + totalIncome));
+  const principal = netUnfunded * programYears;
+  const monthlyRate = interestRate / 100 / 12;
+  const NUM_PAYMENTS = 120;
+  let monthlyPayment = 0;
+  if (principal > 0 && monthlyRate > 0) {
+    const factor = Math.pow(1 + monthlyRate, NUM_PAYMENTS);
+    monthlyPayment = (principal * monthlyRate * factor) / (factor - 1);
+  } else if (principal > 0) {
+    monthlyPayment = principal / NUM_PAYMENTS;
+  }
+  const totalDebt = principal;
+  const lifetimeInterest = Math.max(0, monthlyPayment * NUM_PAYMENTS - principal);
+  const threeXCushion = totalCOA * 3;
+  const cushionPct =
+    threeXCushion > 0
+      ? ((plannedScholarships + totalIncome) / threeXCushion) * 100
+      : 0;
 
   if (loading) {
     return (
       <div className="space-y-4">
-        <h1 className="font-serif text-3xl font-bold text-textPrimary">
+        <h1 className="font-serif text-3xl font-bold text-text">
           Financial Planner
         </h1>
-        <div className="rounded-2xl bg-cardBg p-8 text-center text-textSecondary">
+        <div className="rounded-2xl bg-surfaceSubtle p-8 text-center text-textMuted">
           Loading your financial planner…
         </div>
       </div>
@@ -169,26 +186,26 @@ export function CollegeFinancialPlanner() {
 
   return (
     <div className="space-y-6">
-      <h1 className="font-serif text-3xl font-bold text-textPrimary">
+      <h1 className="font-serif text-3xl font-bold text-text">
         Financial Planner
       </h1>
-      <p className="text-sm text-textSecondary">
+      <p className="text-sm text-textMuted">
         Plan your college budget, track funding gaps, and simulate loan impact over a 10-year repayment period.
       </p>
 
       {error && (
-        <div className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">
+        <div className="rounded-xl bg-dangerSoft px-4 py-3 text-sm text-danger">
           {error}
         </div>
       )}
 
       {/* Export & Sync toolbar */}
-      <div className="flex items-center justify-end gap-3">
+      <div className="flex flex-wrap items-center justify-end gap-3">
         <div className="relative">
           <button
             onClick={() => setExportOpen((v) => !v)}
             disabled={exporting}
-            className="inline-flex items-center gap-2 rounded-full border border-textSecondary/20 px-4 py-2 text-sm font-medium text-textSecondary hover:border-crayolaBlue hover:text-textPrimary disabled:opacity-50"
+            className="inline-flex items-center gap-2 rounded-full border border-textMuted/20 px-4 py-2 text-sm font-medium text-textMuted hover:border-primary hover:text-text disabled:opacity-50"
           >
             <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v12m0 0l-4-4m4 4l4-4M4 20h16" />
@@ -199,29 +216,29 @@ export function CollegeFinancialPlanner() {
             </svg>
           </button>
           {exportOpen && (
-            <div className="absolute right-0 z-20 mt-2 w-64 rounded-xl border border-slate-200 bg-white shadow-lg">
+            <div className="absolute right-0 z-20 mt-2 w-64 max-w-[calc(100vw-2rem)] rounded-xl border border-border bg-white shadow-lg">
               <button
                 onClick={handleDownloadAsanaCsv}
-                className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm text-textPrimary hover:bg-slate-50 rounded-t-xl"
+                className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm text-text hover:bg-surfaceSubtle rounded-t-xl"
               >
-                <svg className="h-5 w-5 text-aquamarine" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+                <svg className="h-5 w-5 text-accentSoft" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M9 13h6m-3-3v6m-9 1V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
                 </svg>
                 <div>
                   <p className="font-medium">Export for Asana (.CSV)</p>
-                  <p className="text-xs text-textSecondary">Planned scholarships as tasks</p>
+                  <p className="text-xs text-textMuted">Planned funding as tasks</p>
                 </div>
               </button>
               <button
                 onClick={handleDownloadIcs}
-                className="flex w-full items-center gap-3 border-t border-slate-100 px-4 py-3 text-left text-sm text-textPrimary hover:bg-slate-50"
+                className="flex w-full items-center gap-3 border-t border-border px-4 py-3 text-left text-sm text-text hover:bg-surfaceSubtle"
               >
-                <svg className="h-5 w-5 text-blueEnergy" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+                <svg className="h-5 w-5 text-secondary" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                 </svg>
                 <div>
                   <p className="font-medium">Download Apple / Outlook (.ICS)</p>
-                  <p className="text-xs text-textSecondary">Calendar feed with 7-day reminders</p>
+                  <p className="text-xs text-textMuted">Calendar feed with 7-day reminders</p>
                 </div>
               </button>
               <a
@@ -229,14 +246,14 @@ export function CollegeFinancialPlanner() {
                 target="_blank"
                 rel="noopener noreferrer"
                 onClick={() => setExportOpen(false)}
-                className="flex w-full items-center gap-3 border-t border-slate-100 px-4 py-3 text-left text-sm text-textPrimary hover:bg-slate-50 rounded-b-xl"
+                className="flex w-full items-center gap-3 border-t border-border px-4 py-3 text-left text-sm text-text hover:bg-surfaceSubtle rounded-b-xl"
               >
-                <svg className="h-5 w-5 text-crayolaBlue" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+                <svg className="h-5 w-5 text-primary" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 2a10 10 0 100 20 10 10 0 000-20zm0 4v6l4 2" />
                 </svg>
                 <div>
                   <p className="font-medium">Sync with Google Calendar</p>
-                  <p className="text-xs text-textSecondary">Open Google Calendar to add events</p>
+                  <p className="text-xs text-textMuted">Open Google Calendar to add events</p>
                 </div>
               </a>
             </div>
@@ -245,27 +262,27 @@ export function CollegeFinancialPlanner() {
       </div>
 
       {/* Top: 3x Application Cushion Progress Meter */}
-      <section className="bg-white/95 backdrop-blur-md rounded-2xl border border-slate-200 shadow-xs p-6">
+      <section className="bg-white/95 backdrop-blur-md rounded-2xl border border-border shadow-xs p-6">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="font-serif text-lg font-semibold text-textPrimary">
+            <h2 className="font-serif text-lg font-semibold text-text">
               3x Application Cushion
             </h2>
-            <p className="mt-0.5 text-xs text-textSecondary">
+            <p className="mt-0.5 text-xs text-textMuted">
               Funding progress toward 3× your annual Cost of Attendance
             </p>
           </div>
-          <span className={`text-2xl font-bold ${cushionPct >= 100 ? "text-aquamarine" : cushionPct >= 50 ? "text-blueEnergy" : "text-textSecondary"}`}>
+          <span className={`text-2xl font-bold ${cushionPct >= 100 ? "text-accentSoft" : cushionPct >= 50 ? "text-secondary" : "text-textMuted"}`}>
             {cushionPct.toFixed(1)}%
           </span>
         </div>
-        <div className="mt-4 h-4 overflow-hidden rounded-full bg-slate-100 p-0.5">
+        <div className="mt-4 h-4 overflow-hidden rounded-full bg-surfaceSubtle p-0.5">
           <div
-            className="h-full rounded-full bg-gradient-to-r from-skyAqua via-blueEnergy to-aquamarine transition-all duration-700 ease-out"
+            className="h-full rounded-full bg-gradient-to-r from-accent via-secondary to-accentSoft transition-all duration-700 ease-out"
             style={{ width: `${Math.min(100, cushionPct)}%` }}
           />
         </div>
-        <div className="mt-3 flex items-center justify-between text-xs text-textSecondary">
+        <div className="mt-3 flex items-center justify-between text-xs text-textMuted">
           <span>Funded: {money(plannedScholarships + totalIncome)}</span>
           <span>Goal: {money(threeXCushion)}</span>
         </div>
@@ -275,8 +292,8 @@ export function CollegeFinancialPlanner() {
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
 
         {/* Col 1: Budget Sheet (collapsible accordion) */}
-        <section className="bg-white/95 backdrop-blur-md rounded-2xl border border-slate-200 shadow-xs p-5">
-          <h2 className="font-serif text-base font-semibold text-textPrimary mb-4">
+        <section className="bg-white/95 backdrop-blur-md rounded-2xl border border-border shadow-xs p-5">
+          <h2 className="font-serif text-base font-semibold text-text mb-4">
             Annual Budget Sheet
           </h2>
 
@@ -315,23 +332,23 @@ export function CollegeFinancialPlanner() {
           </AccordionSection>
 
           {/* Total COA */}
-          <div className="mt-4 flex items-center justify-between rounded-xl bg-surfaceBg px-4 py-3">
-            <span className="text-sm font-medium text-textSecondary">Total Annual COA</span>
-            <span className="font-serif text-lg font-bold text-textPrimary">{money(totalCOA)}</span>
+          <div className="mt-4 flex items-center justify-between rounded-xl bg-surface px-4 py-3">
+            <span className="text-sm font-medium text-textMuted">Total Annual COA</span>
+            <span className="font-serif text-lg font-bold text-text">{money(totalCOA)}</span>
           </div>
 
           <button
             onClick={handleSave}
             disabled={saving}
-            className="mt-4 w-full rounded-full bg-crayolaBlue px-4 py-2 text-sm font-medium text-surfaceBg hover:bg-blueEnergy disabled:opacity-50"
+            className="mt-4 w-full rounded-full bg-primary px-4 py-2 text-sm font-medium text-surface hover:bg-secondary disabled:opacity-50"
           >
             {saving ? "Saving…" : "Save Budget"}
           </button>
         </section>
 
         {/* Col 2: Funding & Inflows */}
-        <section className="bg-white/95 backdrop-blur-md rounded-2xl border border-slate-200 shadow-xs p-5">
-          <h2 className="font-serif text-base font-semibold text-textPrimary mb-4">
+        <section className="bg-white/95 backdrop-blur-md rounded-2xl border border-border shadow-xs p-5">
+          <h2 className="font-serif text-base font-semibold text-text mb-4">
             Funding & Inflows
           </h2>
 
@@ -353,24 +370,24 @@ export function CollegeFinancialPlanner() {
 
           {/* Planned scholarships */}
           <div className="mt-4 space-y-3">
-            <div className="flex items-center justify-between rounded-xl bg-aquamarine/10 border border-aquamarine/30 px-4 py-3">
+            <div className="flex items-center justify-between rounded-xl bg-accentSoft/10 border border-accentSoft/30 px-4 py-3">
               <div>
-                <p className="text-sm font-medium text-textPrimary">Planned Scholarships</p>
-                <p className="text-xs text-textSecondary">From saved & tracked awards</p>
+                <p className="text-sm font-medium text-text">Planned Funding</p>
+                <p className="text-xs text-textMuted">From saved & tracked awards</p>
               </div>
               <div className="flex items-center gap-2">
                 <button
                   onClick={handleDownloadIcs}
                   disabled={exporting || plannedScholarships === 0}
                   title="Add deadlines to your calendar"
-                  className="rounded-lg p-1.5 text-blueEnergy transition hover:bg-blueEnergy/10 disabled:opacity-40"
+                  className="rounded-lg p-1.5 text-secondary transition hover:bg-secondary/10 disabled:opacity-40"
                   aria-label="Sync planned deadlines to calendar"
                 >
                   <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                   </svg>
                 </button>
-                <span className="font-serif text-lg font-bold text-textPrimary">
+                <span className="font-serif text-lg font-bold text-text">
                   {money(plannedScholarships)}
                 </span>
               </div>
@@ -379,17 +396,17 @@ export function CollegeFinancialPlanner() {
             {/* Net deficit */}
             <div className={`flex items-center justify-between rounded-xl px-4 py-3 ${
               netUnfunded > 0
-                ? "bg-red-50 border border-red-200"
-                : "bg-aquamarine/10 border border-aquamarine/30"
+                ? "bg-dangerSoft border border-danger/30"
+                : "bg-accentSoft/10 border border-accentSoft/30"
             }`}>
               <div>
-                <p className="text-sm font-medium text-textPrimary">
+                <p className="text-sm font-medium text-text">
                   {netUnfunded > 0 ? "Net Unfunded (Annual)" : "Surplus (Annual)"}
                 </p>
-                <p className="text-xs text-textSecondary">COA − (Scholarships + Income)</p>
+                <p className="text-xs text-textMuted">COA − (Funding + Income)</p>
               </div>
               <span className={`font-serif text-lg font-bold ${
-                netUnfunded > 0 ? "text-red-600" : "text-aquamarine"
+                netUnfunded > 0 ? "text-danger" : "text-accentSoft"
               }`}>
                 {money(Math.abs(netUnfunded))}
               </span>
@@ -398,15 +415,15 @@ export function CollegeFinancialPlanner() {
         </section>
 
         {/* Col 3: Loan Breakdown & Debt Impact */}
-        <section className="bg-white/95 backdrop-blur-md rounded-2xl border border-slate-200 shadow-xs p-5">
-          <h2 className="font-serif text-base font-semibold text-textPrimary mb-4">
+        <section className="bg-white/95 backdrop-blur-md rounded-2xl border border-border shadow-xs p-5">
+          <h2 className="font-serif text-base font-semibold text-text mb-4">
             Loan Breakdown & Debt Impact
           </h2>
 
           {/* Loan config inputs */}
           <div className="space-y-3">
             <div>
-              <label className="block text-xs font-medium text-textSecondary">
+              <label className="block text-xs font-medium text-textMuted">
                 Program Years
               </label>
               <input
@@ -415,11 +432,11 @@ export function CollegeFinancialPlanner() {
                 max={10}
                 value={programYears}
                 onChange={(e) => setProgramYears(parseInt(e.target.value) || 4)}
-                className="mt-1 w-full rounded-xl border border-textSecondary/20 bg-surfaceBg px-3 py-2 text-sm text-textPrimary"
+                className="mt-1 w-full rounded-xl border border-textMuted/20 bg-surface px-3 py-2 text-sm text-text"
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-textSecondary">
+              <label className="block text-xs font-medium text-textMuted">
                 Interest Rate (%)
               </label>
               <input
@@ -429,7 +446,7 @@ export function CollegeFinancialPlanner() {
                 max={20}
                 value={interestRate}
                 onChange={(e) => setInterestRate(parseFloat(e.target.value) || 7.5)}
-                className="mt-1 w-full rounded-xl border border-textSecondary/20 bg-surfaceBg px-3 py-2 text-sm text-textPrimary"
+                className="mt-1 w-full rounded-xl border border-textMuted/20 bg-surface px-3 py-2 text-sm text-text"
               />
             </div>
           </div>
@@ -440,36 +457,36 @@ export function CollegeFinancialPlanner() {
               label="Estimated Total Debt"
               sublabel={`${programYears}yr × unfunded annual`}
               value={money(totalDebt)}
-              accent="text-textPrimary"
+              accent="text-text"
             />
             <MetricCard
               label="Monthly Payment"
               sublabel="10-year (120 mo) amortization"
               value={money(monthlyPayment)}
-              accent="text-blueEnergy"
+              accent="text-secondary"
             />
             <MetricCard
               label="Lifetime Interest"
               sublabel="Total interest over 10 years"
               value={money(lifetimeInterest)}
-              accent="text-red-600"
+              accent="text-danger"
             />
           </div>
 
           {/* 5x safety buffer */}
-          <div className="mt-4 rounded-xl bg-surfaceBg px-4 py-3">
-            <p className="text-xs text-textSecondary">5× Safety Buffer</p>
-            <p className="mt-1 font-serif text-lg font-bold text-textPrimary">
-              {money(planner?.five_x_safety_buffer ?? totalCOA * 5)}
+          <div className="mt-4 rounded-xl bg-surface px-4 py-3">
+            <p className="text-xs text-textMuted">5× Safety Buffer</p>
+            <p className="mt-1 font-serif text-lg font-bold text-text">
+              {money(totalCOA * 5)}
             </p>
           </div>
 
           <button
             onClick={handleSave}
             disabled={saving}
-            className="mt-4 w-full rounded-full bg-crayolaBlue px-4 py-2 text-sm font-medium text-surfaceBg hover:bg-blueEnergy disabled:opacity-50"
+            className="mt-4 w-full rounded-full bg-primary px-4 py-2 text-sm font-medium text-surface hover:bg-secondary disabled:opacity-50"
           >
-            {saving ? "Recalculating…" : "Recalculate Loan Impact"}
+            {saving ? "Saving…" : "Save Budget"}
           </button>
         </section>
       </div>
@@ -495,16 +512,16 @@ function AccordionSection({
   children: React.ReactNode;
 }) {
   return (
-    <div className="border-b border-slate-100 last:border-0">
+    <div className="border-b border-border last:border-0">
       <button
         onClick={onToggle}
         className="flex w-full items-center justify-between py-3 text-left"
       >
-        <span className="text-sm font-medium text-textPrimary">{title}</span>
+        <span className="text-sm font-medium text-text">{title}</span>
         <div className="flex items-center gap-2">
-          <span className="text-sm font-semibold text-textSecondary">{money(total)}</span>
+          <span className="text-sm font-semibold text-textMuted">{money(total)}</span>
           <svg
-            className={`h-4 w-4 text-textSecondary transition-transform ${isOpen ? "rotate-180" : ""}`}
+            className={`h-4 w-4 text-textMuted transition-transform ${isOpen ? "rotate-180" : ""}`}
             fill="none"
             stroke="currentColor"
             strokeWidth={2}
@@ -530,15 +547,15 @@ function BudgetInput({
 }) {
   return (
     <div className="flex items-center justify-between gap-3">
-      <label className="text-xs text-textSecondary flex-1">{label}</label>
-      <div className="relative w-32">
-        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-textSecondary">$</span>
+      <label className="min-w-0 flex-1 break-words text-xs text-textMuted">{label}</label>
+      <div className="relative w-28 sm:w-32">
+        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-textMuted">$</span>
         <input
           type="number"
           min={0}
           value={value}
           onChange={(e) => onChange(parseInt(e.target.value) || 0)}
-          className="w-full rounded-lg border border-textSecondary/20 bg-surfaceBg pl-5 pr-2 py-1.5 text-xs text-textPrimary"
+          className="w-full rounded-lg border border-textMuted/20 bg-surface pl-5 pr-2 py-1.5 text-xs text-text"
         />
       </div>
     </div>
@@ -557,10 +574,10 @@ function MetricCard({
   accent: string;
 }) {
   return (
-    <div className="rounded-xl bg-surfaceBg px-4 py-3">
-      <p className="text-xs text-textSecondary">{label}</p>
-      <p className={`mt-1 font-serif text-xl font-bold ${accent}`}>{value}</p>
-      <p className="mt-0.5 text-xs text-textSecondary/60">{sublabel}</p>
+    <div className="rounded-xl bg-surface px-4 py-3">
+      <p className="break-words text-xs text-textMuted">{label}</p>
+      <p className={`mt-1 font-serif text-lg font-bold sm:text-xl ${accent}`}>{value}</p>
+      <p className="break-words mt-0.5 text-xs text-textMuted/60">{sublabel}</p>
     </div>
   );
 }

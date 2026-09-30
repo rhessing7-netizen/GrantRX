@@ -55,8 +55,8 @@ def dev_env():
 
 
 @pytest.fixture
-def client():
-    yield TestClient(app)
+def client(authenticated_client_factory):
+    yield authenticated_client_factory(app)
     app.dependency_overrides.clear()
 
 

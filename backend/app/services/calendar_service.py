@@ -16,6 +16,7 @@ from icalendar import Alarm, Calendar, Event, vText
 from sqlalchemy.orm import Session, joinedload
 
 from ..models.models import Profile, UserScholarship
+from ..config import CALENDAR_UID_DOMAIN
 
 logger = logging.getLogger(__name__)
 
@@ -74,17 +75,17 @@ def generate_ics_feed(db: Session, feed_token: str) -> str:
     if not profile:
         # Return a minimal valid calendar so clients don't error
         cal = Calendar()
-        cal.add("prodid", "-//GrantRx//Calendar//EN")
+        cal.add("prodid", "-//EdFintia//Calendar//EN")
         cal.add("version", "2.0")
         return cal.to_ical().decode("utf-8")
 
     events_data = get_calendar_events(db, profile.id)
 
     cal = Calendar()
-    cal.add("prodid", "-//GrantRx//Scholarship Deadlines//EN")
+    cal.add("prodid", "-//EdFintia//Scholarship Deadlines//EN")
     cal.add("version", "2.0")
-    cal.add("name", vText("GrantRx Scholarship Deadlines"))
-    cal.add("x-wr-calname", "GrantRx Scholarships")
+    cal.add("name", vText("EdFintia Scholarship Deadlines"))
+    cal.add("x-wr-calname", "EdFintia Scholarships")
     cal.add("x-wr-timezone", "UTC")
 
     for ev_data in events_data:
@@ -100,13 +101,14 @@ def generate_ics_feed(db: Session, feed_token: str) -> str:
         dtend = dtstart + timedelta(hours=1)
 
         event = Event()
-        event.add("uid", f"grantrx-{ev_data['tracking_id']}@grantrx.app")
+        event.add("uid", f"grantrx-{ev_data['tracking_id']}@{CALENDAR_UID_DOMAIN}")
         event.add("summary", f"{ev_data['title']} — Deadline")
-        description_parts = [
-            f"Provider: {ev_data['provider']}",
-            f"Award: ${ev_data['award_amount']:,}",
-            f"Status: {ev_data['status']}",
-        ]
+        description_parts = [f"Provider: {ev_data['provider']}"]
+        if ev_data["award_amount"] is not None:
+            description_parts.append(f"Award: ${ev_data['award_amount']:,}")
+        else:
+            description_parts.append("Award: Varies")
+        description_parts.append(f"Status: {ev_data['status']}")
         if ev_data["user_notes"]:
             description_parts.append(f"Notes: {ev_data['user_notes']}")
         event.add("description", "\n".join(description_parts))

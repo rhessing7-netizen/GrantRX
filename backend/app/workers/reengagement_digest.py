@@ -24,6 +24,7 @@ from sqlalchemy import func
 
 from ..database import SessionLocal
 from ..models.models import Profile, Scholarship
+from ..config import APP_URL, DIGEST_FROM_EMAIL
 
 logger = logging.getLogger(__name__)
 
@@ -48,8 +49,8 @@ class ReengagementPayload:
     @property
     def subject(self) -> str:
         if self.new_count == 0:
-            return "GrantRx: New scholarships coming soon"
-        return f"GrantRx Update: {self.new_count} new scholarships (${self.total_value:,} total) for your discipline!"
+            return "EdFintia: New scholarships coming soon"
+        return f"EdFintia Update: {self.new_count} new scholarships (${self.total_value:,} total) for your discipline!"
 
     def render_text(self) -> str:
         first = (self.user_name or "there").split(" ")[0]
@@ -61,23 +62,23 @@ class ReengagementPayload:
                 " health students. Check back soon for fresh opportunities"
                 " matched to your discipline.",
                 "",
-                "Browse your feed: https://grant-rx.vercel.app",
+                f"Browse your feed: {APP_URL}",
                 "",
-                "— The GrantRx Team",
+                "— The EdFintia Team",
             ]
         else:
             lines = [
                 f"Hi {first},",
                 "",
-                f"GrantRx Update: {self.new_count} new scholarships"
+                f"EdFintia Update: {self.new_count} new scholarships"
                 f" (${self.total_value:,} total) were just indexed for"
                 f" your discipline!",
                 "",
                 "Log in to see your fresh matches and start applying.",
                 "",
-                "Browse your feed: https://grant-rx.vercel.app",
+                f"Browse your feed: {APP_URL}",
                 "",
-                "— The GrantRx Team",
+                "— The EdFintia Team",
             ]
         return "\n".join(lines)
 
@@ -91,18 +92,18 @@ class ReengagementPayload:
             )
         else:
             body = (
-                f"<p>GrantRx Update: <strong>{self.new_count} new scholarships</strong>"
+                f"<p>EdFintia Update: <strong>{self.new_count} new scholarships</strong>"
                 f" (<strong>${self.total_value:,} total</strong>) were just indexed"
                 f" for your discipline!</p>"
                 "<p>Log in to see your fresh matches and start applying.</p>"
             )
         return (
             '<html><body style="font-family: \'Sora\', sans-serif; color: #1a1a2e; max-width: 560px; margin: 0 auto;">'
-            f'<h1 style="font-family: \'Fraunces\', serif; color: #5C7AFF;">GrantRx Update</h1>'
+            f'<h1 style="font-family: \'Fraunces\', serif; color: #5C7AFF;">EdFintia Update</h1>'
             f"<p>Hi {first},</p>"
             f"{body}"
-            '<p><a href="https://grant-rx.vercel.app" style="background: #5C7AFF; color: #fff; padding: 12px 24px; border-radius: 999px; text-decoration: none; display: inline-block;">Browse Your Feed</a></p>'
-            '<p style="color: #64748b; font-size: 14px;">— The GrantRx Team</p>'
+            f'<p><a href="{APP_URL}" style="background: #5C7AFF; color: #fff; padding: 12px 24px; border-radius: 999px; text-decoration: none; display: inline-block;">Browse Your Feed</a></p>'
+            '<p style="color: #64748b; font-size: 14px;">— The EdFintia Team</p>'
             "</body></html>"
         )
 
@@ -146,7 +147,7 @@ def build_digests(db, now: Optional[datetime] = None) -> List[ReengagementPayloa
                     func.coalesce(func.sum(Scholarship.award_amount), 0),
                 )
                 .filter(Scholarship.created_at >= cutoff)
-                .filter(Scholarship.is_archived == False)  # noqa: E712
+                .filter(Scholarship.lifecycle_status == "published")
                 .first()
             )
         else:
@@ -157,7 +158,7 @@ def build_digests(db, now: Optional[datetime] = None) -> List[ReengagementPayloa
                     func.coalesce(func.sum(Scholarship.award_amount), 0),
                 )
                 .filter(Scholarship.created_at >= cutoff)
-                .filter(Scholarship.is_archived == False)  # noqa: E712
+                .filter(Scholarship.lifecycle_status == "published")
                 .filter(Scholarship.eligible_disciplines.contains([discipline]))
                 .first()
             )
@@ -203,7 +204,7 @@ def send_digests(payloads: List[ReengagementPayload]) -> int:
         logger.error("Failed to configure Resend API key: %s", exc)
         return 0
 
-    from_email = os.getenv("DIGEST_FROM_EMAIL", "hello@grantrx.app")
+    from_email = DIGEST_FROM_EMAIL
     sent = 0
     for p in payloads:
         try:

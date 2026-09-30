@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import type { Session } from "@supabase/supabase-js";
 import type { SupportMessage } from "@/lib/types";
 import { api } from "@/lib/api";
@@ -8,18 +9,20 @@ import { supabase } from "@/lib/supabase";
 
 const MAX_TURNS = 4;
 const WELCOME_REPLY =
-  "Hi! I'm the GrantRx Support Assistant. Ask me about search quotas, match scoring, the Kanban board, document vault, deadline calendars, or subscriptions. How can I help?";
+  "Hi! I'm the EdFintia Support Assistant. Ask me about search quotas, match scoring, the application tracker, linked documents, deadline calendars, or subscriptions. How can I help?";
 const GUEST_WELCOME_REPLY =
-  "Hi! I'm the GrantRx Support Assistant. To protect your account details and route tickets to your student profile, please sign in or create an account.";
+  "Hi! I'm the EdFintia Support Assistant. To protect your account details and route tickets to your student profile, please sign in or create an account.";
 const GUEST_SIGNIN_PROMPT = "Please sign in to continue chatting with support.";
 const SUPPORT_MAILTO =
-  "mailto:phuturecliciansphoundation@gmail.com?subject=%5BGrantRx%20Guest%20Inquiry%5D";
+  "mailto:phuturecliciansphoundation@gmail.com?subject=%5BEdFintia%20Guest%20Inquiry%5D";
+const SUPPORT_MAILTO_MEMBER =
+  "mailto:phuturecliciansphoundation@gmail.com?subject=%5BEdFintia%20Support%5D";
 
 export function SupportAssistantDrawer() {
   const [isOpen, setIsOpen] = useState(false);
   const [session, setSession] = useState<Session | null>(null);
   const [messages, setMessages] = useState<SupportMessage[]>([
-    { role: "assistant", content: WELCOME_REPLY },
+    { role: "assistant", content: GUEST_WELCOME_REPLY },
   ]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
@@ -30,20 +33,50 @@ export function SupportAssistantDrawer() {
   const [escalating, setEscalating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const pathname = usePathname();
+  const router = useRouter();
+  // On the app shell (/), the MobileBottomNav is present on mobile widths.
+  const appShell = pathname === "/";
+
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
   // Read the Supabase auth session and subscribe to auth state changes.
   useEffect(() => {
     if (!supabase) return;
+
+    // Swap the placeholder welcome for the correct variant whenever the auth
+    // session resolves or changes, preserving any real conversation.
+    const applyWelcomeForSession = (sess: Session | null) => {
+      setMessages((prev) => {
+        if (!sess) {
+          // Replace only the very first assistant message if it is still the
+          // authenticated welcome — preserve any user/assistant conversation.
+          if (prev.length === 1 && prev[0].role === "assistant" && prev[0].content === WELCOME_REPLY) {
+            return [{ role: "assistant", content: GUEST_WELCOME_REPLY }];
+          }
+          return prev;
+        }
+        // Authenticated: restore the standard welcome if the only message is the guest welcome.
+        if (prev.length === 1 && prev[0].role === "assistant" && prev[0].content === GUEST_WELCOME_REPLY) {
+          return [{ role: "assistant", content: WELCOME_REPLY }];
+        }
+        return prev;
+      });
+    };
+
     supabase.auth
       .getSession()
-      .then(({ data }) => setSession(data.session))
+      .then(({ data }) => {
+        setSession(data.session);
+        applyWelcomeForSession(data.session);
+      })
       .catch(() => {
         // getSession may fail if Supabase is unreachable — treat as guest
       });
     const { data } = supabase.auth.onAuthStateChange(
       (_event, sess) => {
         setSession(sess);
+        applyWelcomeForSession(sess);
       },
     );
     return () => {
@@ -53,31 +86,20 @@ export function SupportAssistantDrawer() {
 
   const isGuest = !session;
 
-  // When the auth state changes, swap the initial welcome message so guests
-  // see the sign-in prompt instead of the authenticated welcome.
-  useEffect(() => {
-    setMessages((prev) => {
-      if (isGuest) {
-        // Replace only the very first assistant message if it is still the
-        // authenticated welcome — preserve any user/assistant conversation.
-        if (prev.length === 1 && prev[0].role === "assistant" && prev[0].content === WELCOME_REPLY) {
-          return [{ role: "assistant", content: GUEST_WELCOME_REPLY }];
-        }
-        return prev;
-      }
-      // Authenticated: restore the standard welcome if the only message is the guest welcome.
-      if (prev.length === 1 && prev[0].role === "assistant" && prev[0].content === GUEST_WELCOME_REPLY) {
-        return [{ role: "assistant", content: WELCOME_REPLY }];
-      }
-      return prev;
-    });
-  }, [isGuest]);
-
   // Auto-scroll to the latest message.
   useEffect(() => {
     const el = scrollRef.current;
     if (el) el.scrollTop = el.scrollHeight;
   }, [messages, isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setIsOpen(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [isOpen]);
 
   const chatDisabled = isEscalated || turnCount >= MAX_TURNS || sending || isGuest;
 
@@ -93,7 +115,7 @@ export function SupportAssistantDrawer() {
         { role: "assistant", content: GUEST_SIGNIN_PROMPT },
       ]);
       setInput("");
-      window.dispatchEvent(new CustomEvent("grantrx:auth:open"));
+      openAuth();
       return;
     }
 
@@ -153,7 +175,14 @@ export function SupportAssistantDrawer() {
   };
 
   const openAuth = () => {
-    window.dispatchEvent(new CustomEvent("grantrx:auth:open"));
+    if (appShell) {
+      // page.tsx listens for this event and opens the auth modal.
+      window.dispatchEvent(new CustomEvent("grantrx:auth:open"));
+    } else {
+      // On public pages (terms, privacy, early-access) nothing listens —
+      // bounce to the app shell, which opens the modal on ?signin=1.
+      router.push("/?signin=1");
+    }
   };
 
   return (
@@ -162,9 +191,9 @@ export function SupportAssistantDrawer() {
       {!isOpen && (
         <button
           onClick={() => setIsOpen(true)}
-          aria-label="Open GrantRx Support Assistant"
+          aria-label="Open EdFintia Support Assistant"
           title="Support Assistant"
-          className="fixed bottom-6 right-6 z-40 rounded-full border border-skyAqua/50 bg-skyAqua/20 p-3 text-slate-800 shadow-md transition hover:bg-skyAqua/30"
+          className={`fixed right-6 z-40 rounded-full border border-accent/50 bg-accent/20 p-3 text-text shadow-md transition hover:bg-accent/30 lg:bottom-6 ${appShell ? "bottom-20" : "bottom-6"}`}
         >
           <svg
             className="h-6 w-6"
@@ -185,23 +214,23 @@ export function SupportAssistantDrawer() {
       {/* Slide-over drawer */}
       {isOpen && (
         <div
-          className="fixed inset-0 z-50 flex justify-end bg-textPrimary/40 backdrop-blur-sm"
+          className="fixed inset-0 z-50 flex justify-end bg-text/40 backdrop-blur-sm"
           onClick={() => setIsOpen(false)}
         >
           <div
-            className="flex h-full w-full max-w-md flex-col bg-surfaceBg shadow-2xl"
+            className="flex h-full w-full max-w-md flex-col bg-surface shadow-2xl"
             onClick={(e) => e.stopPropagation()}
             role="dialog"
             aria-modal="true"
-            aria-label="GrantRx Support Assistant"
+            aria-label="EdFintia Support Assistant"
           >
             {/* Header */}
-            <div className="flex items-center justify-between border-b border-textSecondary/10 bg-surfaceBg/95 px-5 py-4 backdrop-blur">
+            <div className="flex items-center justify-between border-b border-textMuted/10 bg-surface/95 px-5 py-4 backdrop-blur">
               <div className="min-w-0">
-                <h2 className="font-serif text-lg font-semibold text-textPrimary">
-                  GrantRx Assistant
+                <h2 className="font-serif text-lg font-semibold text-text">
+                  EdFintia Assistant
                 </h2>
-                <p className="text-xs text-textSecondary">
+                <p className="text-xs text-textMuted">
                   {isGuest
                     ? "Guest Mode"
                     : isEscalated || turnCount >= MAX_TURNS
@@ -211,7 +240,7 @@ export function SupportAssistantDrawer() {
               </div>
               <button
                 onClick={() => setIsOpen(false)}
-                className="ml-3 shrink-0 rounded-lg p-1.5 text-textSecondary hover:bg-slate-100 hover:text-textPrimary"
+                className="ml-3 shrink-0 rounded-lg p-1.5 text-textMuted hover:bg-surfaceSubtle hover:text-text"
                 aria-label="Close"
               >
                 <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
@@ -237,8 +266,8 @@ export function SupportAssistantDrawer() {
                   <div
                     className={
                       m.role === "user"
-                        ? "max-w-[85%] rounded-2xl rounded-br-sm bg-blueEnergy px-3.5 py-2 text-sm text-white"
-                        : "max-w-[85%] rounded-2xl rounded-bl-sm border border-slate-200 bg-white px-3.5 py-2 text-sm text-textPrimary"
+                        ? "max-w-[85%] rounded-2xl rounded-br-sm bg-secondary px-3.5 py-2 text-sm text-white"
+                        : "max-w-[85%] rounded-2xl rounded-bl-sm border border-border bg-white px-3.5 py-2 text-sm text-text"
                     }
                   >
                     {m.content}
@@ -247,11 +276,11 @@ export function SupportAssistantDrawer() {
               ))}
               {sending && (
                 <div className="flex justify-start">
-                  <div className="max-w-[85%] rounded-2xl rounded-bl-sm border border-slate-200 bg-white px-3.5 py-2 text-sm text-textSecondary">
+                  <div className="max-w-[85%] rounded-2xl rounded-bl-sm border border-border bg-white px-3.5 py-2 text-sm text-textMuted">
                     <span className="inline-flex gap-1">
-                      <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400 [animation-delay:-0.3s]" />
-                      <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400 [animation-delay:-0.15s]" />
-                      <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400" />
+                      <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-textMuted [animation-delay:-0.3s]" />
+                      <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-textMuted [animation-delay:-0.15s]" />
+                      <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-textMuted" />
                     </span>
                   </div>
                 </div>
@@ -259,23 +288,23 @@ export function SupportAssistantDrawer() {
 
               {/* Guest sign-in CTA card */}
               {isGuest && (
-                <div className="rounded-xl border border-blueEnergy/30 bg-blueEnergy/5 px-4 py-4 text-sm">
-                  <p className="font-semibold text-textPrimary">
+                <div className="rounded-xl border border-secondary/30 bg-secondary/5 px-4 py-4 text-sm">
+                  <p className="font-semibold text-text">
                     Sign in to continue
                   </p>
-                  <p className="mt-1 text-textSecondary">
+                  <p className="mt-1 text-textMuted">
                     To protect your account details and route tickets to your
                     student profile, please sign in or create an account.
                   </p>
                   <button
                     onClick={openAuth}
-                    className="mt-3 w-full rounded-full bg-blueEnergy px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90"
+                    className="mt-3 w-full rounded-full bg-secondary px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90"
                   >
                     Sign In / Create Account
                   </button>
                   <a
                     href={SUPPORT_MAILTO}
-                    className="mt-2 block text-center text-xs font-medium text-blueEnergy hover:underline"
+                    className="mt-2 block text-center text-xs font-medium text-secondary hover:underline"
                   >
                     Email Support Instead
                   </a>
@@ -284,11 +313,11 @@ export function SupportAssistantDrawer() {
 
               {/* Escalation card */}
               {!isGuest && (isEscalated || turnCount >= MAX_TURNS) && (
-                <div className="rounded-xl border border-aquamarine/40 bg-aquamarine/10 px-4 py-3 text-sm text-textPrimary">
-                  <p className="font-semibold text-blueEnergy">
+                <div className="rounded-xl border border-accentSoft/40 bg-accentSoft/10 px-4 py-3 text-sm text-text">
+                  <p className="font-semibold text-secondary">
                     You&rsquo;ve reached the automated assistant limit.
                   </p>
-                  <p className="mt-1 text-textSecondary">
+                  <p className="mt-1 text-textMuted">
                     A support ticket and email transcript have been sent to our
                     support team. We&rsquo;ll follow up with you shortly.
                   </p>
@@ -296,36 +325,45 @@ export function SupportAssistantDrawer() {
               )}
 
               {error && (
-                <p className="text-xs text-amber-700">{error}</p>
+                <p className="text-xs text-warning">{error}</p>
               )}
             </div>
 
             {/* Input + actions */}
-            <div className="border-t border-textSecondary/10 bg-surfaceBg/95 px-5 py-3 backdrop-blur">
+            <div className="border-t border-textMuted/10 bg-surface/95 px-5 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur">
               {isGuest ? (
                 <div className="flex items-center justify-between gap-3">
-                  <p className="text-xs text-textSecondary">
+                  <p className="text-xs text-textMuted">
                     Sign in to chat with the assistant.
                   </p>
                   <button
                     onClick={openAuth}
-                    className="rounded-full bg-blueEnergy px-4 py-2 text-xs font-semibold text-white transition hover:opacity-90"
+                    className="rounded-full bg-secondary px-4 py-2 text-xs font-semibold text-white transition hover:opacity-90"
                   >
                     Sign In / Create Account
                   </button>
                 </div>
               ) : chatDisabled ? (
                 <div className="flex items-center justify-between gap-3">
-                  <p className="text-xs text-textSecondary">
+                  <p className="text-xs text-textMuted">
                     Chat disabled — conversation escalated.
                   </p>
-                  <button
-                    onClick={handleEscalate}
-                    disabled={escalating}
-                    className="rounded-full bg-gradient-to-r from-aquamarine to-neonIce px-4 py-2 text-xs font-semibold text-textPrimary transition hover:opacity-90 disabled:opacity-50"
-                  >
-                    {escalating ? "Sending\u2026" : "Email Support Instead"}
-                  </button>
+                  {isEscalated ? (
+                    <a
+                      href={SUPPORT_MAILTO_MEMBER}
+                      className="rounded-full bg-gradient-to-r from-accentSoft to-accent px-4 py-2 text-xs font-semibold text-text transition hover:opacity-90"
+                    >
+                      Email Support Team
+                    </a>
+                  ) : (
+                    <button
+                      onClick={handleEscalate}
+                      disabled={escalating}
+                      className="rounded-full bg-gradient-to-r from-accentSoft to-accent px-4 py-2 text-xs font-semibold text-text transition hover:opacity-90 disabled:opacity-50"
+                    >
+                      {escalating ? "Sending\u2026" : "Email Support Instead"}
+                    </button>
+                  )}
                 </div>
               ) : (
                 <>
@@ -335,25 +373,25 @@ export function SupportAssistantDrawer() {
                       onChange={(e) => setInput(e.target.value)}
                       onKeyDown={handleKeyDown}
                       rows={1}
-                      placeholder="Ask about quotas, scoring, Kanban..."
-                      className="max-h-32 flex-1 resize-none rounded-xl border border-textSecondary/20 bg-white px-3 py-2 text-sm text-textPrimary placeholder:text-textSecondary/60 focus:border-blueEnergy focus:outline-none focus:ring-1 focus:ring-blueEnergy"
+                      placeholder="Ask about quotas, scoring, tracking..."
+                      className="max-h-32 flex-1 resize-none rounded-xl border border-textMuted/20 bg-white px-3 py-2 text-sm text-text placeholder:text-textMuted/60 focus:border-secondary focus:outline-none focus:ring-1 focus:ring-secondary"
                     />
                     <button
                       onClick={handleSend}
                       disabled={!input.trim() || sending}
-                      className="shrink-0 rounded-full bg-blueEnergy px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
+                      className="shrink-0 rounded-full bg-secondary px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
                     >
                       Send
                     </button>
                   </div>
                   <div className="mt-2 flex items-center justify-between">
-                    <p className="text-[11px] text-textSecondary">
+                    <p className="text-[11px] text-textMuted">
                       {turnsRemaining} of {MAX_TURNS} queries left
                     </p>
                     <button
                       onClick={handleEscalate}
                       disabled={escalating}
-                      className="text-[11px] font-medium text-blueEnergy hover:underline disabled:opacity-50"
+                      className="text-[11px] font-medium text-secondary hover:underline disabled:opacity-50"
                     >
                       Email Support Instead
                     </button>

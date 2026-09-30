@@ -47,6 +47,34 @@ function getBannerUrl(disciplines: string[] | undefined): string {
   return DISCIPLINE_BANNERS[first] ?? FALLBACK_BANNER;
 }
 
+/** Restrained trust indicator — "Source verified" only when asserted key
+ *  facts (title, award, deadline, GPA) were independently located in the
+ *  fetched source; anything else shows as pending. Verification scope is
+ *  limited to those fields — eligibility criteria are not independently
+ *  verified. Never presents unverified data as verified. */
+function VerificationBadge({ status }: { status?: string }) {
+  const verified = status === "verified";
+  return (
+    <span
+      title={
+        verified
+          ? "Key facts (title, award, deadline, GPA) were confirmed on the source page. Other criteria may not be independently verified."
+          : "This listing's facts have not yet been independently verified against its source."
+      }
+      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+        verified ? "bg-successSoft text-success" : "bg-surfaceSubtle text-textMuted"
+      }`}
+    >
+      {verified ? (
+        <svg className="h-2.5 w-2.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+        </svg>
+      ) : null}
+      {verified ? "Source verified" : "Verification pending"}
+    </span>
+  );
+}
+
 export const ScholarshipFeed = ({ results, isPremium, profile, onTrack, onUnlock }: ScholarshipFeedProps) => {
   const [tracking, setTracking] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"cards" | "list">("cards");
@@ -57,8 +85,18 @@ export const ScholarshipFeed = ({ results, isPremium, profile, onTrack, onUnlock
   const [hiddenIds, setHiddenIds] = useState<Set<string>>(new Set());
   const [undoToast, setUndoToast] = useState<{ id: string; title: string } | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Rapid-fire triage: index of the keyboard-focused card/row
+  // Transient action failure notice (save/hide) — auto-dismisses.
+  const [actionError, setActionError] = useState<string | null>(null);
+  const actionTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const flashActionError = useCallback((message: string) => {
+    if (actionTimer.current) clearTimeout(actionTimer.current);
+    setActionError(message);
+    actionTimer.current = setTimeout(() => setActionError(null), 6000);
+  }, []);
+  // Rapid-fire triage: index of the keyboard-focused card/row. Shortcuts are
+  // gated on `hasSelection` so a stray keystroke can never dismiss card #1.
   const [selectedCardIndex, setSelectedCardIndex] = useState(0);
+  const [hasSelection, setHasSelection] = useState(false);
   const cardRefs = useRef<Map<string, HTMLElement>>(new Map());
 
   const handleTrack = useCallback(async (scholarshipId: string) => {
@@ -66,10 +104,12 @@ export const ScholarshipFeed = ({ results, isPremium, profile, onTrack, onUnlock
     try {
       await api.trackScholarship({ scholarship_id: scholarshipId });
       onTrack?.(scholarshipId);
+    } catch {
+      flashActionError("Couldn't save this opportunity — please try again.");
     } finally {
       setTracking(null);
     }
-  }, [onTrack]);
+  }, [onTrack, flashActionError]);
 
   const handleDismiss = useCallback(async (scholarshipId: string, title: string) => {
     // Optimistic: fade & collapse the card immediately
@@ -103,8 +143,9 @@ export const ScholarshipFeed = ({ results, isPremium, profile, onTrack, onUnlock
         return next;
       });
       setUndoToast(null);
+      flashActionError("Couldn't hide this opportunity — please try again.");
     }
-  }, []);
+  }, [flashActionError]);
 
   const handleUndo = useCallback(async () => {
     if (!undoToast) return;
@@ -141,6 +182,7 @@ export const ScholarshipFeed = ({ results, isPremium, profile, onTrack, onUnlock
       const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
       const move = (delta: number) => {
         e.preventDefault();
+        setHasSelection(true);
         setSelectedCardIndex((prev) => {
           const next = Math.min(
             Math.max(0, Math.min(prev, visibleResults.length - 1) + delta),
@@ -163,12 +205,14 @@ export const ScholarshipFeed = ({ results, isPremium, profile, onTrack, onUnlock
           move(-1);
           break;
         case "s":
-          if (!current || (current.is_locked && !isPremium)) return;
+          if (!hasSelection || !current || (current.is_locked && !isPremium)) return;
           e.preventDefault();
           if (tracking !== current.scholarship_id) void handleTrack(current.scholarship_id);
           break;
         case "x":
-          if (!current) return;
+          // Require an explicit navigation step before X can dismiss —
+          // otherwise a stray keystroke silently removes the first card.
+          if (!hasSelection || !current) return;
           e.preventDefault();
           void handleDismiss(current.scholarship_id, current.title);
           break;
@@ -176,7 +220,7 @@ export const ScholarshipFeed = ({ results, isPremium, profile, onTrack, onUnlock
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [visibleResults, clampedIndex, previewScholarship, isPremium, tracking, handleTrack, handleDismiss]);
+  }, [visibleResults, clampedIndex, previewScholarship, isPremium, tracking, hasSelection, handleTrack, handleDismiss]);
 
   const registerCard = useCallback((id: string, el: HTMLElement | null) => {
     if (el) cardRefs.current.set(id, el);
@@ -184,10 +228,28 @@ export const ScholarshipFeed = ({ results, isPremium, profile, onTrack, onUnlock
   }, []);
 
   if (visibleResults.length === 0) {
+    // All results were manually dismissed this session — distinguishable
+    // from a genuine zero-match state, with a way back.
+    if (results.length > 0 && hiddenIds.size > 0) {
+      return (
+        <div className="rounded-2xl bg-surfaceSubtle p-8 text-center">
+          <p className="text-textMuted">
+            You&apos;ve hidden all {results.length} current match
+            {results.length === 1 ? "" : "es"}.
+          </p>
+          <button
+            onClick={() => setHiddenIds(new Set())}
+            className="mt-3 rounded-full border border-primary px-5 py-2 text-sm font-medium text-primary transition hover:bg-primary/5"
+          >
+            Show them again
+          </button>
+        </div>
+      );
+    }
     return (
-      <div className="rounded-2xl bg-cardBg p-8 text-center text-textSecondary">
-        No scholarships matched your profile yet. Try broadening your criteria
-        or check back after new scholarships are ingested.
+      <div className="rounded-2xl bg-surfaceSubtle p-8 text-center text-textMuted">
+        No opportunities matched your profile yet. Try broadening your criteria
+        or check back after new opportunities are added.
       </div>
     );
   }
@@ -197,22 +259,22 @@ export const ScholarshipFeed = ({ results, isPremium, profile, onTrack, onUnlock
       {/* Toolbar: result count + view mode toggle */}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-          <p className="text-sm text-slate-500">
-            {visibleResults.length} scholarship{visibleResults.length === 1 ? "" : "s"}
+          <p className="text-sm text-textMuted">
+            {visibleResults.length} opportunit{visibleResults.length === 1 ? "y" : "ies"}
           </p>
-          <p className="hidden text-xs text-slate-400 font-mono sm:block" aria-hidden="true">
-            Press <kbd className="rounded border border-slate-200 bg-slate-50 px-1">S</kbd> to save,{" "}
-            <kbd className="rounded border border-slate-200 bg-slate-50 px-1">X</kbd> to dismiss,{" "}
-            <kbd className="rounded border border-slate-200 bg-slate-50 px-1">↓</kbd>/<kbd className="rounded border border-slate-200 bg-slate-50 px-1">↑</kbd> to navigate
+          <p className="hidden text-xs text-textMuted font-mono sm:block" aria-hidden="true">
+            Press <kbd className="rounded border border-border bg-surfaceSubtle px-1">S</kbd> to save,{" "}
+            <kbd className="rounded border border-border bg-surfaceSubtle px-1">X</kbd> to dismiss,{" "}
+            <kbd className="rounded border border-border bg-surfaceSubtle px-1">↓</kbd>/<kbd className="rounded border border-border bg-surfaceSubtle px-1">↑</kbd> to navigate
           </p>
         </div>
-        <div className="inline-flex p-1 rounded-xl bg-slate-100 border border-slate-200/80">
+        <div className="inline-flex p-1 rounded-xl bg-surfaceSubtle border border-border/80">
           <button
             onClick={() => setViewMode("cards")}
             className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs transition ${
               viewMode === "cards"
-                ? "bg-white text-slate-900 shadow-xs font-semibold"
-                : "text-slate-500 hover:text-slate-700"
+                ? "bg-white text-text shadow-xs font-semibold"
+                : "text-textMuted hover:text-text"
             }`}
             aria-label="Card view"
           >
@@ -228,8 +290,8 @@ export const ScholarshipFeed = ({ results, isPremium, profile, onTrack, onUnlock
             onClick={() => setViewMode("list")}
             className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs transition ${
               viewMode === "list"
-                ? "bg-white text-slate-900 shadow-xs font-semibold"
-                : "text-slate-500 hover:text-slate-700"
+                ? "bg-white text-text shadow-xs font-semibold"
+                : "text-textMuted hover:text-text"
             }`}
             aria-label="List view"
           >
@@ -259,7 +321,7 @@ export const ScholarshipFeed = ({ results, isPremium, profile, onTrack, onUnlock
               tracking={tracking === s.scholarship_id}
               fading={fadingIds.has(s.scholarship_id)}
               focused={s.scholarship_id === focusedId}
-              onFocusCard={() => setSelectedCardIndex(i)}
+              onFocusCard={() => { setSelectedCardIndex(i); setHasSelection(true); }}
               registerRef={registerCard}
               index={i}
             />
@@ -276,7 +338,7 @@ export const ScholarshipFeed = ({ results, isPremium, profile, onTrack, onUnlock
               tracking={tracking === s.scholarship_id}
               fading={fadingIds.has(s.scholarship_id)}
               focused={s.scholarship_id === focusedId}
-              onFocusCard={() => setSelectedCardIndex(i)}
+              onFocusCard={() => { setSelectedCardIndex(i); setHasSelection(true); }}
               registerRef={registerCard}
             />
           ))}
@@ -298,16 +360,29 @@ export const ScholarshipFeed = ({ results, isPremium, profile, onTrack, onUnlock
 
       {/* Undo toast */}
       {undoToast && (
-        <div className="fixed bottom-6 left-1/2 z-50 flex -translate-x-1/2 items-center gap-3 rounded-full bg-textPrimary px-5 py-3 text-sm text-surfaceBg shadow-xl">
+        <div
+          role="status"
+          className="fixed bottom-6 left-1/2 z-50 flex -translate-x-1/2 items-center gap-3 rounded-full bg-text px-5 py-3 text-sm text-surface shadow-xl"
+        >
           <span className="max-w-[240px] truncate">
-            Hidden from your feed
+            Hidden &ldquo;{undoToast.title}&rdquo;
           </span>
           <button
             onClick={handleUndo}
-            className="font-semibold text-aquamarine hover:underline"
+            className="font-semibold text-accentSoft hover:underline"
           >
             Undo
           </button>
+        </div>
+      )}
+
+      {/* Action failure toast */}
+      {actionError && (
+        <div
+          role="alert"
+          className="fixed bottom-6 left-1/2 z-50 flex -translate-x-1/2 items-center gap-3 rounded-full bg-danger px-5 py-3 text-sm text-white shadow-xl"
+        >
+          {actionError}
         </div>
       )}
     </div>
@@ -347,7 +422,11 @@ function ScholarshipCard({
   const [reportSubmitted, setReportSubmitted] = useState(false);
   const locked = scholarship.is_locked && !isPremium;
   const bannerUrl = getBannerUrl(scholarship.eligible_disciplines);
-  const providerInitial = (scholarship.provider?.trim()?.charAt(0) || "G").toUpperCase();
+  const providerInitial = (
+    scholarship.provider?.trim()?.charAt(0) ||
+    scholarship.title?.trim()?.charAt(0) ||
+    "•"
+  ).toUpperCase();
 
   const handleReport = async () => {
     try {
@@ -370,27 +449,18 @@ function ScholarshipCard({
       onClick={openPreview}
       onMouseEnter={onFocusCard}
       onFocus={onFocusCard}
-      onKeyDown={(e) => {
-        if (!locked && (e.key === "Enter" || e.key === " ") && e.target === e.currentTarget) {
-          e.preventDefault();
-          openPreview();
-        }
-      }}
-      role={locked ? undefined : "button"}
-      tabIndex={locked ? undefined : 0}
-      aria-label={locked ? undefined : `View details for ${scholarship.title}`}
-      aria-current={focused ? "true" : undefined}
-      className={`bg-white/95 rounded-2xl border border-slate-200/90 shadow-[0_4px_20px_-4px_rgba(15,23,42,0.06)] hover:shadow-[0_12px_32px_-6px_rgba(74,143,231,0.18)] hover:-translate-y-1 hover:border-slate-300 transition-all duration-200 flex flex-col relative ${
-        locked ? "ring-1 ring-textSecondary/10" : "cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-skyAqua"
-      } ${focused && !locked ? "ring-2 ring-blueEnergy/60" : ""} ${
+      aria-label={`View details for ${scholarship.title}`}
+      className={`bg-white/95 rounded-2xl border border-border/90 shadow-[0_4px_20px_-4px_rgba(15,23,42,0.06)] hover:shadow-[0_12px_32px_-6px_rgba(87,74,226,0.16)] hover:-translate-y-1 hover:border-border transition-all duration-200 flex flex-col relative group ${
+        locked ? "ring-1 ring-textMuted/10" : "cursor-pointer"
+      } ${focused && !locked ? "ring-2 ring-secondary/60" : ""} ${
         fading ? "opacity-0 scale-95 max-h-0 pointer-events-none overflow-hidden" : "opacity-100"
       }`}
     >
       {/* Discipline banner image — explicit height + shimmer placeholder to prevent CLS */}
-      <div className="relative h-24 w-full overflow-hidden rounded-t-2xl bg-slate-100">
+      <div className="relative h-24 w-full overflow-hidden rounded-t-2xl bg-surfaceSubtle">
         {/* Shimmer placeholder — visible until image loads */}
         {!imgLoaded && (
-          <div className="absolute inset-0 animate-pulse bg-gradient-to-r from-slate-100 via-slate-200 to-slate-100" />
+          <div className="absolute inset-0 animate-pulse bg-gradient-to-r from-surfaceSubtle via-border to-surfaceSubtle" />
         )}
         {/* eslint-disable-next-line @next/next/no-img-element -- external CDN image */}
         <img
@@ -411,12 +481,12 @@ function ScholarshipCard({
           }}
         />
         {/* Darkened gradient overlay anchored to bottom for text contrast */}
-        <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-slate-950/25 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-navy/80 via-navy/25 to-transparent" />
       </div>
 
       {/* Provider avatar — crisp 44x44 tile overlapping the banner */}
       <div className="relative z-10 -mt-6 ml-5">
-        <div className="h-11 w-11 rounded-xl bg-gradient-to-br from-crayolaBlue to-blueEnergy text-white font-bold shadow-md ring-2 ring-white flex items-center justify-center text-sm">
+        <div className="h-11 w-11 rounded-xl bg-gradient-to-br from-primary to-secondary text-white font-bold shadow-md ring-2 ring-white flex items-center justify-center text-sm">
           {providerInitial}
         </div>
       </div>
@@ -428,19 +498,19 @@ function ScholarshipCard({
           <div className="min-w-0 flex-1">
             {locked ? (
               <>
-                <h3 className="font-serif text-lg font-semibold text-textPrimary/40 blur-[3px] select-none">
+                <h3 className="font-serif text-lg font-semibold text-text/40 blur-[3px] select-none">
                   {scholarship.masked_title ?? scholarship.title}
                 </h3>
-                <p className="mt-0.5 text-sm text-textSecondary/50 blur-[3px] select-none">
+                <p className="mt-0.5 text-sm text-textMuted/50 blur-[3px] select-none">
                   {scholarship.masked_provider ?? scholarship.provider}
                 </p>
               </>
             ) : (
               <>
-                <h3 className="font-serif text-slate-900 font-bold text-lg leading-snug tracking-tight hover:text-blueEnergy transition-colors">
+                <h3 className="font-serif text-text break-words font-bold text-lg leading-snug tracking-tight hover:text-secondary transition-colors">
                   {scholarship.title}
                 </h3>
-                <p className="mt-0.5 text-slate-500 font-semibold text-xs tracking-wider uppercase">
+                <p className="mt-0.5 text-textMuted max-w-full break-words font-semibold text-xs tracking-wider uppercase">
                   {scholarship.provider}
                 </p>
                 {/* Metro restriction badges — soft glowing pills */}
@@ -449,8 +519,7 @@ function ScholarshipCard({
                     {scholarship.metro_restrictions.map((m) => (
                       <span
                         key={m}
-                        className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold text-surfaceBg"
-                        style={{ backgroundColor: "#4A8FE7" }}
+                        className="inline-flex items-center gap-1 rounded-full bg-primary px-2.5 py-1 text-xs font-semibold text-surface"
                       >
                         <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 20 20">
                           <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
@@ -467,7 +536,7 @@ function ScholarshipCard({
                   scholarship.employment_required) && (
                   <div className="mt-2 flex flex-wrap gap-1.5">
                     {scholarship.has_service_commitment && (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-violet-100 px-2.5 py-1 text-xs font-semibold text-violet-800">
+                      <span className="inline-flex items-center gap-1 rounded-full bg-accentSoft px-2.5 py-1 text-xs font-semibold text-secondary">
                         <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 20 20">
                           <path d="M9 12l2 2 4-4" />
                           <path fillRule="evenodd" d="M3 10a7 7 0 1114 0 7 7 0 01-14 0zm7-5a5 5 0 100 10 5 5 0 000-10z" clipRule="evenodd" />
@@ -478,11 +547,12 @@ function ScholarshipCard({
                     {(scholarship.funding_type === "tuition_reimbursement" ||
                       scholarship.funding_type === "employer_sponsorship" ||
                       scholarship.employment_required) && (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-800">
-                        <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 20 20">
-                          <path d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" />
-                          <path d="M7 8h6v2H7z" />
-                        </svg>
+                      <span className="inline-flex items-center gap-1 rounded-full bg-successSoft px-2.5 py-1 text-xs font-semibold text-success">
+                        <img
+                          src="/brand/icons/employer-programs.svg"
+                          alt=""
+                          className="h-3 w-3"
+                        />
                         Employer Benefit
                       </span>
                     )}
@@ -499,12 +569,12 @@ function ScholarshipCard({
                 e.stopPropagation();
                 onDismiss(scholarship.scholarship_id, scholarship.title);
               }}
-              className="rounded-lg p-1.5 text-textSecondary/40 transition hover:bg-slate-100 hover:text-textSecondary"
-              aria-label="Hide this scholarship"
+              className="rounded-lg p-2.5 text-textMuted/40 transition hover:bg-surfaceSubtle hover:text-textMuted"
+              aria-label="Hide this opportunity"
               title="Hide from my feed"
             >
               <svg
-                className="h-4 w-4"
+                className="h-5 w-5"
                 fill="none"
                 stroke="currentColor"
                 strokeWidth={2}
@@ -523,14 +593,14 @@ function ScholarshipCard({
 
         {locked ? (
           /* Paywall overlay */
-          <div className="mt-4 rounded-xl bg-surfaceBg/90 p-4 text-center backdrop-blur-md">
-            <span className="inline-block rounded-full bg-blueEnergy px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
-              Pro Only
+          <div className="mt-4 rounded-xl bg-surface/90 p-4 text-center backdrop-blur-md">
+            <span className="inline-block rounded-full bg-secondary px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
+              Premium
             </span>
-            <p className="mt-2 text-sm font-medium text-textPrimary">
-              Unlock this scholarship
+            <p className="mt-2 text-sm font-medium text-text">
+              Unlock this opportunity
             </p>
-            <p className="mt-1 text-xs text-textSecondary">
+            <p className="mt-1 text-xs text-textMuted">
               Upgrade to Premium for full details, provider info, and application links.
             </p>
             <button
@@ -538,7 +608,7 @@ function ScholarshipCard({
                 e.stopPropagation();
                 onUnlock?.();
               }}
-              className="mt-3 rounded-full bg-gradient-to-r from-aquamarine to-neonIce px-5 py-2 text-sm font-semibold text-textPrimary transition hover:opacity-90"
+              className="mt-3 rounded-full bg-gradient-to-r from-accentSoft to-accent px-5 py-2 text-sm font-semibold text-text transition hover:opacity-90"
             >
               Unlock with Premium
             </button>
@@ -547,20 +617,21 @@ function ScholarshipCard({
           <>
             {/* Details */}
             <div className="mt-4 flex flex-wrap gap-x-6 gap-y-1 text-sm">
-              <span className="text-textSecondary">
+              <span className="text-textMuted">
                 Award:{" "}
-                <span className="font-semibold text-textPrimary">
-                  {scholarship.award_amount > 0
+                <span className="font-semibold text-text">
+                  {scholarship.award_amount != null && scholarship.award_amount > 0
                     ? `$${scholarship.award_amount.toLocaleString()}`
                     : "Varies"}
                 </span>
               </span>
-              <span className="text-textSecondary">
+              <span className="text-textMuted">
                 Deadline:{" "}
-                <span className="font-semibold text-textPrimary">
-                  {scholarship.deadline || "Rolling"}
+                <span className="font-semibold text-text">
+                  {scholarship.deadline || "Not listed"}
                 </span>
               </span>
+              <VerificationBadge status={scholarship.verification_status} />
             </div>
 
             {/* Missing criteria — clickable resolver chips */}
@@ -573,14 +644,14 @@ function ScholarshipCard({
             )}
 
             {/* Actions */}
-            <div className="mt-4 flex gap-3">
+            <div className="mt-4 flex flex-wrap gap-3">
               {scholarship.portal_url && (
                 <a
                   href={scholarship.portal_url}
                   target="_blank"
                   rel="noopener noreferrer"
                   onClick={(e) => e.stopPropagation()}
-                  className="rounded-full bg-crayolaBlue px-5 py-2 text-sm font-medium text-surfaceBg hover:bg-blueEnergy"
+                  className="rounded-full bg-primary px-5 py-2 text-sm font-medium text-surface hover:bg-secondary"
                 >
                   Apply
                 </a>
@@ -592,9 +663,20 @@ function ScholarshipCard({
                   onTrack(scholarship.scholarship_id);
                 }}
                 disabled={tracking}
-                className="rounded-full border border-textSecondary/20 px-5 py-2 text-sm font-medium text-textSecondary hover:border-crayolaBlue hover:text-textPrimary disabled:opacity-50"
+                className="rounded-full border border-textMuted/20 px-5 py-2 text-sm font-medium text-textMuted hover:border-primary hover:text-text disabled:opacity-50"
               >
-                {tracking ? "Saving\u2026" : "Save to Kanban"}
+                {tracking ? "Saving\u2026" : "Save to My Applications"}
+              </button>
+              {/* Dedicated details control — the card's click-to-open affordance
+                  stays mouse-only; keyboard/AT users use this button. */}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  openPreview();
+                }}
+                className="rounded-full border border-transparent px-4 py-2 text-sm font-medium text-textMuted transition hover:border-textMuted/20 hover:text-text"
+              >
+                Details
               </button>
             </div>
 
@@ -602,13 +684,14 @@ function ScholarshipCard({
                 select/buttons never open the preview drawer */}
             <div className="mt-3" onClick={(e) => e.stopPropagation()}>
               {reportSubmitted ? (
-                <p className="text-xs text-aquamarine">✓ Report submitted — thank you!</p>
+                <p className="text-xs text-accentSoft">✓ Report submitted — thank you!</p>
               ) : reportOpen ? (
                 <div className="flex items-center gap-2">
                   <select
                     value={reportReason}
                     onChange={(e) => setReportReason(e.target.value as typeof reportReason)}
-                    className="rounded-lg border border-textSecondary/20 px-2 py-1 text-xs text-textPrimary"
+                    aria-label="Report reason"
+                    className="rounded-lg border border-textMuted/20 px-2 py-1 text-xs text-text"
                   >
                     <option value="broken_link">Broken link</option>
                     <option value="inaccurate_deadline">Wrong deadline</option>
@@ -616,13 +699,13 @@ function ScholarshipCard({
                   </select>
                   <button
                     onClick={handleReport}
-                    className="rounded-lg bg-crayolaBlue px-3 py-1 text-xs font-medium text-surfaceBg"
+                    className="rounded-lg bg-primary px-3 py-1 text-xs font-medium text-surface"
                   >
                     Submit
                   </button>
                   <button
                     onClick={() => setReportOpen(false)}
-                    className="text-xs text-textSecondary hover:text-textPrimary"
+                    className="text-xs text-textMuted hover:text-text"
                   >
                     Cancel
                   </button>
@@ -630,7 +713,7 @@ function ScholarshipCard({
               ) : (
                 <button
                   onClick={() => setReportOpen(true)}
-                  className="text-xs text-textSecondary/50 hover:text-crayolaBlue hover:underline"
+                  className="text-xs text-textMuted/50 hover:text-primary hover:underline"
                 >
                   ⚑ Report inaccurate info
                 </button>
@@ -676,15 +759,21 @@ function ScholarshipListItem({
   const openPreview = () => {
     if (!locked) onOpen(scholarship);
   };
-  const providerInitial = (scholarship.provider?.trim()?.charAt(0) || "G").toUpperCase();
+  const providerInitial = (
+    scholarship.provider?.trim()?.charAt(0) ||
+    scholarship.title?.trim()?.charAt(0) ||
+    "•"
+  ).toUpperCase();
   const firstDiscipline = scholarship.eligible_disciplines?.[0];
 
-  // Days-left countdown
+  // Days-left countdown — anchored to a reference time captured once at card
+  // mount so render stays pure (Date.now is never called during render).
+  const [renderedAt] = useState(() => Date.now());
   const daysLeft = (() => {
     if (!scholarship.deadline) return null;
     const d = new Date(scholarship.deadline);
     if (isNaN(d.getTime())) return null;
-    const diff = Math.ceil((d.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+    const diff = Math.ceil((d.getTime() - renderedAt) / (1000 * 60 * 60 * 24));
     return diff;
   })();
 
@@ -694,26 +783,17 @@ function ScholarshipListItem({
       onClick={openPreview}
       onMouseEnter={onFocusCard}
       onFocus={onFocusCard}
-      onKeyDown={(e) => {
-        if (!locked && (e.key === "Enter" || e.key === " ") && e.target === e.currentTarget) {
-          e.preventDefault();
-          openPreview();
-        }
-      }}
-      role={locked ? undefined : "button"}
-      tabIndex={locked ? undefined : 0}
-      aria-label={locked ? undefined : `View details for ${scholarship.title}`}
-      aria-current={focused ? "true" : undefined}
-      className={`bg-white rounded-xl border border-slate-200/90 shadow-xs hover:border-slate-300 hover:shadow-sm transition-all duration-150 p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 group ${
-        locked ? "" : "cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-skyAqua"
-      } ${focused && !locked ? "ring-2 ring-blueEnergy/60" : ""} ${
+      aria-label={`View details for ${scholarship.title}`}
+      className={`bg-white rounded-xl border border-border/90 shadow-xs hover:border-border hover:shadow-sm transition-all duration-150 p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 group ${
+        locked ? "" : "cursor-pointer"
+      } ${focused && !locked ? "ring-2 ring-secondary/60" : ""} ${
         fading ? "opacity-0 scale-95 max-h-0 pointer-events-none" : "opacity-100"
       }`}
     >
       {locked ? (
         /* Paywalled list row — blurred with centered lock badge */
         <div className="flex flex-1 items-center justify-center py-2">
-          <div className="flex items-center gap-3 text-slate-400">
+          <div className="flex items-center gap-3 text-textMuted">
             <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
               <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
               <path d="M7 11V7a5 5 0 0 1 10 0v4" />
@@ -721,15 +801,15 @@ function ScholarshipListItem({
             <span className="text-sm font-medium blur-[2px] select-none">
               {scholarship.masked_title ?? scholarship.title}
             </span>
-            <span className="inline-block rounded-full bg-blueEnergy px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
-              Pro Only
+            <span className="inline-block rounded-full bg-secondary px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
+              Premium
             </span>
             <button
               onClick={(e) => {
                 e.stopPropagation();
                 onUnlock?.();
               }}
-              className="rounded-full bg-gradient-to-r from-aquamarine to-neonIce px-4 py-1.5 text-xs font-semibold text-textPrimary transition hover:opacity-90"
+              className="rounded-full bg-gradient-to-r from-accentSoft to-accent px-4 py-1.5 text-xs font-semibold text-text transition hover:opacity-90"
             >
               Unlock with Premium
             </button>
@@ -741,47 +821,48 @@ function ScholarshipListItem({
           <div className="min-w-0 flex-1">
             {/* Provider row */}
             <div className="flex items-center gap-2">
-              <div className="h-8 w-8 bg-gradient-to-br from-crayolaBlue to-blueEnergy text-white rounded-lg font-bold text-xs flex items-center justify-center shrink-0">
+              <div className="h-8 w-8 bg-gradient-to-br from-primary to-secondary text-white rounded-lg font-bold text-xs flex items-center justify-center shrink-0">
                 {providerInitial}
               </div>
-              <span className="text-slate-500 text-xs font-semibold tracking-wider uppercase truncate">
+              <span className="text-textMuted max-w-full break-words text-xs font-semibold tracking-wider uppercase">
                 {scholarship.provider}
               </span>
               {firstDiscipline && (
-                <span className="shrink-0 rounded-full bg-slate-100 border border-slate-200 px-2 py-0.5 text-[10px] font-medium text-slate-600 capitalize">
+                <span className="shrink-0 rounded-full bg-surfaceSubtle border border-border px-2 py-0.5 text-[10px] font-medium text-textMuted capitalize">
                   {firstDiscipline.replace(/_/g, " ")}
                 </span>
               )}
               {scholarship.has_service_commitment && (
-                <span className="shrink-0 rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-semibold text-violet-800">
+                <span className="shrink-0 rounded-full bg-accentSoft px-2 py-0.5 text-[10px] font-semibold text-secondary">
                   Service Obligation
                 </span>
               )}
               {(scholarship.funding_type === "tuition_reimbursement" ||
                 scholarship.funding_type === "employer_sponsorship" ||
                 scholarship.employment_required) && (
-                <span className="shrink-0 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-800">
+                <span className="shrink-0 rounded-full bg-successSoft px-2 py-0.5 text-[10px] font-semibold text-success">
                   Employer Benefit
                 </span>
               )}
+              <VerificationBadge status={scholarship.verification_status} />
             </div>
 
             {/* Title */}
-            <h3 className="mt-1.5 font-serif text-slate-900 font-bold text-base leading-snug group-hover:text-blueEnergy transition-colors">
+            <h3 className="mt-1.5 font-serif text-text break-words font-bold text-base leading-snug group-hover:text-secondary transition-colors">
               {scholarship.title}
             </h3>
 
             {/* Metadata strip */}
             <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
-              <span className="text-blueEnergy font-bold text-sm">
-                {scholarship.award_amount > 0
+              <span className="text-secondary font-bold text-sm">
+                {scholarship.award_amount != null && scholarship.award_amount > 0
                   ? `$${scholarship.award_amount.toLocaleString()}`
                   : "Varies"}
               </span>
-              <span className="text-slate-500">
-                {scholarship.deadline || "Rolling"}
+              <span className="text-textMuted">
+                {scholarship.deadline || "No deadline listed"}
                 {daysLeft !== null && daysLeft >= 0 && (
-                  <span className={`ml-1 font-medium ${daysLeft <= 7 ? "text-amber-600" : "text-slate-400"}`}>
+                  <span className={`ml-1 font-medium ${daysLeft <= 7 ? "text-warning" : "text-textMuted"}`}>
                     ({daysLeft}d left)
                   </span>
                 )}
@@ -792,7 +873,7 @@ function ScholarshipListItem({
                     <GapChip key={c} criterion={c} portalUrl={scholarship.portal_url} compact />
                   ))}
                   {scholarship.missing_criteria.length > 3 && (
-                    <span className="text-xs text-slate-400">
+                    <span className="text-xs text-textMuted">
                       +{scholarship.missing_criteria.length - 3} more
                     </span>
                   )}
@@ -802,17 +883,26 @@ function ScholarshipListItem({
           </div>
 
           {/* Right column — score & actions */}
-          <div className="flex shrink-0 items-center gap-3">
+          <div className="flex flex-wrap shrink-0 items-center gap-3">
             <ScorePopover scholarship={scholarship} label={`${scholarship.score}%`} compact />
 
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  openPreview();
+                }}
+                className="rounded-full border border-transparent px-3 py-1.5 text-xs font-medium text-textMuted transition hover:border-border hover:text-text"
+              >
+                Details
+              </button>
               {scholarship.portal_url && (
                 <a
                   href={scholarship.portal_url}
                   target="_blank"
                   rel="noopener noreferrer"
                   onClick={(e) => e.stopPropagation()}
-                  className="rounded-full bg-blueEnergy hover:bg-[#3b7ed6] text-white font-medium px-4 py-1.5 text-xs transition-colors"
+                  className="rounded-full bg-primary hover:bg-primaryHover text-white font-medium px-4 py-1.5 text-xs transition-colors"
                 >
                   Apply
                 </a>
@@ -823,7 +913,7 @@ function ScholarshipListItem({
                   onTrack(scholarship.scholarship_id);
                 }}
                 disabled={tracking}
-                className="rounded-full border border-slate-200 px-4 py-1.5 text-xs font-medium text-slate-600 hover:border-slate-300 hover:text-slate-900 disabled:opacity-50 transition"
+                className="rounded-full border border-border px-4 py-1.5 text-xs font-medium text-textMuted hover:border-primary hover:text-text disabled:opacity-50 transition"
               >
                 {tracking ? "Saving\u2026" : "Save"}
               </button>
@@ -832,12 +922,12 @@ function ScholarshipListItem({
                   e.stopPropagation();
                   onDismiss(scholarship.scholarship_id, scholarship.title);
                 }}
-                className="rounded-lg p-1.5 text-slate-300 transition hover:bg-slate-100 hover:text-slate-600 opacity-0 group-hover:opacity-100"
-                aria-label="Hide this scholarship"
+                className="rounded-lg p-2.5 text-textMuted transition hover:bg-surfaceSubtle hover:text-textMuted opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100 sm:group-focus-within:opacity-100"
+                aria-label="Hide this opportunity"
                 title="Hide from my feed"
               >
                 <svg
-                  className="h-4 w-4"
+                  className="h-5 w-5"
                   fill="none"
                   stroke="currentColor"
                   strokeWidth={2}
@@ -908,11 +998,11 @@ function ScorePopover({
         className={
           compact
             ? scholarship.score >= 80
-              ? "bg-aquamarine text-slate-950 font-bold px-2.5 py-1 rounded-full text-xs shadow-xs"
-              : "bg-slate-100 text-slate-800 border border-slate-200 font-semibold px-2.5 py-1 rounded-full text-xs"
+              ? "bg-accentSoft text-text font-bold px-2.5 py-1 rounded-full text-xs shadow-xs"
+              : "bg-surfaceSubtle text-text border border-border font-semibold px-2.5 py-1 rounded-full text-xs"
             : scholarship.score >= 80
-              ? "bg-aquamarine text-slate-950 font-bold px-3 py-1 rounded-full text-xs shadow-xs"
-              : "bg-slate-100 text-slate-800 border border-slate-200 font-semibold px-3 py-1 rounded-full text-xs"
+              ? "bg-accentSoft text-text font-bold px-3 py-1 rounded-full text-xs shadow-xs"
+              : "bg-surfaceSubtle text-text border border-border font-semibold px-3 py-1 rounded-full text-xs"
         }
       >
         {label}
@@ -931,12 +1021,12 @@ function ScorePopover({
             id={popoverId}
             role="dialog"
             onClick={(e) => e.stopPropagation()}
-            className="absolute right-0 top-full z-50 mt-2 w-64 rounded-xl border border-slate-200 bg-white p-3 shadow-xl"
+            className="absolute right-0 top-full z-50 mt-2 w-64 max-w-[calc(100vw-2rem)] rounded-xl border border-border bg-white p-3 shadow-xl"
           >
-            <p className="font-serif text-sm font-semibold text-textPrimary">
+            <p className="font-serif text-sm font-semibold text-text">
               Why am I seeing this?
             </p>
-            <p className="mt-0.5 text-xs text-textSecondary">
+            <p className="mt-0.5 text-xs text-textMuted">
               Match score is based on your profile vs. scholarship criteria.
             </p>
             {bucketRows.length > 0 ? (
@@ -945,15 +1035,15 @@ function ScorePopover({
                   const meta = SCORE_BUCKET_META[key];
                   return (
                     <li key={key} className="flex items-center justify-between gap-2 text-xs">
-                      <span className="text-slate-600">{meta.label}</span>
+                      <span className="text-textMuted">{meta.label}</span>
                       <span className="flex items-center gap-1.5">
-                        <span className="h-1.5 w-16 overflow-hidden rounded-full bg-slate-100">
+                        <span className="h-1.5 w-16 overflow-hidden rounded-full bg-surfaceSubtle">
                           <span
-                            className="block h-full rounded-full bg-blueEnergy"
+                            className="block h-full rounded-full bg-secondary"
                             style={{ width: `${(value / meta.max) * 100}%` }}
                           />
                         </span>
-                        <span className="font-semibold text-textPrimary">
+                        <span className="font-semibold text-text">
                           +{value}
                         </span>
                       </span>
@@ -962,12 +1052,16 @@ function ScorePopover({
                 })}
               </ul>
             ) : (
-              <p className="mt-2 text-xs text-slate-500">
+              <p className="mt-2 text-xs text-textMuted">
                 Detailed breakdown unavailable for this result.
               </p>
             )}
-            <p className="mt-2 border-t border-slate-100 pt-2 text-[11px] text-slate-400">
-              Total: <span className="font-semibold text-textPrimary">{scholarship.score}</span>/100
+            <p className="mt-2 border-t border-border pt-2 text-[11px] text-textMuted">
+              Total: <span className="font-semibold text-text">{scholarship.score}</span>/100
+              {breakdown &&
+                Object.values(breakdown).reduce((a, b) => a + (b ?? 0), 0) > 100 && (
+                  <span className="block">Category scores are capped at a total of 100.</span>
+                )}
             </p>
           </div>
         </>
@@ -1026,8 +1120,8 @@ function GapChip({
         title="How to resolve this gap"
         className={
           compact
-            ? "bg-amber-50 text-amber-900 border border-amber-200/80 font-medium px-2.5 py-0.5 rounded-md text-xs hover:bg-amber-100"
-            : "bg-amber-50 text-amber-900 border border-amber-200/80 font-medium px-2.5 py-0.5 rounded-md text-xs flex items-center gap-1.5 hover:bg-amber-100"
+            ? "bg-warningSoft text-warning border border-warning/30 font-medium px-2.5 py-0.5 rounded-md text-xs hover:bg-warning/10"
+            : "bg-warningSoft text-warning border border-warning/30 font-medium px-2.5 py-0.5 rounded-md text-xs flex items-center gap-1.5 hover:bg-warning/10"
         }
       >
         {criterion}
@@ -1045,19 +1139,19 @@ function GapChip({
             id={popoverId}
             role="dialog"
             onClick={(e) => e.stopPropagation()}
-            className="absolute left-0 top-full z-50 mt-1 w-64 rounded-xl border border-slate-200 bg-white p-3 shadow-xl"
+            className="absolute left-0 top-full z-50 mt-1 w-64 max-w-[calc(100vw-2rem)] rounded-xl border border-border bg-white p-3 shadow-xl"
           >
-            <p className="font-serif text-sm font-semibold text-textPrimary">
+            <p className="font-serif text-sm font-semibold text-text">
               Resolve this gap
             </p>
-            <p className="mt-1 text-xs text-textSecondary">{suggestion}</p>
+            <p className="mt-1 text-xs text-textMuted">{suggestion}</p>
             {portalUrl && (
               <a
                 href={portalUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 onClick={(e) => e.stopPropagation()}
-                className="mt-2 inline-block rounded-full bg-blueEnergy px-3 py-1 text-xs font-semibold text-white hover:opacity-90"
+                className="mt-2 inline-block rounded-full bg-secondary px-3 py-1 text-xs font-semibold text-white hover:opacity-90"
               >
                 Open provider site
               </a>

@@ -59,3 +59,11 @@ export const CREDENTIALS_BY_LEVEL: Record<DegreeLevel, string[]> = {
     "Surgical Technology Certificate",
   ],
 };
+
+/** Reverse-lookup: find the degree level that contains a given credential. */
+export function levelForCredential(credential: string): DegreeLevel | "" {
+  for (const [level, creds] of Object.entries(CREDENTIALS_BY_LEVEL)) {
+    if (creds.includes(credential)) return level as DegreeLevel;
+  }
+  return "";
+}

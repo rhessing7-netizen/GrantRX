@@ -1,17 +1,21 @@
 import logging
 import os
-from datetime import datetime
+import secrets
+from datetime import date, datetime
 from typing import List, Optional
 from uuid import UUID
 
 from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Header, Request, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
 from .database import get_db, SessionLocal
+from .config import API_BASE_URL, PORTAL_RETURN_URL, allowed_origins
 from .middleware.auth import JWTMiddleware, User, get_current_user
 from .middleware.tier_guard import (
+    ACTIVE_TRACKING_STATUSES,
     FREE_ACTIVE_TRACKING_LIMIT,
     apply_tier_gating,
     consume_search,
@@ -24,6 +28,7 @@ from .models.models import (
     ScholarshipReport,
     StudentCollegeBudget,
     UserScholarship,
+    WaitlistLead,
 )
 from .schemas.schemas import (
     CalendarEventOut,
@@ -32,6 +37,8 @@ from .schemas.schemas import (
     CancellationFeedbackOut,
     CheckoutRequest,
     CheckoutResponse,
+    EarlyAccessSignupRequest,
+    EarlyAccessSignupResponse,
     FinancialPlannerOut,
     MatchedFeedOut,
     MatchedScholarshipOut,
@@ -56,11 +63,18 @@ from .schemas.schemas import (
     UserScholarshipOut,
     UserScholarshipUpdate,
 )
-from .services.archiver import archive_expired_scholarships, get_archival_summary
-from .services.calendar_service import generate_ics_feed, get_calendar_events
+from .services import lifecycle
+from .services.email_marketing import get_email_marketing_provider, waitlist_tags_for_audience
+from .services.rate_limit import SlidingWindowRateLimiter
+from .services.archiver import (
+    apply_staleness_policy,
+    archive_expired_scholarships,
+    get_archival_summary,
+)
+from .services.calendar_service import generate_ics_feed as generate_subscription_ics_feed, get_calendar_events
 from .services.email_service import welcome_email
 from .services.matcher import match_scholarships
-from .services.profile_service import delete_account
+from .services.profile_service import SubscriptionCancellationError, delete_account
 from .services.stripe_service import (
     create_billing_portal_session,
     create_checkout_session,
@@ -71,7 +85,7 @@ from .workers.ingestion import run_ingestion
 from .services.export_service import (
     generate_asana_csv,
     generate_gcal_url,
-    generate_ics_feed,
+    generate_ics_feed as generate_export_ics_feed,
 )
 from .services.outline_service import (
     EssayOutlineRequest,
@@ -82,7 +96,7 @@ from .services.support_service import escalate as escalate_support, handle_chat
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="GrantRx API", version="0.1.0")
+app = FastAPI(title="EdFintia API", version="0.1.0")
 
 app.add_middleware(JWTMiddleware)
 
@@ -90,20 +104,7 @@ app.add_middleware(JWTMiddleware)
 # CORS — production origins via ALLOWED_ORIGINS env var (comma-separated).
 # Falls back to localhost dev origins when not set.
 # ---------------------------------------------------------------------------
-_default_origins = [
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-    "http://127.0.0.1:60201",
-    "https://grant-rx.vercel.app",
-    "https://*.vercel.app",
-]
-_allowed_origins_env = os.getenv("ALLOWED_ORIGINS", "")
-if _allowed_origins_env.strip():
-    _allowed_origins = [
-        o.strip() for o in _allowed_origins_env.split(",") if o.strip()
-    ]
-else:
-    _allowed_origins = _default_origins
+_allowed_origins = allowed_origins()
 
 app.add_middleware(
     CORSMiddleware,
@@ -132,7 +133,7 @@ def run_startup_archival():
 @app.get("/")
 @app.head("/")
 async def root():
-    return {"status": "healthy", "service": "GrantRx API"}
+    return {"status": "healthy", "service": "EdFintia API"}
 
 
 @app.get("/health")
@@ -170,7 +171,11 @@ def create_profile(
 
     # Map consent flags to timestamps
     now = datetime.now(timezone.utc)
-    data = payload.model_dump(exclude={"id", "terms_accepted", "privacy_accepted"})
+    # subscription_tier is server-controlled (Stripe webhooks) — never accept
+    # it from a client payload, including the model's "free" default on upsert.
+    data = payload.model_dump(
+        exclude={"id", "terms_accepted", "privacy_accepted", "subscription_tier"}
+    )
 
     if payload.terms_accepted:
         data["terms_accepted_at"] = now
@@ -180,19 +185,20 @@ def create_profile(
         data["marketing_opt_in_at"] = now
 
     if existing:
-        # Update existing profile
-        for key, value in data.items():
-            if value is not None:
-                setattr(existing, key, value)
+        # Update existing profile (explicit null clears whitelisted fields)
+        _apply_profile_update(existing, data)
         existing.updated_at = now
         db.commit()
         db.refresh(existing)
+        _mark_waitlist_conversion(db, [data.get("email"), user.email], user.id)
         return existing
 
     profile = Profile(id=user.id, **data)
     db.add(profile)
     db.commit()
     db.refresh(profile)
+
+    _mark_waitlist_conversion(db, [data.get("email"), user.email], user.id)
 
     # Send welcome email on initial onboarding
     if profile.email:
@@ -202,6 +208,65 @@ def create_profile(
             logger.warning("Welcome email failed for %s: %s", profile.email, exc)
 
     return profile
+
+
+# Profile columns that may be explicitly cleared by sending null in an update.
+# Whitelisted to genuinely nullable optional fields so protected/non-nullable
+# fields (subscription_tier, arrays, booleans) can never be nulled out.
+PROFILE_CLEARABLE_FIELDS = frozenset(
+    {
+        "primary_discipline",
+        "target_credential",
+        "clinical_phase",
+        "gpa",
+        "state_residence",
+        "metro_area",
+        "sai_score",
+        "full_name",
+        "email",
+    }
+)
+
+
+def _apply_profile_update(profile, data):
+    """Apply PATCH-like semantics: unset keys keep existing values, explicit
+    null clears whitelisted nullable fields, other explicit nulls are ignored."""
+    for key, value in data.items():
+        if value is not None or key in PROFILE_CLEARABLE_FIELDS:
+            setattr(profile, key, value)
+
+
+def _mark_waitlist_conversion(db: Session, emails, user_id: UUID) -> None:
+    """Mark matching early-access leads as converted (lead -> account).
+
+    Called when a profile is created/upserted. Best-effort and non-fatal —
+    a failure here must never block profile creation.
+    """
+    from datetime import timezone
+
+    normalized = {e.strip().lower() for e in emails if e}
+    if not normalized:
+        return
+    try:
+        now = datetime.now(timezone.utc)
+        marked = False
+        for email in normalized:
+            lead = (
+                db.query(WaitlistLead)
+                .filter(WaitlistLead.email == email)
+                .first()
+            )
+            if lead and not lead.converted_to_user:
+                lead.converted_to_user = True
+                lead.converted_at = now
+                lead.converted_user_id = user_id
+                lead.updated_at = now
+                marked = True
+        if marked:
+            db.commit()
+    except Exception as exc:  # noqa: BLE001
+        db.rollback()
+        logger.warning("Waitlist conversion marking failed: %s", exc)
 
 
 @app.put("/profiles", response_model=ProfileOut)
@@ -218,7 +283,10 @@ def update_profile(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profile not found")
 
     now = datetime.now(timezone.utc)
-    data = payload.model_dump(exclude={"id", "terms_accepted", "privacy_accepted"}, exclude_unset=True)
+    data = payload.model_dump(
+        exclude={"id", "terms_accepted", "privacy_accepted", "subscription_tier"},
+        exclude_unset=True,
+    )
 
     if payload.terms_accepted:
         data["terms_accepted_at"] = now
@@ -227,9 +295,7 @@ def update_profile(
     if payload.marketing_opt_in:
         data["marketing_opt_in_at"] = now
 
-    for key, value in data.items():
-        if value is not None:
-            setattr(profile, key, value)
+    _apply_profile_update(profile, data)
     profile.updated_at = now
     db.commit()
     db.refresh(profile)
@@ -250,7 +316,16 @@ def list_scholarships(
         )
         .all()
     }
-    scholarships = db.query(Scholarship).filter(Scholarship.is_archived == False).all()
+    # Consumer discovery surfaces published opportunities only (draft, stale,
+    # and archived are excluded), and excludes needs_review records pending
+    # verification clearance (E1.5). Tracked/saved history is served
+    # separately by /user-scholarships and is unaffected.
+    scholarships = (
+        db.query(Scholarship)
+        .filter(Scholarship.lifecycle_status == lifecycle.PUBLISHED)
+        .filter(Scholarship.verification_status != "needs_review")
+        .all()
+    )
     if dismissed_ids:
         scholarships = [s for s in scholarships if s.id not in dismissed_ids]
     return scholarships
@@ -273,9 +348,38 @@ def create_scholarship(
         )
 
     data = payload.model_dump()
+    # is_archived is a legacy compatibility input; lifecycle is authoritative.
+    requested_archived = bool(data.pop("is_archived", False))
     scholarship = Scholarship(**data)
+    # Admin-curated records are published (not observed — no last_seen_at).
+    # A past deadline or an explicit archive request archives with a reason.
+    if requested_archived:
+        lifecycle.archive(scholarship, lifecycle.MANUAL)
+    elif scholarship.deadline and scholarship.deadline < date.today():
+        lifecycle.archive(scholarship, lifecycle.DEADLINE_PASSED)
+    else:
+        lifecycle.publish(scholarship)
+    # Persisted identity (C4): a record that cannot establish a stable
+    # identity must not be inserted — it could never be safely refreshed.
+    from scrapers.utils.identity import compute_identity_keys
+
+    scholarship.identity_key, scholarship.identity_fallback_key = compute_identity_keys(
+        scholarship.title, scholarship.provider, scholarship.portal_url,
+    )
+    if not scholarship.identity_key:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Cannot determine a stable opportunity identity from title/provider/portal_url.",
+        )
     db.add(scholarship)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="An opportunity with this identity already exists.",
+        )
     db.refresh(scholarship)
     return scholarship
 
@@ -288,7 +392,10 @@ def list_user_scholarships(
     return (
         db.query(UserScholarship)
         .options(joinedload(UserScholarship.scholarship))
-        .filter(UserScholarship.user_id == user.id)
+        .filter(
+            UserScholarship.user_id == user.id,
+            UserScholarship.dismiss_only == False,  # noqa: E712
+        )
         .all()
     )
 
@@ -296,17 +403,79 @@ def list_user_scholarships(
 @app.post("/user-scholarships", response_model=UserScholarshipOut, status_code=status.HTTP_201_CREATED)
 def track_scholarship(
     payload: UserScholarshipCreate,
+    response: Response,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    # Free-tier paywall: max 3 active (non-archived) tracked applications
+    # Idempotent save: a user can only have one tracking record per
+    # scholarship (enforced by UNIQUE(user_id, scholarship_id)). Re-saving
+    # returns the existing record instead of raising a 500.
+    existing = (
+        db.query(UserScholarship)
+        .filter(
+            UserScholarship.user_id == user.id,
+            UserScholarship.scholarship_id == payload.scholarship_id,
+        )
+        .first()
+    )
+    if existing:
+        response.status_code = status.HTTP_200_OK
+        # The same free-tier active-application cap applies when an existing
+        # row transitions INTO an active status via re-save — otherwise a
+        # saved/dismissed row could bypass the limit that PATCH enforces.
+        current_status = getattr(existing.status, "value", existing.status)
+        requested = getattr(payload.status, "value", payload.status)
+        entering_active = (
+            requested in ACTIVE_TRACKING_STATUSES
+            and current_status not in ACTIVE_TRACKING_STATUSES
+        )
+        if entering_active:
+            profile = db.query(Profile).filter(Profile.id == user.id).first()
+            if profile and profile.subscription_tier != "premium":
+                active_count = (
+                    db.query(UserScholarship)
+                    .filter(
+                        UserScholarship.user_id == user.id,
+                        UserScholarship.id != existing.id,
+                        UserScholarship.status.in_(ACTIVE_TRACKING_STATUSES),
+                    )
+                    .count()
+                )
+                if active_count >= FREE_ACTIVE_TRACKING_LIMIT:
+                    raise HTTPException(
+                        status_code=status.HTTP_402_PAYMENT_REQUIRED,
+                        detail={
+                            "detail": "PAYWALL_REQUIRED",
+                            "feature": "kanban_tracking",
+                            "upgrade_url": "/billing",
+                            "limit": FREE_ACTIVE_TRACKING_LIMIT,
+                        },
+                    )
+        if getattr(existing, "dismiss_only", False):
+            # Converting a dismiss-only marker into a real tracking record:
+            # the user is explicitly saving this scholarship now.
+            existing.dismiss_only = False
+            existing.is_dismissed = False
+            existing.status = payload.status
+            existing.updated_at = datetime.utcnow()
+            db.commit()
+            db.refresh(existing)
+        return existing
+
+    # Free-tier paywall: users may save any number of scholarships, but only
+    # In Progress + Submitted count as active applications. Enforce this rule
+    # server-side so API clients cannot bypass the browser check.
     profile = db.query(Profile).filter(Profile.id == user.id).first()
-    if profile and profile.subscription_tier != "premium":
+    if (
+        profile
+        and profile.subscription_tier != "premium"
+        and payload.status.value in ACTIVE_TRACKING_STATUSES
+    ):
         active_count = (
             db.query(UserScholarship)
             .filter(
                 UserScholarship.user_id == user.id,
-                UserScholarship.status != "archived",
+                UserScholarship.status.in_(ACTIVE_TRACKING_STATUSES),
             )
             .count()
         )
@@ -317,13 +486,32 @@ def track_scholarship(
                     "detail": "PAYWALL_REQUIRED",
                     "feature": "kanban_tracking",
                     "upgrade_url": "/billing",
+                    "limit": FREE_ACTIVE_TRACKING_LIMIT,
                 },
             )
 
     data = payload.model_dump()
     tracking = UserScholarship(user_id=user.id, **data)
     db.add(tracking)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        # A concurrent request created the row between the existence check and
+        # the insert. The UNIQUE constraint is the final integrity boundary;
+        # return the winning row so the save is still idempotent.
+        db.rollback()
+        existing = (
+            db.query(UserScholarship)
+            .filter(
+                UserScholarship.user_id == user.id,
+                UserScholarship.scholarship_id == payload.scholarship_id,
+            )
+            .first()
+        )
+        if existing:
+            response.status_code = status.HTTP_200_OK
+            return existing
+        raise
     db.refresh(tracking)
     return tracking
 
@@ -343,7 +531,43 @@ def update_tracking(
     if not tracking:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tracking not found")
 
-    for field, value in payload.model_dump(exclude_unset=True).items():
+    update_data = payload.model_dump(exclude_unset=True)
+
+    # Enforce the same active-application limit on status transitions. Saved,
+    # Awarded, and Archived do not consume an active slot.
+    requested_status = update_data.get("status")
+    current_status = tracking.status.value if hasattr(tracking.status, "value") else tracking.status
+    requested_status_value = (
+        requested_status.value if hasattr(requested_status, "value") else requested_status
+    )
+    entering_active = (
+        requested_status_value in ACTIVE_TRACKING_STATUSES
+        and current_status not in ACTIVE_TRACKING_STATUSES
+    )
+    if entering_active:
+        profile = db.query(Profile).filter(Profile.id == user.id).first()
+        if profile and profile.subscription_tier != "premium":
+            active_count = (
+                db.query(UserScholarship)
+                .filter(
+                    UserScholarship.user_id == user.id,
+                    UserScholarship.id != tracking.id,
+                    UserScholarship.status.in_(ACTIVE_TRACKING_STATUSES),
+                )
+                .count()
+            )
+            if active_count >= FREE_ACTIVE_TRACKING_LIMIT:
+                raise HTTPException(
+                    status_code=status.HTTP_402_PAYMENT_REQUIRED,
+                    detail={
+                        "detail": "PAYWALL_REQUIRED",
+                        "feature": "kanban_tracking",
+                        "upgrade_url": "/billing",
+                        "limit": FREE_ACTIVE_TRACKING_LIMIT,
+                    },
+                )
+
+    for field, value in update_data.items():
         setattr(tracking, field, value)
     tracking.updated_at = datetime.utcnow()
     db.commit()
@@ -417,7 +641,10 @@ def preview_match_count(
         hobbies=body.hobbies,
     )
     scholarships = (
-        db.query(Scholarship).filter(Scholarship.is_archived == False).all()  # noqa: E712
+        db.query(Scholarship)
+        .filter(Scholarship.lifecycle_status == lifecycle.PUBLISHED)
+        .filter(Scholarship.verification_status != "needs_review")
+        .all()
     )
     results = match_scholarships(transient, scholarships)
     return MatchPreviewOut(
@@ -511,11 +738,15 @@ def dismiss_scholarship(
         existing.is_dismissed = True
         existing.updated_at = datetime.utcnow()
     else:
+        # Dismissal is a discovery preference, not a pipeline state. The row is
+        # marked dismiss_only so it is excluded from Saved/Kanban listings and
+        # deleted by undismiss instead of becoming a phantom "saved" record.
         db.add(
             UserScholarship(
                 user_id=user.id,
                 scholarship_id=scholarship_id,
                 is_dismissed=True,
+                dismiss_only=True,
             )
         )
     db.commit()
@@ -540,8 +771,15 @@ def undismiss_scholarship(
     if not existing or not existing.is_dismissed:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Dismissal not found")
 
-    existing.is_dismissed = False
-    existing.updated_at = datetime.utcnow()
+    if getattr(existing, "dismiss_only", False):
+        # The row exists solely to record the dismissal — undo removes it
+        # entirely so no phantom "saved" tracking record is left behind.
+        db.delete(existing)
+    else:
+        # A real tracking record: restore discovery visibility while
+        # preserving its saved/in-progress/submitted status.
+        existing.is_dismissed = False
+        existing.updated_at = datetime.utcnow()
     db.commit()
     return {"status": "restored", "scholarship_id": str(scholarship_id)}
 
@@ -585,7 +823,7 @@ def get_ics_feed(
     No JWT required — the token in the query string authenticates the feed.
     Compatible with Apple Calendar, Google Calendar, and Outlook.
     """
-    ics_content = generate_ics_feed(db, token)
+    ics_content = generate_subscription_ics_feed(db, token)
     return Response(
         content=ics_content,
         media_type="text/calendar",
@@ -606,8 +844,31 @@ def get_feed_url(
     if not profile:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profile not found")
 
-    base = os.getenv("APP_BASE_URL", "http://localhost:8000")
+    base = API_BASE_URL
     feed_url = f"{base}/api/calendar/feed.ics?token={profile.feed_token}"
+    return CalendarFeedOut(feed_url=feed_url, feed_token=profile.feed_token)
+
+
+@app.post("/api/calendar/feed-token/rotate", response_model=CalendarFeedOut)
+def rotate_feed_token(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Rotate the private calendar subscription token.
+
+    Rotation immediately invalidates the previous public .ics URL.  Users can
+    use this if a subscription URL is accidentally shared or otherwise
+    exposed.
+    """
+    profile = db.query(Profile).filter(Profile.id == user.id).first()
+    if not profile:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profile not found")
+
+    profile.feed_token = secrets.token_hex(24)
+    db.commit()
+    db.refresh(profile)
+
+    feed_url = f"{API_BASE_URL}/api/calendar/feed.ics?token={profile.feed_token}"
     return CalendarFeedOut(feed_url=feed_url, feed_token=profile.feed_token)
 
 
@@ -695,7 +956,7 @@ def create_billing_portal(
             detail="No Stripe customer account found. Upgrade to Premium first.",
         )
 
-    return_url = os.getenv("PORTAL_RETURN_URL", "https://grant-rx.vercel.app")
+    return_url = PORTAL_RETURN_URL
     try:
         session = create_billing_portal_session(
             customer_id=profile.stripe_customer_id,
@@ -792,7 +1053,11 @@ def delete_my_account(
     student_college_budgets, scholarship_reports filed by the user, the
     profile row, and Supabase Auth credentials (when configured).
     """
-    result = delete_account(db, str(user.id))
+    try:
+        result = delete_account(db, str(user.id))
+    except SubscriptionCancellationError as exc:
+        # Do not delete an account while an active recurring charge may remain.
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
     if result.get("status") == "not_found":
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=result["message"])
     return result
@@ -876,10 +1141,12 @@ def trigger_archival(
     x_admin_key: Optional[str] = Header(None),
     db: Session = Depends(get_db),
 ):
-    """Manually trigger archival of expired scholarships."""
+    """Manually trigger archival of expired scholarships (and the opt-in
+    staleness pass when CATALOG_STALENESS_ENABLED is set)."""
     _verify_admin_key(x_admin_key)
     count = archive_expired_scholarships(db)
-    return {"status": "ok", "archived": count}
+    staled = apply_staleness_policy(db)
+    return {"status": "ok", "archived": count, "staled": staled}
 
 
 @app.get("/api/admin/archival-summary")
@@ -890,6 +1157,72 @@ def archival_summary(
     """Return a summary of scholarship archival state."""
     _verify_admin_key(x_admin_key)
     return get_archival_summary(db)
+
+
+@app.get("/api/admin/source-registry/summary")
+def source_registry_summary(
+    x_admin_key: Optional[str] = Header(None),
+    db: Session = Depends(get_db),
+):
+    """Counts of registered catalog sources by health + due-now total (C7)."""
+    _verify_admin_key(x_admin_key)
+    from scrapers.source_registry import registry_summary
+
+    return registry_summary(db)
+
+
+@app.get("/api/admin/source-registry")
+def source_registry_list(
+    health: Optional[str] = None,
+    enabled: Optional[bool] = None,
+    due_only: bool = False,
+    limit: int = 200,
+    x_admin_key: Optional[str] = Header(None),
+    db: Session = Depends(get_db),
+):
+    """Bounded source-registry listing for operators (C7).
+
+    Exposes scheduling/health metadata only — never page bodies, headers,
+    or other sensitive diagnostics."""
+    _verify_admin_key(x_admin_key)
+    from datetime import datetime as _dt
+
+    from app.models.models import CatalogSource
+
+    q = db.query(CatalogSource)
+    if health:
+        q = q.filter(CatalogSource.health == health)
+    if enabled is not None:
+        q = q.filter(CatalogSource.enabled.is_(enabled))
+    if due_only:
+        q = q.filter(
+            (CatalogSource.next_check_at.is_(None))
+            | (CatalogSource.next_check_at <= _dt.utcnow())
+        )
+    rows = q.order_by(CatalogSource.next_check_at.asc().nullsfirst()).limit(
+        min(max(limit, 1), 500)).all()
+    return [
+        {
+            "source_key": r.source_key,
+            "name": r.name,
+            "url": r.url,
+            "category": r.category,
+            "enabled": r.enabled,
+            "health": r.health,
+            "next_check_at": r.next_check_at.isoformat() if r.next_check_at else None,
+            "last_attempted_at": r.last_attempted_at.isoformat() if r.last_attempted_at else None,
+            "last_fetch_ok_at": r.last_fetch_ok_at.isoformat() if r.last_fetch_ok_at else None,
+            "last_extracted_at": r.last_extracted_at.isoformat() if r.last_extracted_at else None,
+            "last_check_outcome": r.last_check_outcome,
+            "last_http_status": r.last_http_status,
+            "consecutive_failures": r.consecutive_failures,
+            "consecutive_unchanged": r.consecutive_unchanged,
+            "checks_total": r.checks_total,
+            "extractions_total": r.extractions_total,
+            "skips_total": r.skips_total,
+        }
+        for r in rows
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -981,6 +1314,11 @@ def get_financial_planner(
     db: Session = Depends(get_db),
 ):
     """Get the user's college budget and computed financial planner metrics."""
+    profile = db.query(Profile).filter(Profile.id == user.id).first()
+    if not profile:
+        # Budgets are FK'd to profiles — a JWT user without a profile must get
+        # a clean 404, not an FK violation 500.
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profile not found")
     budget = (
         db.query(StudentCollegeBudget)
         .filter(StudentCollegeBudget.user_id == user.id)
@@ -1015,6 +1353,9 @@ def update_financial_planner(
     db: Session = Depends(get_db),
 ):
     """Update the user's college budget values and loan settings."""
+    profile = db.query(Profile).filter(Profile.id == user.id).first()
+    if not profile:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profile not found")
     budget = (
         db.query(StudentCollegeBudget)
         .filter(StudentCollegeBudget.user_id == user.id)
@@ -1149,7 +1490,7 @@ def export_ics_calendar(
             "award_amount": s.award_amount or 0,
         })
 
-    ics_content = generate_ics_feed(items)
+    ics_content = generate_export_ics_feed(items)
 
     return Response(
         content=ics_content,
@@ -1240,7 +1581,7 @@ async def support_chat(
     """
     profile = db.query(Profile).filter(Profile.id == user.id).first()
     tier = profile.subscription_tier if profile else "free"
-    user_email = profile.email if profile and profile.email else (user.email or "unknown@grantrx.app")
+    user_email = profile.email if profile and profile.email else (user.email or "unknown@grantrx.com")
 
     result = await handle_chat(
         db=db,
@@ -1262,7 +1603,7 @@ async def support_escalate(
     """Explicitly trigger human email escalation before exhausting turns."""
     profile = db.query(Profile).filter(Profile.id == user.id).first()
     tier = profile.subscription_tier if profile else "free"
-    user_email = profile.email if profile and profile.email else (user.email or "unknown@grantrx.app")
+    user_email = profile.email if profile and profile.email else (user.email or "unknown@grantrx.com")
 
     # Reconstruct a minimal transcript from the most recent ticket if present.
     from .models.models import SupportTicket
@@ -1289,4 +1630,167 @@ async def support_escalate(
         ticket_id=str(ticket.id),
         is_escalated=True,
         message="A support ticket and email transcript have been sent to our team.",
+    )
+
+
+# ---------------------------------------------------------------------------
+# Early Access / Waitlist signup (R3)
+# ---------------------------------------------------------------------------
+
+# Public-endpoint abuse protection. Per-process sliding window; keys are
+# client hosts held in memory only — never persisted for attribution.
+early_access_rate_limiter = SlidingWindowRateLimiter(
+    limit=int(os.getenv("EARLY_ACCESS_RATE_LIMIT", "10")),
+    window_seconds=int(os.getenv("EARLY_ACCESS_RATE_WINDOW_SECONDS", "300")),
+)
+
+# First-touch attribution: these fields are only ever filled while empty —
+# a resubmission must not erase the original acquisition source. Channel,
+# referral code, and UTM parameters remain distinct fields.
+_FIRST_TOUCH_FIELDS = (
+    "referral_source",
+    "referral_code",
+    "referred_by",
+    "utm_source",
+    "utm_medium",
+    "utm_campaign",
+    "utm_content",
+    "utm_term",
+    "landing_page",
+)
+
+
+@app.post(
+    "/api/v1/early-access",
+    response_model=EarlyAccessSignupResponse,
+    status_code=201,
+)
+def early_access_signup(
+    payload: EarlyAccessSignupRequest,
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db),
+):
+    """Public early-access / waitlist signup.
+
+    DB-FIRST: the lead is validated, normalized, and committed to the EdFintia
+    database BEFORE any email-marketing provider sync is attempted. A provider
+    failure (or missing provider configuration) after a successful commit
+    still returns success — the lead is never lost, and the sync state is
+    recorded on the lead for later retry. Duplicate submissions are
+    idempotent: they refresh profile/consent fields and fill still-empty
+    attribution, preserve first-touch values and created_at, and return a
+    friendly success rather than a conflict error.
+    """
+    client_host = request.client.host if request.client else "unknown"
+    if not early_access_rate_limiter.allow(client_host):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many requests. Please try again in a few minutes.",
+        )
+
+    from datetime import timezone
+
+    now = datetime.now(timezone.utc)
+    email = payload.email  # already trimmed + lowercased by the request schema
+    consent_source = payload.consent_source or "early_access_form"
+    attribution = {field: getattr(payload, field) for field in _FIRST_TOUCH_FIELDS}
+
+    lead = db.query(WaitlistLead).filter(WaitlistLead.email == email).first()
+    already_registered = lead is not None
+
+    if lead is None:
+        lead = WaitlistLead(
+            email=email,
+            first_name=payload.first_name,
+            audience_type=payload.audience_type.value,
+            education_type=(
+                payload.education_type.value if payload.education_type else None
+            ),
+            status="waitlist",
+            consent_timestamp=now,
+            consent_source=consent_source,
+            provider_sync_status="pending",
+            **attribution,
+        )
+        db.add(lead)
+    else:
+        lead.first_name = payload.first_name
+        lead.audience_type = payload.audience_type.value
+        if payload.education_type is not None:
+            lead.education_type = payload.education_type.value
+        for field, value in attribution.items():
+            if value and not getattr(lead, field):
+                setattr(lead, field, value)
+        lead.consent_timestamp = now
+        lead.consent_source = consent_source
+        lead.updated_at = now
+
+    try:
+        db.commit()
+    except IntegrityError:
+        # Concurrent first-time signup with the same email — the unique index
+        # is the final integrity boundary. Re-read and treat as a duplicate.
+        db.rollback()
+        lead = db.query(WaitlistLead).filter(WaitlistLead.email == email).first()
+        if lead is None:
+            raise
+        already_registered = True
+
+    if already_registered:
+        response.status_code = status.HTTP_200_OK
+    db.refresh(lead)
+
+    # An account already exists for this email -> the lead is converted.
+    if not lead.converted_to_user:
+        existing_account = (
+            db.query(Profile).filter(Profile.email == email).first()
+        )
+        if existing_account:
+            lead.converted_to_user = True
+            lead.converted_at = datetime.now(timezone.utc)
+            lead.converted_user_id = existing_account.id
+            db.commit()
+
+    # Provider sync AFTER durable save. Any failure is recorded on the lead
+    # for later retry and is never surfaced to the visitor.
+    provider = get_email_marketing_provider()
+    try:
+        if provider is None:
+            if lead.provider_sync_status == "pending":
+                lead.provider_sync_status = "skipped"
+        else:
+            result = provider.subscribe_or_update(
+                email=lead.email,
+                first_name=lead.first_name,
+                tags=waitlist_tags_for_audience(lead.audience_type),
+            )
+            lead.provider_sync_status = result.status
+            if result.status == "synced":
+                lead.provider_synced_at = datetime.now(timezone.utc)
+                lead.provider_last_error = None
+            elif result.status == "failed":
+                lead.provider_last_error = result.error
+                logger.warning(
+                    "Waitlist provider sync failed for lead %s: %s",
+                    getattr(lead, "id", "?"),
+                    result.error,
+                )
+        db.commit()
+    except Exception as exc:  # noqa: BLE001
+        db.rollback()
+        logger.warning(
+            "Waitlist provider sync errored for lead %s: %s",
+            getattr(lead, "id", "?"),
+            exc,
+        )
+
+    return EarlyAccessSignupResponse(
+        status="ok",
+        already_registered=already_registered,
+        message=(
+            "You're already on the early-access list — watch your inbox for updates."
+            if already_registered
+            else "You're on the early-access list — watch your inbox for updates."
+        ),
     )

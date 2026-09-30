@@ -54,6 +54,12 @@ def _make_scholarship(**kwargs):
         "has_service_commitment": False,
         "annual_benefit_cap": None,
         "vendor_platform": None,
+        "source_url": None,
+        "extraction_method": None,
+        "verified_fields": {},
+        "verified_at": None,
+
+        "verification_status": "legacy_unverified",
     }
     defaults.update(kwargs)
     obj = MagicMock()
@@ -68,7 +74,8 @@ def _make_db(scholarships):
     def query_side_effect(arg):
         q = MagicMock()
         if arg is Scholarship:
-            q.filter.return_value.all.return_value = scholarships
+            q.filter.return_value = q  # chainable: endpoint uses two filters
+            q.all.return_value = scholarships
         return q
 
     db.query.side_effect = query_side_effect

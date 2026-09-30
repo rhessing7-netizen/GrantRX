@@ -53,7 +53,7 @@ export function MultiSelect({
   return (
     <div ref={ref} className="relative">
       {label && (
-        <label className="block text-sm font-medium text-textSecondary">
+        <label className="block text-sm font-medium text-textMuted">
           {label}
         </label>
       )}
@@ -61,15 +61,15 @@ export function MultiSelect({
       {/* Selected badges + trigger */}
       <div
         onClick={() => setOpen(!open)}
-        className="mt-2 flex min-h-[44px] cursor-pointer flex-wrap items-center gap-1.5 rounded-xl border border-textSecondary/20 bg-surfaceBg px-3 py-2"
+        className="mt-2 flex min-h-[44px] cursor-pointer flex-wrap items-center gap-1.5 rounded-xl border border-textMuted/20 bg-surface px-3 py-2"
       >
         {selected.length === 0 && (
-          <span className="text-sm text-textSecondary/50">{placeholder}</span>
+          <span className="text-sm text-textMuted/50">{placeholder}</span>
         )}
         {selected.map((s) => (
           <span
             key={s}
-            className="inline-flex items-center gap-1 rounded-full bg-crayolaBlue/10 px-2.5 py-1 text-xs font-medium text-crayolaBlue"
+            className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary"
             onClick={(e) => {
               e.stopPropagation();
               remove(s);
@@ -82,7 +82,7 @@ export function MultiSelect({
           </span>
         ))}
         <svg
-          className={`ml-auto h-4 w-4 text-textSecondary transition-transform ${open ? "rotate-180" : ""}`}
+          className={`ml-auto h-4 w-4 text-textMuted transition-transform ${open ? "rotate-180" : ""}`}
           fill="none"
           stroke="currentColor"
           viewBox="0 0 24 24"
@@ -93,15 +93,15 @@ export function MultiSelect({
 
       {/* Dropdown */}
       {open && (
-        <div className="absolute z-20 mt-1 w-full rounded-xl border border-textSecondary/20 bg-surfaceBg shadow-lg">
+        <div className="absolute z-20 mt-1 w-full rounded-xl border border-textMuted/20 bg-surface shadow-lg">
           {/* Filter input */}
-          <div className="border-b border-textSecondary/10 p-2">
+          <div className="border-b border-textMuted/10 p-2">
             <input
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
               placeholder="Search…"
               autoFocus
-              className="w-full rounded-lg border border-textSecondary/15 bg-surfaceBg px-3 py-1.5 text-sm text-textPrimary placeholder:text-textSecondary/50"
+              className="w-full rounded-lg border border-textMuted/15 bg-surface px-3 py-1.5 text-sm text-text placeholder:text-textMuted/50"
               onClick={(e) => e.stopPropagation()}
             />
           </div>
@@ -109,18 +109,18 @@ export function MultiSelect({
           {/* Options list */}
           <div className="overflow-y-auto p-1" style={{ maxHeight }}>
             {filteredOptions.length === 0 && (
-              <p className="px-3 py-2 text-sm text-textSecondary">No matches found</p>
+              <p className="px-3 py-2 text-sm text-textMuted">No matches found</p>
             )}
             {filteredOptions.map((option) => (
               <label
                 key={option}
-                className="flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm text-textPrimary hover:bg-cardBg"
+                className="flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm text-text hover:bg-surfaceSubtle"
               >
                 <input
                   type="checkbox"
                   checked={selected.includes(option)}
                   onChange={() => toggle(option)}
-                  className="h-4 w-4 accent-crayolaBlue"
+                  className="h-4 w-4 accent-primary"
                 />
                 <span className="flex-1">{option}</span>
               </label>
@@ -128,17 +128,17 @@ export function MultiSelect({
           </div>
 
           {/* Footer */}
-          <div className="flex items-center justify-between border-t border-textSecondary/10 px-3 py-2">
+          <div className="flex items-center justify-between border-t border-textMuted/10 px-3 py-2">
             <button
               onClick={(e) => {
                 e.stopPropagation();
                 onChange([]);
               }}
-              className="text-xs text-textSecondary hover:text-textPrimary"
+              className="text-xs text-textMuted hover:text-text"
             >
               Clear all
             </button>
-            <span className="text-xs text-textSecondary">
+            <span className="text-xs text-textMuted">
               {selected.length} selected
             </span>
           </div>

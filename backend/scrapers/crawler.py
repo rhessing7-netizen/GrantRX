@@ -19,14 +19,16 @@ Usage:
 from __future__ import annotations
 
 import logging
-import random
 import re
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Set, Tuple
 from urllib.parse import urljoin, urlparse
 
-import httpx
-
+from .fetch_policy import (
+    OUTCOME_NOT_MODIFIED,
+    FetchSession,
+    default_session,
+)
 from .metro_filters import detect_all_metros, metro_name
 
 logger = logging.getLogger(__name__)
@@ -276,17 +278,6 @@ BLOCKED_DOMAINS = {
     "scholarshipportal.com",
 }
 
-USER_AGENTS = [
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0",
-]
-
-
-def _random_ua() -> str:
-    return random.choice(USER_AGENTS)
-
-
 # ---------------------------------------------------------------------------
 # Result dataclass
 # ---------------------------------------------------------------------------
@@ -321,6 +312,17 @@ class CrawlStats:
     # Newly discovered directory-hub URLs collected during traversal.
     # These are candidate seeds for the autonomous crawler_seeds queue.
     discovered_hubs: List[str] = field(default_factory=list)
+    # hub_url -> URL of the page on which the hub link was discovered
+    hub_origins: Dict[str, str] = field(default_factory=dict)
+    # normalized seed URL -> (success, bounded_error). Every seed gets its
+    # own outcome; a failing seed must never contaminate another seed's
+    # retry state. A robots denial lands here as "robots_denied" — a policy
+    # outcome, not a broken site (C6: must not accrue quarantine failures).
+    seed_results: Dict[str, Tuple[bool, str]] = field(default_factory=dict)
+    # fetch outcome -> count, for observability (robots_denied, timeout,
+    # permanent_http, ...). Populated when fetches go through the C6
+    # FetchSession; absent when _fetch is substituted in tests.
+    fetch_outcomes: Dict[str, int] = field(default_factory=dict)
 
     def summary(self) -> dict:
         return {
@@ -331,6 +333,12 @@ class CrawlStats:
             "errors": self.errors,
             "domains_visited": list(self.domains_visited),
             "discovered_hubs": list(self.discovered_hubs),
+            "discovered_hub_origins": dict(self.hub_origins),
+            "seed_results": {
+                seed: {"success": ok, "error": err}
+                for seed, (ok, err) in self.seed_results.items()
+            },
+            "fetch_outcomes": dict(self.fetch_outcomes),
         }
 
 
@@ -370,99 +378,133 @@ class ScholarshipCrawler:
         self._domain_counts: Dict[str, int] = {}
         self._stats = CrawlStats()
         self._queue: List[Tuple[str, int, str]] = []  # (url, depth, seed_url)
+        self._seed_aliases: Dict[str, str] = {}  # raw seed -> normalized seed
 
     async def crawl(self) -> List[CrawlCandidate]:
         """Execute the crawl and return verified candidate pages."""
-        # Seed the queue
+        # Seed the queue; record per-seed outcome state up front so every
+        # seed receives its own success/failure regardless of batch peers.
         for seed in self.seeds:
             normalized = self._normalize_url(seed)
-            if normalized:
+            if not normalized:
+                self._stats.seed_results[seed] = (False, "invalid seed URL")
+                continue
+            self._seed_aliases[seed] = normalized
+            if normalized not in self._stats.seed_results:
+                self._stats.seed_results[normalized] = (False, "seed page not reached")
                 self._queue.append((normalized, 0, normalized))
+            else:
+                # Duplicate seed normalizing to the same URL shares its outcome.
+                self._seed_aliases[seed] = normalized
 
         candidates: List[CrawlCandidate] = []
 
-        async with httpx.AsyncClient(
-            timeout=self.timeout,
-            follow_redirects=True,
-            headers={"User-Agent": _random_ua()},
-        ) as client:
-            while self._queue:
-                url, depth, seed_url = self._queue.pop(0)
+        # One polite fetch boundary for the whole crawl: honest EdFintiaBot
+        # identity, robots.txt, per-host pacing, and bounded retries all live
+        # in the shared FetchSession (C6).
+        session = default_session()
+        while self._queue:
+            url, depth, seed_url = self._queue.pop(0)
 
-                # Skip already visited
-                if url in self._visited:
-                    continue
-                self._visited.add(url)
+            # Skip already visited
+            if url in self._visited:
+                continue
+            self._visited.add(url)
 
-                # Check domain page cap
-                domain = self._get_domain(url)
-                if self._domain_counts.get(domain, 0) >= self.max_pages_per_domain:
-                    logger.debug("Domain cap reached for %s — skipping %s", domain, url)
-                    continue
+            # Check domain page cap
+            domain = self._get_domain(url)
+            if self._domain_counts.get(domain, 0) >= self.max_pages_per_domain:
+                logger.debug("Domain cap reached for %s — skipping %s", domain, url)
+                if depth == 0:
+                    self._stats.seed_results[url] = (False, "skipped: domain page cap reached")
+                continue
 
-                # Fetch the page
-                html, ok = await self._fetch(client, url)
-                if not ok or not html:
-                    self._stats.errors += 1
-                    continue
+            # Fetch the page
+            html, ok, fetch_error = await self._fetch(session, url)
+            if not ok:
+                self._stats.errors += 1
+                if depth == 0:
+                    # Only the seed's own root fetch decides seed failure;
+                    # child-page errors never fail the parent seed.
+                    self._stats.seed_results[url] = (False, fetch_error)
+                continue
+            if not html:
+                # 304 / empty body: a successful fetch with no new content.
+                # Not an error — nothing to extract or follow this run.
+                if depth == 0:
+                    self._stats.seed_results[url] = (True, "")
+                continue
 
-                self._stats.pages_crawled += 1
-                self._domain_counts[domain] = self._domain_counts.get(domain, 0) + 1
-                self._stats.domains_visited.add(domain)
+            if depth == 0:
+                self._stats.seed_results[url] = (True, "")
 
-                # Parse and evaluate content
-                text, title, links = self._parse_page(html, url)
-                base_score, matched, regional_score, regional_kws, state_restriction = self._score_content(text)
-                total_score = base_score + regional_score
+            self._stats.pages_crawled += 1
+            self._domain_counts[domain] = self._domain_counts.get(domain, 0) + 1
+            self._stats.domains_visited.add(domain)
 
-                logger.debug(
-                    "Crawled [depth=%d] %s — base=%d, regional=%d, total=%d, links=%d, state=%s",
-                    depth, url, base_score, regional_score, total_score, len(links), state_restriction,
+            # Parse and evaluate content
+            text, title, links = self._parse_page(html, url)
+            base_score, matched, regional_score, regional_kws, state_restriction = self._score_content(text)
+            total_score = base_score + regional_score
+
+            logger.debug(
+                "Crawled [depth=%d] %s — base=%d, regional=%d, total=%d, links=%d, state=%s",
+                depth, url, base_score, regional_score, total_score, len(links), state_restriction,
+            )
+
+            # Skip negative path patterns even if content scored well
+            url_path = urlparse(url).path.lower()
+            if any(pattern in url_path for pattern in NEGATIVE_PATH_PATTERNS):
+                logger.debug("Skipping negative path: %s", url)
+            elif total_score >= self.min_relevance:
+                candidate = CrawlCandidate(
+                    url=url,
+                    title=title,
+                    html=html,
+                    text=text,
+                    relevance_score=total_score,
+                    matched_keywords=matched,
+                    seed_url=seed_url,
+                    depth=depth,
+                    state_restriction=state_restriction,
+                    regional_keywords=regional_kws,
+                )
+                candidates.append(candidate)
+                self._stats.candidates_found += 1
+                regional_str = f", regional={regional_score}" if regional_score else ""
+                state_str = f", state={state_restriction}" if state_restriction else ""
+                logger.info(
+                    "Candidate found: %s (score=%d%s%s, keywords=%s)",
+                    url, total_score, regional_str, state_str, matched[:5],
                 )
 
-                # Skip negative path patterns even if content scored well
-                url_path = urlparse(url).path.lower()
-                if any(pattern in url_path for pattern in NEGATIVE_PATH_PATTERNS):
-                    logger.debug("Skipping negative path: %s", url)
-                elif total_score >= self.min_relevance:
-                    candidate = CrawlCandidate(
-                        url=url,
-                        title=title,
-                        html=html,
-                        text=text,
-                        relevance_score=total_score,
-                        matched_keywords=matched,
-                        seed_url=seed_url,
-                        depth=depth,
-                        state_restriction=state_restriction,
-                        regional_keywords=regional_kws,
-                    )
-                    candidates.append(candidate)
-                    self._stats.candidates_found += 1
-                    regional_str = f", regional={regional_score}" if regional_score else ""
-                    state_str = f", state={state_restriction}" if state_restriction else ""
-                    logger.info(
-                        "Candidate found: %s (score=%d%s%s, keywords=%s)",
-                        url, total_score, regional_str, state_str, matched[:5],
-                    )
+            # Enqueue child links if we haven't reached max depth
+            if depth < self.max_depth:
+                for link in links:
+                    if link in self._visited:
+                        continue
+                    if self._should_follow(link, url):
+                        self._queue.append((link, depth + 1, seed_url))
+                        self._stats.links_followed += 1
+                        # Collect potential seed hubs for the autonomous
+                        # crawler_seeds queue.  Only directory-style pages
+                        # (not individual application forms or file
+                        # downloads) are collected.
+                        if self._is_hub_candidate(link, url):
+                            if link not in self._stats.discovered_hubs:
+                                self._stats.discovered_hubs.append(link)
+                                # Record the actual page that surfaced this
+                                # hub so queue attribution is accurate.
+                                self._stats.hub_origins[link] = url
+                    else:
+                        self._stats.links_rejected += 1
 
-                # Enqueue child links if we haven't reached max depth
-                if depth < self.max_depth:
-                    for link in links:
-                        if link in self._visited:
-                            continue
-                        if self._should_follow(link, url):
-                            self._queue.append((link, depth + 1, seed_url))
-                            self._stats.links_followed += 1
-                            # Collect potential seed hubs for the autonomous
-                            # crawler_seeds queue.  Only directory-style pages
-                            # (not individual application forms or file
-                            # downloads) are collected.
-                            if self._is_hub_candidate(link, url):
-                                if link not in self._stats.discovered_hubs:
-                                    self._stats.discovered_hubs.append(link)
-                        else:
-                            self._stats.links_rejected += 1
+        # Publish outcomes keyed by the raw seed URL the caller supplied so
+        # the queue can look each seed up directly; duplicate seeds that
+        # normalized to the same URL share that URL's outcome.
+        for raw, normalized in self._seed_aliases.items():
+            if normalized in self._stats.seed_results:
+                self._stats.seed_results[raw] = self._stats.seed_results[normalized]
 
         logger.info("Crawl complete: %s", self._stats.summary())
         return candidates
@@ -474,17 +516,34 @@ class ScholarshipCrawler:
     # Internal helpers
     # ------------------------------------------------------------------
 
-    async def _fetch(self, client: httpx.AsyncClient, url: str) -> Tuple[str, bool]:
-        """Fetch a URL and return (html, success)."""
+    async def _fetch(self, client: "FetchSession", url: str) -> Tuple[str, bool, str]:
+        """Fetch a URL through the C6 policy and return (html, success, error).
+
+        ``client`` is the shared FetchSession (robots/pacing/retries already
+        applied inside ``session.get``). The error string is a bounded
+        diagnostic — an outcome name (``robots_denied``), an HTTP status, or
+        an exception class — never headers, credentials, or page content.
+        """
         try:
-            resp = await client.get(url)
-            if resp.status_code >= 400:
-                logger.debug("HTTP %d for %s", resp.status_code, url)
-                return "", False
-            return resp.text, True
-        except httpx.HTTPError as exc:
+            result = await client.get(url, timeout=self.timeout)
+        except Exception as exc:  # noqa: BLE001
             logger.debug("Fetch error for %s: %s", url, exc)
-            return "", False
+            return "", False, f"{type(exc).__name__}"[:200]
+
+        self._stats.fetch_outcomes[result.outcome] = (
+            self._stats.fetch_outcomes.get(result.outcome, 0) + 1
+        )
+        if result.outcome == OUTCOME_NOT_MODIFIED:
+            return "", True, "not_modified"
+        if result.ok:
+            return result.text, True, ""
+        if result.is_robots_block:
+            # A policy outcome, not a broken site — the queue driver maps
+            # this to the robots path rather than failure counting.
+            logger.debug("%s for %s", result.outcome, url)
+            return "", False, result.outcome
+        logger.debug("Fetch %s for %s: %s", result.outcome, url, result.error)
+        return "", False, result.error or result.outcome
 
     def _parse_page(self, html: str, base_url: str) -> Tuple[str, str, List[str]]:
         """Extract text, title, and links from HTML."""

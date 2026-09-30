@@ -40,8 +40,8 @@ def dev_env():
 
 
 @pytest.fixture
-def client():
-    yield TestClient(app)
+def client(authenticated_client_factory):
+    yield authenticated_client_factory(app)
     app.dependency_overrides.clear()
 
 
@@ -318,7 +318,7 @@ class TestReengagementSendAndCli:
     def test_send_digests_returns_zero_without_api_key(self):
         with patch.dict(os.environ, {}, clear=True):
             result = send_digests([])
-        assert result is 0 or result == 0
+        assert result == 0
 
     def test_send_digests_sends_via_resend(self):
         """When Resend is configured, emails are sent."""

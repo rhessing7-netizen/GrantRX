@@ -12,6 +12,7 @@ import pytest
 from fastapi import HTTPException
 
 from app.middleware.tier_guard import (
+    ACTIVE_TRACKING_STATUSES,
     FREE_ACTIVE_TRACKING_LIMIT,
     FREE_SEARCH_LIMIT,
     consume_search,
@@ -335,3 +336,10 @@ class TestSearchQuotaPaywall:
     def test_free_tracking_limit_constant(self):
         """The Kanban free-tier limit should match the advertised '3 active apps'."""
         assert FREE_ACTIVE_TRACKING_LIMIT == 3
+
+    def test_active_tracking_statuses_match_product_copy(self):
+        """Only In Progress + Submitted consume a free-tier active slot."""
+        assert set(ACTIVE_TRACKING_STATUSES) == {"in_progress", "submitted"}
+        assert "saved" not in ACTIVE_TRACKING_STATUSES
+        assert "awarded" not in ACTIVE_TRACKING_STATUSES
+        assert "archived" not in ACTIVE_TRACKING_STATUSES

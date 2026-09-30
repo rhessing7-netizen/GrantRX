@@ -2,23 +2,44 @@
 
 from __future__ import annotations
 
+import re
 from typing import List, Optional
 
 from pydantic import BaseModel, Field
+
+
+class TrackExtract(BaseModel):
+    """One named track/variant inside a parent funding program (C8).
+
+    A track shares the parent's administration and application. It may carry
+    its own eligibility, award, deadline and detail URL, but it is not an
+    independently persisted opportunity — it never gets its own
+    ``identity_key``.
+    """
+
+    title: str
+    detail_url: Optional[str] = None
+    award_amount: Optional[int] = None
+    deadline: Optional[str] = None  # ISO YYYY-MM-DD
+    eligible_disciplines: List[str] = Field(default_factory=list)
+    eligible_credentials: List[str] = Field(default_factory=list)
 
 
 class ScholarshipExtract(BaseModel):
     """Schema produced by deterministic and LLM parsers alike.
 
     `portal_url` and `provider` are set by the runner before DB upsert.
-    Critical fields used to decide whether to invoke the LLM fallback:
-    `title`, `award_amount`, `deadline`.
+    A record is publishable when it has a title; award amount and deadline may
+    legitimately be unknown, variable, rolling, or not yet announced.
     """
 
     # Core Identification & Link
     title: str
     provider: str = ""
     portal_url: str = ""
+    # Opportunity-specific detail page found on a listing (C5). Extraction-time
+    # only — not persisted; it can become portal_url when no application link.
+    detail_url: Optional[str] = None
     source_url: Optional[str] = None
     source_name: Optional[str] = None
     source_category: str = "general"
@@ -49,9 +70,12 @@ class ScholarshipExtract(BaseModel):
     max_sai: Optional[int] = None
 
     # Geographic Targeting (National, State, Metro, Hyper-Local)
-    scope: str = Field(
-        default="national",
-        description="'national', 'state', 'metro', 'county', or 'city'",
+    # NULL means the geography was never established — an explicitly
+    # unrestricted award stores 'national'. Unknown must never masquerade as
+    # national (C8 / C6.5 calibration finding).
+    scope: Optional[str] = Field(
+        default=None,
+        description="'national', 'state', 'metro', 'county', 'city', or null when unstated",
     )
     state_restrictions: List[str] = []
     metro_restrictions: List[str] = []  # MSA names or "cbsa:XXXXX" codes
@@ -89,11 +113,13 @@ class ScholarshipExtract(BaseModel):
     provider_core_values: List[str] = []
 
     # Employer tuition assistance, service-obligation, and vendor-platform fields
-    funding_type: str = Field(
-        default="scholarship",
+    funding_type: Optional[str] = Field(
+        default=None,
         description=(
-            "Funding mechanism: 'scholarship' (default), 'tuition_reimbursement', "
-            "'employer_sponsorship', 'loan_repayment', or 'service_contingent'."
+            "Funding mechanism when stated: 'scholarship', 'grant', "
+            "'fellowship', 'tuition_reimbursement', 'employer_sponsorship', "
+            "'loan_repayment', 'service_contingent', 'prize', 'other'. "
+            "Null when unknown — never fabricated."
         ),
     )
     employment_required: bool = Field(
@@ -145,9 +171,70 @@ class ScholarshipExtract(BaseModel):
         ),
     )
 
+    # Additional eligibility dimensions (C8). All record-only: the profile
+    # side does not yet collect these attributes, so they inform display and
+    # notices rather than hard gates.
+    citizenship_requirement: Optional[str] = Field(
+        default=None,
+        description="Canonical citizenship code or null when unstated.",
+    )
+    enrollment_statuses: List[str] = Field(
+        default_factory=list,
+        description="Canonical enrollment codes (full_time/part_time/enrolled/accepted/graduating); empty when unstated.",
+    )
+    institution_restrictions: List[str] = Field(
+        default_factory=list,
+        description="Named institutions the award is limited to; empty when unstated.",
+    )
+    military_affiliation_requirement: Optional[str] = Field(
+        default=None,
+        description="Canonical military-affiliation code or null when unstated.",
+    )
+
+    # Parent-program tracks (C8). Named variants of this one program — never
+    # independently persisted opportunities.
+    tracks: List[TrackExtract] = Field(default_factory=list)
+
     def is_critical_complete(self) -> bool:
-        """Return True if all critical fields are populated and parseable."""
-        return bool(self.title) and self.award_amount is not None and bool(self.deadline)
+        """Return True when the opportunity has enough identity to persist.
+
+        Unknown award amounts and deadlines are valid source states and must not
+        be converted into invented values. Generic directory/listing headings
+        are not opportunity titles.
+        """
+        title = re.sub(r"[^a-z0-9]+", " ", (self.title or "").casefold()).strip()
+        return bool(title) and title not in _GENERIC_LISTING_TITLES
+
+
+# Directory/listing headings that describe a page of opportunities, not an
+# individual opportunity. Exact-match only so that specifically named programs
+# (e.g. "Community Health Scholarship Fund") are never rejected.
+_GENERIC_LISTING_TITLES = {
+    "scholarship",
+    "scholarships",
+    "scholarship opportunities",
+    "scholarship program",
+    "scholarship programs",
+    "student scholarships",
+    "financial aid",
+    "financial aid scholarships",
+    "grants",
+    "grant programs",
+    "funding opportunities",
+    "funding",
+    "awards",
+    "awards and grants",
+    "scholarships and grants",
+    "grants and scholarships",
+    "tuition assistance",
+    "outside scholarships",
+    "external scholarships",
+    "external aid",
+    "scholarship search",
+    "scholarship finder",
+    "opportunities",
+    "apply",
+}
 
 
 class ParseError(BaseModel):

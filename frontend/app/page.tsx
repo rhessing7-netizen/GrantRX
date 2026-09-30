@@ -13,7 +13,11 @@ import { DeadlineCalendar } from "@/components/DeadlineCalendar";
 import { CollegeFinancialPlanner } from "@/components/CollegeFinancialPlanner";
 import { UpgradeModal } from "@/components/UpgradeModal";
 import { InteractiveTour, notifyTourSave } from "@/components/InteractiveTour";
-import { api, setAuthToken } from "@/lib/api";
+import { MobileHeader } from "@/components/MobileHeader";
+import { MobileBottomNav } from "@/components/MobileBottomNav";
+import { MobileMenu } from "@/components/MobileMenu";
+import { DiscoverSearch } from "@/components/DiscoverSearch";
+import { api, setAuthToken, getAuthToken } from "@/lib/api";
 import { supabase } from "@/lib/supabase";
 import type {
   MatchedFeed,
@@ -32,6 +36,7 @@ export default function Home() {
   const [showUpgrade, setShowUpgrade] = useState(false);
   const [showProfileEdit, setShowProfileEdit] = useState(false);
   const [showAccountSettings, setShowAccountSettings] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [upgradeReason, setUpgradeReason] = useState<string | undefined>(undefined);
 
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -42,56 +47,80 @@ export default function Home() {
   const [metroFilter, setMetroFilter] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [authNotice, setAuthNotice] = useState<string | null>(null);
 
-  // Auth token is auto-configured in lib/api.ts:
-  //   - Uses NEXT_PUBLIC_DEMO_JWT if set
-  //   - Falls back to "grantrx-dev-demo" for local dev (accepted by backend in dev mode)
-  //   - In production, setAuthToken(supabaseSession.access_token) after OAuth login
-
-  // Immediately restore cached profile from localStorage on mount so the
-  // LeftPanel and matching feed recognize the user is logged in without
-  // waiting for the async Supabase session check to complete.
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    try {
-      const cachedProfile = localStorage.getItem("grantrx_profile");
-      if (cachedProfile) {
-        setProfile(JSON.parse(cachedProfile));
-      }
-    } catch {
-      // localStorage may be unavailable or contain invalid JSON — ignore
-    }
-  }, []);
+  // Auth comes from the Supabase session. A demo JWT is used only when
+  // NEXT_PUBLIC_DEMO_JWT is explicitly configured for local testing.
 
   // Session check and auth state listener are defined after loadFeed below
   // because they depend on loadFeed for immediate feed hydration after OAuth.
 
-  // Detect ?onboarding=open from OAuth callback redirect
+  // Restore the cached profile after mount. localStorage is client-only, so
+  // the first render must agree with SSR (null); the cache is applied
+  // post-mount as a UX hint only — the backend profile fetched in
+  // loadProfileAndUsage stays authoritative and overwrites it.
+  useEffect(() => {
+    queueMicrotask(() => {
+      try {
+        const cached = localStorage.getItem("grantrx_profile");
+        if (cached) {
+          setProfile(JSON.parse(cached) as Profile);
+        }
+      } catch {
+        // localStorage may be unavailable or contain invalid JSON — ignore
+      }
+    });
+  }, []);
+
+  // Detect and consume the ?onboarding=open flag from the OAuth callback
+  // redirect. The wizard opens post-mount (deferred) so SSR and the first
+  // client render agree, then the URL flag is stripped.
   useEffect(() => {
     if (typeof window === "undefined") return;
     const params = new URLSearchParams(window.location.search);
     if (params.get("onboarding") === "open") {
-      setShowOnboarding(true);
-      // Clean up the URL param
       params.delete("onboarding");
       const cleanUrl = params.toString()
         ? `${window.location.pathname}?${params.toString()}`
         : window.location.pathname;
       window.history.replaceState({}, "", cleanUrl);
+      queueMicrotask(() => setShowOnboarding(true));
+    }
+    // The layout-mounted support assistant redirects here with ?signin=1
+    // when a guest taps Sign In from a public page.
+    if (params.get("signin") === "1") {
+      params.delete("signin");
+      const cleanUrl = params.toString()
+        ? `${window.location.pathname}?${params.toString()}`
+        : window.location.pathname;
+      window.history.replaceState({}, "", cleanUrl);
+      queueMicrotask(() => setShowAuth(true));
     }
   }, []);
 
-  // Strip stale ?auth_error=... from the URL so it doesn't trigger
-  // persistent error banners after the OAuth redirect lands.
+  // Consume ?auth_error=... from the OAuth callback: map the safe error
+  // code to a friendly notice, then strip it from the URL.
   useEffect(() => {
     if (typeof window === "undefined") return;
     const params = new URLSearchParams(window.location.search);
-    if (params.has("auth_error")) {
+    const code = params.get("auth_error");
+    if (code) {
       params.delete("auth_error");
       const cleanUrl = params.toString()
         ? `${window.location.pathname}?${params.toString()}`
         : window.location.pathname;
       window.history.replaceState({}, "", cleanUrl);
+      const messages: Record<string, string> = {
+        cancelled: "Sign-in was cancelled. You can try again anytime.",
+        oauth_failed:
+          "We couldn't complete sign-in with that provider. Please try again or use email and password.",
+        auth_unavailable:
+          "Sign-in is temporarily unavailable. Please try again in a few minutes.",
+      };
+      const message =
+        messages[code] ??
+        "Sign-in couldn't be completed. Please try again.";
+      queueMicrotask(() => setAuthNotice(message));
     }
   }, []);
 
@@ -122,6 +151,14 @@ export default function Home() {
     return () => { cancelled = true; };
   }, [loadProfileAndUsage]);
 
+  // Components outside the page tree (e.g. the layout-mounted support
+  // assistant) can request the auth modal via this event.
+  useEffect(() => {
+    const open = () => setShowAuth(true);
+    window.addEventListener("grantrx:auth:open", open);
+    return () => window.removeEventListener("grantrx:auth:open", open);
+  }, []);
+
   // Load matched feed (initial load / refresh / filter change — does NOT
   // consume a search quota because no keyword query is sent)
   const loadFeed = useCallback(async () => {
@@ -130,9 +167,6 @@ export default function Home() {
     try {
       const f = await api.getMatchedScholarships();
       setFeed(f);
-      // If the feed was loaded via the Supabase fallback (backend returned
-      // "Invalid token" or was unreachable), clear any stale error banner
-      // so the red error box never shows alongside working fallback data.
       setError(null);
       // Refresh usage display — wrapped separately so a usage fetch failure
       // doesn't blank out the successfully loaded feed.
@@ -145,25 +179,32 @@ export default function Home() {
     } catch (err) {
       const e = err as Error & { status?: number; body?: unknown };
       if (e.status === 404) {
-        setError("Please complete onboarding to see matched scholarships.");
-      } else if (e.message?.includes("Invalid token")) {
-        // Suppress the "Invalid token" banner — the Supabase fallback in
-        // getMatchedScholarships should have handled this, but if it also
-        // failed, show a neutral message instead of the raw error.
-        setError(null);
+        setError("Please complete onboarding to see matched opportunities.");
+      } else if (e.status === 401) {
+        // Distinguish anonymous users (no saved token) from users whose token
+        // has expired or been invalidated; raw backend details must not surface.
+        if (getAuthToken()) {
+          setError("Your session has expired. Please sign in again.");
+        } else {
+          setError("Please sign in to see matched opportunities.");
+        }
       } else {
-        setError(e.message || "Failed to load scholarships");
+        // Unexpected errors keep their detail and are logged for diagnosis.
+        console.error("Feed load failed:", err);
+        setError(e.message || "Failed to load opportunities");
       }
     } finally {
       setLoading(false);
     }
   }, []);
 
-  // Load the feed on mount — works for both authenticated users and guest
-  // visitors. The Supabase fallback in getMatchedScholarships handles
-  // unauthenticated users without throwing or setting an error banner.
+  // Load the feed on mount. Failures remain visible instead of being replaced
+  // with fabricated scholarship data. Deferred to a microtask so loadFeed's
+  // synchronous setLoading does not run inside the effect body.
   useEffect(() => {
-    loadFeed();
+    queueMicrotask(() => {
+      void loadFeed();
+    });
   }, [loadFeed]);
 
   // Check for existing Supabase session on mount and listen for auth state
@@ -188,43 +229,18 @@ export default function Home() {
         // localStorage may be unavailable or contain invalid JSON — ignore
       }
 
-      // 2. Query Supabase directly for the user's profile row
+      // 2. Hydrate from the authoritative backend profile.
       try {
-        const { data: sbProfile } = await supabase
-          .from("profiles")
-          .select("*")
-          .eq("id", session.user.id)
-          .maybeSingle();
-
-        if (sbProfile && sbProfile.primary_discipline) {
-          setProfile(sbProfile);
-          localStorage.setItem("grantrx_profile", JSON.stringify(sbProfile));
-          loadFeed();
-        } else {
-          // New OAuth user: seed profile from OAuth user_metadata
-          const metaName =
-            (session.user.user_metadata?.full_name as string) ||
-            (session.user.user_metadata?.name as string) ||
-            "Student";
-          const metaEmail = session.user.email || "";
-          const newOAuthProfile = {
-            id: session.user.id,
-            user_id: session.user.id,
-            full_name: metaName,
-            email: metaEmail,
-            primary_discipline: sbProfile?.primary_discipline || "pharmacy",
-            target_credential: sbProfile?.target_credential || "PharmD",
-            clinical_phase: sbProfile?.clinical_phase || "Professional (P1-P4)",
-            gpa: sbProfile?.gpa || 3.5,
-            state_residence: sbProfile?.state_residence || "OH",
-            updated_at: new Date().toISOString(),
-          };
-          setProfile(newOAuthProfile as unknown as Profile);
-          localStorage.setItem("grantrx_profile", JSON.stringify(newOAuthProfile));
-          loadFeed();
+        const serverProfile = await api.getProfile();
+        setProfile(serverProfile);
+        try { localStorage.setItem("grantrx_profile", JSON.stringify(serverProfile)); } catch {}
+        loadFeed();
+      } catch (profileError) {
+        const status = (profileError as Error & { status?: number }).status;
+        if (status === 404) {
+          setProfile(null);
+          setShowOnboarding(true);
         }
-      } catch {
-        // Supabase query failed — the localStorage profile (if any) is enough
       }
     };
 
@@ -258,7 +274,7 @@ export default function Home() {
 
     // Check if user has reached their limit before making the request
     if (usage && !usage.is_premium && usage.remaining !== null && usage.remaining <= 0) {
-      setUpgradeReason("You've reached your free keyword search limit (10/week). Upgrade for unlimited searches.");
+      setUpgradeReason(`You've reached your free keyword search limit (${usage.search_limit ?? 10}/week). Upgrade for unlimited searches.`);
       setShowUpgrade(true);
       return;
     }
@@ -274,14 +290,14 @@ export default function Home() {
     } catch (err) {
       const e = err as Error & { status?: number; body?: unknown };
       if (e.status === 402) {
-        setUpgradeReason("You've reached your free keyword search limit (10/week). Upgrade for unlimited searches.");
+        setUpgradeReason(`You've reached your free keyword search limit (${usage?.search_limit ?? 10}/week). Upgrade for unlimited searches.`);
         setShowUpgrade(true);
       } else if (e.message?.includes("Invalid token") || e.message === "Invalid token") {
         console.warn("Suppressed unauthenticated token error on public feed:", err);
         setError(null);
         return;
       } else {
-        setError(e.message || "Failed to load scholarships");
+        setError(e.message || "Failed to load opportunities");
       }
     } finally {
       setLoading(false);
@@ -407,41 +423,60 @@ export default function Home() {
     setAuthToken(null);
   };
 
+  const leftPanelProps = {
+    profile,
+    usage,
+    search,
+    onSearchChange: setSearch,
+    metroFilter,
+    onMetroFilterChange: setMetroFilter,
+    onOpenOnboarding: () => {
+      if (profile) {
+        setShowProfileEdit(true);
+      } else {
+        setShowOnboarding(true);
+      }
+    },
+    onKeywordSearch: runKeywordSearch,
+    onRefreshFeed: loadFeed,
+    onUpgrade: () => openUpgrade(),
+    onOpenAuth: () => setShowAuth(true),
+    onSignOut: handleSignOut,
+    onOpenAccountSettings: () => setShowAccountSettings(true),
+    busy: loading,
+  };
+
   return (
     <>
+      <MobileHeader
+        onOpenMenu={() => setMobileMenuOpen(true)}
+        onOpenAccount={() => setShowAccountSettings(true)}
+      />
+      <MobileMenu open={mobileMenuOpen} onClose={() => setMobileMenuOpen(false)}>
+        <LeftPanel {...leftPanelProps} idPrefix="menu" />
+        <div className="mt-6 space-y-2 border-t border-border pt-4">
+          <button
+            onClick={() => { setTab("planner"); setMobileMenuOpen(false); }}
+            className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-medium text-text transition hover:bg-surfaceSubtle"
+          >
+            <svg className="h-5 w-5 text-textMuted" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            Financial Planner
+          </button>
+        </div>
+      </MobileMenu>
       <Shell
-        left={
-          <LeftPanel
-            profile={profile}
-            usage={usage}
-            search={search}
-            onSearchChange={setSearch}
-            metroFilter={metroFilter}
-            onMetroFilterChange={setMetroFilter}
-            onOpenOnboarding={() => {
-              if (profile) {
-                setShowProfileEdit(true);
-              } else {
-                setShowOnboarding(true);
-              }
-            }}
-            onKeywordSearch={runKeywordSearch}
-            onRefreshFeed={loadFeed}
-            onUpgrade={() => openUpgrade()}
-            onOpenAuth={() => setShowAuth(true)}
-            onSignOut={handleSignOut}
-            onOpenAccountSettings={() => setShowAccountSettings(true)}
-          />
-        }
+        left={<LeftPanel key="desktop" {...leftPanelProps} />}
         right={
           <div className="space-y-6">
             {/* Tab switcher */}
-            <div className="flex gap-2 border-b border-textSecondary/10 pb-3">
+            <div className="hidden flex-wrap gap-2 border-b border-textMuted/10 pb-3 lg:flex">
               <TabButton
                 active={tab === "discover"}
                 onClick={() => setTab("discover")}
               >
-                Discover Grants
+                Discover
               </TabButton>
               <TabButton
                 active={tab === "kanban"}
@@ -464,26 +499,59 @@ export default function Home() {
               </TabButton>
             </div>
 
+            {authNotice && (
+              <div className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-secondary/30 bg-secondary/10 p-4 text-sm text-text">
+                <p>{authNotice}</p>
+                <button
+                  onClick={() => setAuthNotice(null)}
+                  className="shrink-0 rounded-lg p-1 text-textMuted transition hover:text-text"
+                  aria-label="Dismiss notice"
+                >
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            )}
+
             {error && error !== "Invalid token" && (
-              <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-600">
+              <div className="mb-4 rounded-xl border border-danger/30 bg-dangerSoft p-4 text-sm text-danger">
                 {error}
               </div>
             )}
 
             {tab === "discover" && (
               <div className="space-y-4">
-                <h1 className="font-serif text-3xl font-bold text-textPrimary">
-                  Discover Scholarships
+                <h1 className="font-serif text-3xl font-bold text-text">
+                  Discover Opportunities
                 </h1>
 
+                {/* Mobile Discover search — visible without opening the menu */}
+                <div className="lg:hidden rounded-2xl border border-border bg-surface p-4 shadow-sm">
+                  <DiscoverSearch
+                    search={search}
+                    onSearchChange={setSearch}
+                    onKeywordSearch={runKeywordSearch}
+                    onRefreshFeed={loadFeed}
+                    usage={usage}
+                    onUpgrade={() =>
+                      openUpgrade(
+                        `You've reached your free keyword search limit (${usage?.search_limit ?? 10}/week). Upgrade for unlimited searches.`,
+                      )
+                    }
+                    idPrefix="mb"
+                    busy={loading}
+                  />
+                </div>
+
                 {!profile && !error && (
-                  <div className="rounded-2xl bg-cardBg p-6 text-center">
-                    <p className="text-textSecondary">
-                      Complete your profile to see matched scholarships.
+                  <div className="rounded-2xl bg-surfaceSubtle p-6 text-center">
+                    <p className="text-textMuted">
+                      Complete your profile to see matched opportunities.
                     </p>
                     <button
                       onClick={() => setShowOnboarding(true)}
-                      className="mt-4 rounded-full bg-crayolaBlue px-6 py-2.5 text-sm font-medium text-surfaceBg"
+                      className="mt-4 rounded-full bg-primary px-6 py-2.5 text-sm font-medium text-surface"
                     >
                       Start Onboarding
                     </button>
@@ -491,23 +559,23 @@ export default function Home() {
                 )}
 
                 {profile && !feed && !loading && !error && (
-                  <div className="rounded-2xl bg-cardBg p-6 text-center">
-                    <p className="text-textSecondary">
+                  <div className="rounded-2xl bg-surfaceSubtle p-6 text-center">
+                    <p className="text-textMuted">
                       Click &ldquo;Refresh Matches&rdquo; to run the matching engine.
                     </p>
                   </div>
                 )}
 
                 {loading && (
-                  <div className="rounded-2xl bg-cardBg p-6 text-center text-textSecondary">
+                  <div className="rounded-2xl bg-surfaceSubtle p-6 text-center text-textMuted">
                     Loading matches…
                   </div>
                 )}
 
                 {feed && (
                   <>
-                    <p className="text-sm text-textSecondary">
-                      {feed.total} scholarships matched · {feed.visible} visible
+                    <p className="text-sm text-textMuted">
+                      {feed.total} opportunities matched · {feed.visible} visible
                       {!isPremium && ` (free tier shows top ${feed.visible})`}
                     </p>
                     <ScholarshipFeed
@@ -515,7 +583,7 @@ export default function Home() {
                       isPremium={isPremium}
                       profile={profile}
                       onUnlock={() =>
-                        openUpgrade("Unlock all scholarship results with Premium.")
+                        openUpgrade("Unlock all matched opportunities with Premium.")
                       }
                       onTrack={() => {
                         // Refresh kanban count silently
@@ -531,10 +599,10 @@ export default function Home() {
 
             {tab === "kanban" && (
               <div className="space-y-4">
-                <h1 className="font-serif text-3xl font-bold text-textPrimary">
+                <h1 className="font-serif text-3xl font-bold text-text">
                   My Applications
                 </h1>
-                <p className="text-sm text-textSecondary">
+                <p className="text-sm text-textMuted">
                   Drag cards between columns to update status.{" "}
                   {!isPremium &&
                     "Free tier: max 3 active applications (In Progress + Submitted)."}
@@ -553,7 +621,7 @@ export default function Home() {
             )}
 
             {tab === "calendar" && (
-              <DeadlineCalendar isPremium={isPremium} />
+              <DeadlineCalendar />
             )}
 
             {tab === "planner" && (
@@ -629,6 +697,12 @@ export default function Home() {
           setError("Your account has been permanently deleted.");
         }}
       />
+
+      <MobileBottomNav
+        activeTab={tab === "planner" ? null : (tab as "discover" | "kanban" | "calendar")}
+        onTabChange={(t) => setTab(t)}
+        onOpenMenu={() => setMobileMenuOpen(true)}
+      />
     </>
   );
 }
@@ -649,8 +723,8 @@ function TabButton({
       onClick={onClick}
       className={`rounded-full px-5 py-2 text-sm font-medium transition ${
         active
-          ? "bg-crayolaBlue text-surfaceBg"
-          : "text-textSecondary hover:text-textPrimary"
+          ? "bg-primary text-surface"
+          : "text-textMuted hover:text-text"
       }`}
       {...rest}
     >

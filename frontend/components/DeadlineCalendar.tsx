@@ -5,19 +5,19 @@ import type { AppStatus, CalendarEvent } from "@/lib/types";
 import { api } from "@/lib/api";
 
 const STATUS_COLORS: Record<AppStatus, string> = {
-  saved: "bg-textSecondary/20 text-textSecondary",
-  in_progress: "bg-skyAqua text-surfaceBg",
-  submitted: "bg-blueEnergy text-surfaceBg",
-  awarded: "bg-aquamarine text-textPrimary",
-  archived: "bg-textSecondary/10 text-textSecondary",
+  saved: "bg-textMuted/20 text-textMuted",
+  in_progress: "bg-accent text-surface",
+  submitted: "bg-secondary text-surface",
+  awarded: "bg-accentSoft text-text",
+  archived: "bg-textMuted/10 text-textMuted",
 };
 
 const STATUS_DOT: Record<AppStatus, string> = {
-  saved: "bg-textSecondary/40",
-  in_progress: "bg-skyAqua",
-  submitted: "bg-blueEnergy",
-  awarded: "bg-aquamarine",
-  archived: "bg-textSecondary/20",
+  saved: "bg-textMuted/40",
+  in_progress: "bg-accent",
+  submitted: "bg-secondary",
+  awarded: "bg-accentSoft",
+  archived: "bg-textMuted/20",
 };
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -26,25 +26,24 @@ const MONTHS = [
   "July", "August", "September", "October", "November", "December",
 ];
 
-export type DeadlineCalendarProps = {
-  isPremium: boolean;
-};
-
-export function DeadlineCalendar(_props: DeadlineCalendarProps) {
+export function DeadlineCalendar() {
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [feedUrl, setFeedUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-  const [view, setView] = useState<"month" | "week">("month");
-  const [cursor, setCursor] = useState(() => {
-    const now = new Date();
-    return new Date(now.getFullYear(), now.getMonth(), 1);
-  });
+  const [rotatingFeed, setRotatingFeed] = useState(false);
+  const [view, setView] = useState<"month" | "week">("week");
+  // Anchor the cursor at today — week view renders the current week;
+  // month view derives the month from this date.
+  const [cursor, setCursor] = useState(() => new Date());
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       setLoading(true);
+      setLoadError(false);
       try {
         const [evs, feed] = await Promise.all([
           api.getCalendarEvents(),
@@ -54,6 +53,8 @@ export function DeadlineCalendar(_props: DeadlineCalendarProps) {
           setEvents(evs);
           if (feed) setFeedUrl(feed.feed_url);
         }
+      } catch {
+        if (!cancelled) setLoadError(true);
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -61,7 +62,7 @@ export function DeadlineCalendar(_props: DeadlineCalendarProps) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [reloadKey]);
 
   // Group events by deadline date (YYYY-MM-DD)
   const eventsByDate = useMemo(() => {
@@ -93,6 +94,20 @@ export function DeadlineCalendar(_props: DeadlineCalendarProps) {
     }
   };
 
+  const handleRotateFeed = async () => {
+    if (!window.confirm("Regenerate your calendar link? Your old subscription URL will stop working immediately.")) return;
+    setRotatingFeed(true);
+    try {
+      const feed = await api.rotateFeedToken();
+      setFeedUrl(feed.feed_url);
+      setCopied(false);
+    } catch {
+      // Leave the existing URL in place — the sync button still works.
+    } finally {
+      setRotatingFeed(false);
+    }
+  };
+
   const navigate = (delta: number) => {
     if (view === "month") {
       setCursor(new Date(cursor.getFullYear(), cursor.getMonth() + delta, 1));
@@ -109,21 +124,22 @@ export function DeadlineCalendar(_props: DeadlineCalendarProps) {
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="font-serif text-3xl font-bold text-textPrimary">
+          <h1 className="font-serif text-3xl font-bold text-text">
             Deadline Calendar
           </h1>
-          <p className="mt-1 text-sm text-textSecondary">
-            Track scholarship deadlines with color-coded status indicators.
+          <p className="mt-1 text-sm text-textMuted">
+            Deadlines published by providers for your tracked opportunities —
+            EdFintia never invents one.
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
-          {/* View toggle */}
-          <div className="flex rounded-full border border-textSecondary/20 p-0.5">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+          {/* View toggle — hidden on mobile (mobile defaults to week view) */}
+          <div className="hidden rounded-full border border-textMuted/20 p-0.5 sm:flex">
             <button
               onClick={() => setView("month")}
               className={`rounded-full px-4 py-1.5 text-sm font-medium transition ${
-                view === "month" ? "bg-crayolaBlue text-surfaceBg" : "text-textSecondary"
+                view === "month" ? "bg-primary text-surface" : "text-textMuted"
               }`}
             >
               Month
@@ -131,7 +147,7 @@ export function DeadlineCalendar(_props: DeadlineCalendarProps) {
             <button
               onClick={() => setView("week")}
               className={`rounded-full px-4 py-1.5 text-sm font-medium transition ${
-                view === "week" ? "bg-crayolaBlue text-surfaceBg" : "text-textSecondary"
+                view === "week" ? "bg-primary text-surface" : "text-textMuted"
               }`}
             >
               Week
@@ -142,7 +158,7 @@ export function DeadlineCalendar(_props: DeadlineCalendarProps) {
           <button
             onClick={handleCopyFeed}
             disabled={!feedUrl}
-            className="rounded-full bg-gradient-to-r from-aquamarine to-neonIce px-5 py-2 text-sm font-semibold text-textPrimary disabled:opacity-50"
+            className="rounded-full bg-gradient-to-r from-accentSoft to-accent px-4 py-2 text-sm font-semibold text-text disabled:opacity-50"
           >
             {copied ? "✓ Copied!" : "Sync to Calendar"}
           </button>
@@ -151,37 +167,44 @@ export function DeadlineCalendar(_props: DeadlineCalendarProps) {
 
       {/* Feed URL display */}
       {feedUrl && (
-        <div className="rounded-xl bg-cardBg p-3">
-          <p className="text-xs text-textSecondary">
+        <div className="rounded-xl bg-surfaceSubtle p-3">
+          <p className="break-words text-xs text-textMuted">
             .ics subscription URL (paste into Apple Calendar → New Subscription, Google Calendar → Add by URL, or Outlook → Import):
           </p>
-          <code className="mt-1 block truncate text-xs text-textPrimary">{feedUrl}</code>
+          <code className="mt-1 block break-all text-xs text-text">{feedUrl}</code>
+          <button
+            onClick={handleRotateFeed}
+            disabled={rotatingFeed}
+            className="mt-2 text-xs font-medium text-primary hover:underline disabled:opacity-50"
+          >
+            {rotatingFeed ? "Regenerating…" : "Regenerate calendar link"}
+          </button>
         </div>
       )}
 
       {/* Navigation */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <button
           onClick={() => navigate(-1)}
-          className="rounded-full border border-textSecondary/20 px-4 py-1.5 text-sm text-textSecondary hover:border-crayolaBlue"
+          className="rounded-full border border-textMuted/20 px-3 py-1.5 text-xs text-textMuted hover:border-primary sm:px-4 sm:text-sm"
         >
           ‹ {view === "month" ? "Prev Month" : "Prev Week"}
         </button>
-        <h2 className="font-serif text-lg font-semibold text-textPrimary">
+        <h2 className="break-words font-serif text-base font-semibold text-text sm:text-lg">
           {view === "month"
             ? `${MONTHS[cursor.getMonth()]} ${cursor.getFullYear()}`
             : `Week of ${cursor.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`}
         </h2>
         <button
           onClick={() => navigate(1)}
-          className="rounded-full border border-textSecondary/20 px-4 py-1.5 text-sm text-textSecondary hover:border-crayolaBlue"
+          className="rounded-full border border-textMuted/20 px-3 py-1.5 text-xs text-textMuted hover:border-primary sm:px-4 sm:text-sm"
         >
           {view === "month" ? "Next Month" : "Next Week"} ›
         </button>
       </div>
 
       {/* Legend */}
-      <div className="flex flex-wrap gap-3 text-xs text-textSecondary">
+      <div className="flex flex-wrap gap-3 text-xs text-textMuted">
         {(["saved", "in_progress", "submitted", "awarded"] as AppStatus[]).map((s) => (
           <span key={s} className="flex items-center gap-1.5">
             <span className={`inline-block h-2.5 w-2.5 rounded-full ${STATUS_DOT[s]}`} />
@@ -192,15 +215,38 @@ export function DeadlineCalendar(_props: DeadlineCalendarProps) {
 
       {/* Calendar grid */}
       {loading ? (
-        <div className="rounded-2xl bg-cardBg p-8 text-center text-textSecondary">
+        <div className="rounded-2xl bg-surfaceSubtle p-8 text-center text-textMuted">
           Loading calendar…
         </div>
+      ) : loadError ? (
+        <div className="rounded-2xl border border-danger/20 bg-dangerSoft p-8 text-center">
+          <p className="text-sm text-danger">
+            Couldn&apos;t load your calendar. Please try again.
+          </p>
+          <button
+            onClick={() => setReloadKey((k) => k + 1)}
+            className="mt-3 rounded-full border border-danger/30 px-5 py-2 text-sm font-medium text-danger transition hover:bg-danger/5"
+          >
+            Retry
+          </button>
+        </div>
       ) : view === "month" ? (
-        <MonthGrid
-          cursor={cursor}
-          eventsByDate={eventsByDate}
-          todayKey={todayKey}
-        />
+        <>
+          <div className="hidden sm:block">
+            <MonthGrid
+              cursor={cursor}
+              eventsByDate={eventsByDate}
+              todayKey={todayKey}
+            />
+          </div>
+          <div className="sm:hidden">
+            <WeekGrid
+              cursor={cursor}
+              eventsByDate={eventsByDate}
+              todayKey={todayKey}
+            />
+          </div>
+        </>
       ) : (
         <WeekGrid
           cursor={cursor}
@@ -239,17 +285,17 @@ function MonthGrid({
   while (cells.length % 7 !== 0) cells.push(null);
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-textSecondary/10 bg-cardBg">
-      <div className="grid grid-cols-7 border-b border-textSecondary/10">
+    <div className="overflow-hidden rounded-2xl border border-textMuted/10 bg-surfaceSubtle">
+      <div className="grid grid-cols-7 border-b border-textMuted/10">
         {WEEKDAYS.map((d) => (
-          <div key={d} className="px-2 py-2 text-center text-xs font-medium text-textSecondary">
+          <div key={d} className="px-2 py-2 text-center text-xs font-medium text-textMuted">
             {d}
           </div>
         ))}
       </div>
       <div className="grid grid-cols-7">
         {cells.map((date, i) => {
-          if (!date) return <div key={i} className="min-h-[80px] border-b border-r border-textSecondary/5" />;
+          if (!date) return <div key={i} className="min-h-[80px] border-b border-r border-textMuted/5" />;
           const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
           const dayEvents = eventsByDate[key] ?? [];
           const isToday = key === todayKey;
@@ -257,12 +303,12 @@ function MonthGrid({
           return (
             <div
               key={i}
-              className={`min-h-[80px] border-b border-r border-textSecondary/5 p-1.5 ${
-                isToday ? "bg-aquamarine/10" : ""
+              className={`min-h-[80px] border-b border-r border-textMuted/5 p-1.5 ${
+                isToday ? "bg-accentSoft/10" : ""
               }`}
             >
               <span
-                className={`text-xs ${isToday ? "font-bold text-crayolaBlue" : "text-textSecondary"}`}
+                className={`text-xs ${isToday ? "font-bold text-primary" : "text-textMuted"}`}
               >
                 {date.getDate()}
               </span>
@@ -277,7 +323,7 @@ function MonthGrid({
                   </div>
                 ))}
                 {dayEvents.length > 3 && (
-                  <p className="text-[10px] text-textSecondary">+{dayEvents.length - 3} more</p>
+                  <p className="text-[10px] text-textMuted">+{dayEvents.length - 3} more</p>
                 )}
               </div>
             </div>
@@ -321,24 +367,27 @@ function WeekGrid({
           <div
             key={key}
             className={`rounded-xl border p-3 ${
-              isToday ? "border-crayolaBlue bg-aquamarine/5" : "border-textSecondary/10 bg-cardBg"
+              isToday ? "border-primary bg-accentSoft/5" : "border-textMuted/10 bg-surfaceSubtle"
             }`}
           >
-            <p className={`text-xs font-medium ${isToday ? "text-crayolaBlue" : "text-textSecondary"}`}>
+            <p className={`text-xs font-medium ${isToday ? "text-primary" : "text-textMuted"}`}>
               {WEEKDAYS[date.getDay()]} {date.getDate()}
             </p>
             <div className="mt-2 space-y-2">
               {dayEvents.length === 0 && (
-                <p className="text-xs text-textSecondary/40">No deadlines</p>
+                <p className="text-xs text-textMuted/40">No deadlines</p>
               )}
               {dayEvents.map((ev) => (
-                <div key={ev.tracking_id} className="rounded-lg bg-surfaceBg p-2 shadow-sm">
+                <div key={ev.tracking_id} className="rounded-lg bg-surface p-2 shadow-sm">
                   <div className="flex items-center gap-1.5">
                     <span className={`inline-block h-2 w-2 shrink-0 rounded-full ${STATUS_DOT[ev.status]}`} />
-                    <p className="truncate text-xs font-medium text-textPrimary">{ev.title}</p>
+                    <p className="truncate text-xs font-medium text-text">{ev.title}</p>
                   </div>
-                  <p className="mt-0.5 text-[10px] text-textSecondary">
-                    ${ev.award_amount.toLocaleString()} · {ev.provider}
+                  <p className="mt-0.5 text-[10px] text-textMuted">
+                    {ev.award_amount != null
+                      ? `$${ev.award_amount.toLocaleString()} · `
+                      : ""}
+                    {ev.provider}
                   </p>
                 </div>
               ))}
@@ -367,31 +416,33 @@ function UpcomingList({ events }: { events: CalendarEvent[] }) {
   if (sorted.length === 0) return null;
 
   return (
-    <div className="rounded-2xl bg-cardBg p-5">
-      <h3 className="font-serif text-lg font-semibold text-textPrimary">
+    <div className="rounded-2xl bg-surfaceSubtle p-5">
+      <h3 className="font-serif text-lg font-semibold text-text">
         Upcoming Deadlines
       </h3>
       <div className="mt-3 space-y-2">
         {sorted.map((ev) => (
           <div
             key={ev.tracking_id}
-            className="flex items-center justify-between rounded-xl bg-surfaceBg px-4 py-2.5"
+            className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-surface px-4 py-2.5"
           >
             <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium text-textPrimary">
+              <p className="break-words text-sm font-medium text-text">
                 {ev.title}
               </p>
-              <p className="text-xs text-textSecondary">
-                {ev.provider} · ${ev.award_amount.toLocaleString()}
+              <p className="break-words text-xs text-textMuted">
+                {ev.provider}
+                {ev.award_amount != null &&
+                  ` · $${ev.award_amount.toLocaleString()}`}
               </p>
             </div>
-            <div className="flex shrink-0 items-center gap-3">
+            <div className="flex shrink-0 items-center gap-2 sm:gap-3">
               <span
-                className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_COLORS[ev.status]}`}
+                className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${STATUS_COLORS[ev.status]}`}
               >
                 {ev.status.replace("_", " ")}
               </span>
-              <span className="text-sm font-semibold text-textPrimary">
+              <span className="text-sm font-semibold text-text">
                 {ev.deadline.slice(5)}
               </span>
             </div>

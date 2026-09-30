@@ -35,8 +35,8 @@ def dev_env():
 
 
 @pytest.fixture
-def client():
-    yield TestClient(app)
+def client(authenticated_client_factory):
+    yield authenticated_client_factory(app)
     app.dependency_overrides.clear()
 
 
@@ -108,7 +108,7 @@ class TestAccountDeletionEndpoint:
             return_value=True,
         ), patch(
             "app.services.profile_service._delete_supabase_user",
-            return_value=False,
+            return_value=True,
         ):
             resp = client.delete("/api/v1/profile/me")
 
@@ -200,7 +200,7 @@ class TestAccountDeletionEndpoint:
 
         with patch(
             "app.services.profile_service._cancel_stripe_subscription",
-            return_value=False,
+            return_value=True,
         ), patch(
             "app.services.profile_service._delete_supabase_user",
             return_value=False,
@@ -221,7 +221,7 @@ class TestAccountDeletionEndpoint:
 
         with patch(
             "app.services.profile_service._cancel_stripe_subscription",
-            return_value=False,
+            return_value=True,
         ), patch(
             "app.services.profile_service._delete_supabase_user",
             return_value=True,
@@ -232,8 +232,12 @@ class TestAccountDeletionEndpoint:
         assert resp.json()["supabase_deleted"] is True
         mock_supabase.assert_called_once_with(str(DEMO_USER_ID))
 
-    def test_delete_succeeds_even_if_stripe_fails(self, client):
-        """Local data is still deleted even if Stripe cancellation fails."""
+    def test_delete_blocked_when_stripe_cancellation_fails(self, client):
+        """Deletion stops when an active subscription cannot be canceled.
+
+        Fail-safe rule: GrantRx must not remove the account while a recurring
+        Premium charge may still be active on Stripe.
+        """
         profile = _make_profile()
         db = _build_db(profile=profile)
         _override_db(db)
@@ -247,9 +251,10 @@ class TestAccountDeletionEndpoint:
         ):
             resp = client.delete("/api/v1/profile/me")
 
-        assert resp.status_code == 200
-        assert resp.json()["stripe_canceled"] is False
-        db.commit.assert_called_once()
+        assert resp.status_code == 502
+        assert "could not be canceled" in resp.json()["detail"].lower()
+        db.commit.assert_not_called()
+        assert db._delete_calls == {}
 
 
 # ===========================================================================
@@ -292,7 +297,7 @@ class TestProfileServiceDeleteAccount:
 
         with patch(
             "app.services.profile_service._cancel_stripe_subscription",
-            return_value=False,
+            return_value=True,
         ), patch(
             "app.services.profile_service._delete_supabase_user",
             return_value=False,

@@ -122,7 +122,7 @@ class TestAsanaCsv:
         assert "APhA" in row[3]
         assert "$5,000" in row[3]
         assert row[4] == "Planned"
-        assert "GrantRx" in row[5]
+        assert "EdFintia" in row[5]
 
     def test_comma_escaping(self):
         items = [

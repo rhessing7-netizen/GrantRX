@@ -49,110 +49,23 @@ SCRAPER_TYPES = {"deterministic", "playwright", "llm_fallback"}
 # Discipline normalization
 # ---------------------------------------------------------------------------
 
-# Maps human-readable discipline labels from sources.json to the system's
-# clinical_discipline ENUM values used by the matcher.
-_DISCIPLINE_MAP = {
-    "pharmacy": "pharmacy",
-    "medicine": "medicine",
-    "nursing": "nursing",
-    "physical therapy": "therapeutics_rehab",
-    "occupational therapy": "therapeutics_rehab",
-    "therapeutics_rehab": "therapeutics_rehab",
-    "diagnostic imaging": "diagnostic_imaging",
-    "radiology": "diagnostic_imaging",
-    "public health": "public_health_emergency",
-    "emergency": "public_health_emergency",
-    "osteopathic medicine": "medicine",
-    "physician assistant": "medicine",
-    "dentistry": "any",  # no matching enum; treat as unrestricted
-    "speech-language pathology": "therapeutics_rehab",
-    "health administration": "public_health_emergency",
-    # Allied Health, Therapy & Kinesiology
-    "exercise science": "therapeutics_rehab",
-    "kinesiology": "therapeutics_rehab",
-    "athletic training": "therapeutics_rehab",
-    "respiratory therapy": "therapeutics_rehab",
-    # Public Health & Health Administration
-    "health sciences": "public_health_emergency",
-    "global health": "public_health_emergency",
-    "epidemiology": "public_health_emergency",
-    "healthcare management": "public_health_emergency",
-    "health informatics": "public_health_emergency",
-    "environmental health": "public_health_emergency",
-    "environmental science": "public_health_emergency",
-    # Diagnostic Imaging
-    "radiologic technology": "diagnostic_imaging",
-    "radiologic": "diagnostic_imaging",
-    # Pre-clinical & general science -> medicine (pre-health fallback)
-    "pre-medicine": "medicine",
-    "pre-med": "medicine",
-    "pre-nursing": "nursing",
-    "pre-pharmacy": "pharmacy",
-    "pre-dental": "medicine",
-    "pre-veterinary": "medicine",
-    "pre-vet": "medicine",
-    "pre-physician assistant": "medicine",
-    "pre-pa": "medicine",
-    "medical laboratory science": "medicine",
-    "dental hygiene": "medicine",
-    # Biological Sciences -> medicine (pre-health)
-    "biology": "medicine",
-    "molecular": "medicine",
-    "cellular biology": "medicine",
-    "microbiology": "medicine",
-    "genetics": "medicine",
-    "neuroscience": "medicine",
-    "botany": "medicine",
-    "plant biology": "medicine",
-    "zoology": "medicine",
-    "ecology": "medicine",
-    "evolutionary biology": "medicine",
-    # Chemical & Physical Sciences -> medicine (pre-health)
-    "chemistry": "medicine",
-    "biochemistry": "medicine",
-    "organic chemistry": "medicine",
-    "analytical chemistry": "medicine",
-    "physics": "medicine",
-    "biophysics": "medicine",
-    "astronomy": "medicine",
-    "astrophysics": "medicine",
-    # Earth & Environmental Sciences -> medicine (pre-health/STEM)
-    "geology": "medicine",
-    "earth science": "medicine",
-    "geophysics": "medicine",
-    "oceanography": "medicine",
-    "atmospheric": "medicine",
-    "meteorology": "medicine",
-    "any": "any",
-}
+# C8: the canonical field-of-study registry lives in scrapers.utils.taxonomy.
+# The old _DISCIPLINE_MAP collapsed every label into the six clinical_discipline
+# enum values (or "any"); normalization now returns canonical field-of-study
+# codes. `normalize_discipline` keeps its name/signature for callers.
+from .utils.taxonomy import ANY_FIELD, normalize_field_of_study
 
 
 def normalize_discipline(value: str) -> str:
-    """Normalize a human-readable discipline label to a system ENUM value.
+    """Normalize a human-readable discipline label to a canonical field code.
 
-    Examples:
-        "Pharmacy (PharmD)" -> "pharmacy"
-        "Medicine (MD)"     -> "medicine"
-        "Nursing (BSN)"     -> "nursing"
-        "any"               -> "any"
+    Used for source-coverage hints: unmapped values return ``ANY_FIELD``
+    ("this source is not discipline-scoped"), which is a source hint, not an
+    applicant-eligibility assertion.
     """
     if not value:
-        return "any"
-    lower = value.strip().lower()
-    if lower == "any":
-        return "any"
-    # Try exact key match first
-    if lower in _DISCIPLINE_MAP:
-        return _DISCIPLINE_MAP[lower]
-    # Try prefix match (e.g. "pharmacy (pharmd)" -> "pharmacy")
-    for key, mapped in _DISCIPLINE_MAP.items():
-        if lower.startswith(key):
-            return mapped
-    # Fallback: check if any keyword is in the string
-    for key, mapped in _DISCIPLINE_MAP.items():
-        if key in lower:
-            return mapped
-    return "any"
+        return ANY_FIELD
+    return normalize_field_of_study(value) or ANY_FIELD
 
 
 # ---------------------------------------------------------------------------

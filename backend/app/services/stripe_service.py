@@ -10,7 +10,7 @@ Required env vars:
   STRIPE_WEBHOOK_SECRET  - whsec_... (from Stripe Dashboard webhook endpoint)
   STRIPE_PRICE_MONTHLY   - price_... (Stripe Price ID for monthly plan)
   STRIPE_PRICE_ANNUAL    - price_... (Stripe Price ID for annual plan)
-  APP_BASE_URL           - e.g. https://api.grantrx.app (for success/cancel defaults)
+  API_BASE_URL           - e.g. https://api.grantrx.com
 """
 
 from __future__ import annotations
@@ -23,6 +23,7 @@ import stripe
 from sqlalchemy.orm import Session
 
 from ..models.models import Profile
+from ..config import APP_URL
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +32,6 @@ stripe.api_key = os.getenv("STRIPE_SECRET_KEY", "")
 PRICE_MONTHLY = os.getenv("STRIPE_PRICE_MONTHLY", "")
 PRICE_ANNUAL = os.getenv("STRIPE_PRICE_ANNUAL", "")
 WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET", "")
-APP_BASE_URL = os.getenv("APP_BASE_URL", "http://localhost:8000")
 
 PLAN_PRICES = {
     "monthly": PRICE_MONTHLY,
@@ -92,7 +92,7 @@ def create_checkout_session(
 
 def create_billing_portal_session(
     customer_id: str,
-    return_url: str = "https://grant-rx.vercel.app",
+    return_url: str = APP_URL,
 ) -> stripe.billing_portal.Session:
     """Create a Stripe Customer Portal session for self-service billing management."""
     if not stripe.api_key:

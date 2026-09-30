@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   AFFILIATION_OPTIONS,
   CREDENTIAL_OPTIONS,
@@ -9,7 +9,7 @@ import {
 } from "@/lib/types";
 import { getMetrosForState } from "@/lib/constants/metros";
 import { MAJOR_CATEGORIES, mapMajorToClinicalDiscipline } from "@/lib/constants/disciplines";
-import { type DegreeLevel } from "@/lib/constants/credentials";
+import { levelForCredential, type DegreeLevel } from "@/lib/constants/credentials";
 import { api } from "@/lib/api";
 import { supabase } from "@/lib/supabase";
 import { MultiSelect } from "./MultiSelect";
@@ -28,8 +28,14 @@ export function ProfileEditModal({ open, onClose, profile, onSaved, onDeleted }:
   const [disciplines, setDisciplines] = useState<string[]>(profile.disciplines ?? []);
   const [credentials, setCredentials] = useState<string[]>(profile.target_credentials ?? []);
 
-  // Cascading credential selection
-  const [degreeLevel, setDegreeLevel] = useState<DegreeLevel | "">("");
+  // Cascading credential selection — reverse-map the saved credential to its
+  // degree level so the select restores the full path instead of hiding the
+  // saved value.
+  const [degreeLevel, setDegreeLevel] = useState<DegreeLevel | "">(
+    profile.target_credential
+      ? levelForCredential(profile.target_credential)
+      : "",
+  );
   const [selectedCredential, setSelectedCredential] = useState(profile.target_credential ?? "");
   const [clinicalPhase, setClinicalPhase] = useState(profile.clinical_phase ?? "");
   const [gpa, setGpa] = useState(profile.gpa != null ? String(profile.gpa) : "");
@@ -45,8 +51,21 @@ export function ProfileEditModal({ open, onClose, profile, onSaved, onDeleted }:
 
   // Danger Zone state
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        if (confirmDeleteOpen) setConfirmDeleteOpen(false);
+        else onClose();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [open, onClose, confirmDeleteOpen]);
 
   if (!open) return null;
 
@@ -60,9 +79,15 @@ export function ProfileEditModal({ open, onClose, profile, onSaved, onDeleted }:
     setSaving(true);
     setError(null);
     try {
-      const allCredentials = selectedCredential
-        ? [...credentials, selectedCredential]
-        : credentials;
+      // Stable-order dedup: the cascading credential may already be present
+      // in the multi-select list after a previous save.
+      const allCredentials = [
+        ...new Set(
+          selectedCredential ? [...credentials, selectedCredential] : credentials,
+        ),
+      ];
+      // Explicit nulls clear optional fields on the backend; omitting a key
+      // would leave the existing value unchanged.
       const payload: ProfileUpdate = {
         disciplines,
         target_credentials: allCredentials,
@@ -73,20 +98,22 @@ export function ProfileEditModal({ open, onClose, profile, onSaved, onDeleted }:
           .split(",")
           .map((h) => h.trim())
           .filter(Boolean),
+        // Map the first selected major to primary_discipline for backend matching
+        primary_discipline:
+          disciplines.length > 0
+            ? mapMajorToClinicalDiscipline(disciplines[0])
+            : null,
+        target_credential: selectedCredential || null,
+        clinical_phase: clinicalPhase || null,
+        gpa: gpa ? parseFloat(gpa) : null,
+        state_residence: stateResidence ? stateResidence.toUpperCase() : null,
+        metro_area: metroArea || null,
+        sai_score: saiScore ? parseInt(saiScore, 10) : null,
       };
-      // Map the first selected major to primary_discipline for backend matching
-      if (disciplines.length > 0) {
-        payload.primary_discipline = mapMajorToClinicalDiscipline(disciplines[0]);
-      }
-      // Set target_credential from the cascading selection
-      if (selectedCredential) payload.target_credential = selectedCredential;
-      if (clinicalPhase) payload.clinical_phase = clinicalPhase;
-      if (gpa) payload.gpa = parseFloat(gpa);
-      if (stateResidence) payload.state_residence = stateResidence.toUpperCase();
-      if (metroArea) payload.metro_area = metroArea;
-      if (saiScore) payload.sai_score = parseInt(saiScore, 10);
 
       const updated = await api.updateProfile(payload);
+      // Sync the cache with the server-confirmed result only after success
+      try { localStorage.setItem("grantrx_profile", JSON.stringify(updated)); } catch {}
       onSaved(updated);
       onClose();
     } catch (err) {
@@ -98,27 +125,30 @@ export function ProfileEditModal({ open, onClose, profile, onSaved, onDeleted }:
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-textPrimary/40 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-text/40 p-4 backdrop-blur-sm"
       onClick={onClose}
     >
       <div
-        className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-3xl bg-surfaceBg p-8 shadow-2xl"
+        className="mx-auto max-h-[90dvh] w-[calc(100%-2rem)] max-w-lg overflow-y-auto rounded-2xl bg-surface p-6 shadow-2xl sm:w-full sm:rounded-3xl sm:p-8"
         onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Edit profile"
       >
         <div className="mb-6 flex items-center justify-between">
-          <h2 className="font-serif text-2xl font-bold text-textPrimary">
+          <h2 className="font-serif text-2xl font-bold text-text">
             Edit Profile
           </h2>
           <button
             onClick={onClose}
-            className="text-sm text-textSecondary hover:text-textPrimary"
+            className="text-sm text-textMuted hover:text-text"
           >
             Close
           </button>
         </div>
 
         {error && (
-          <div className="mb-4 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">
+          <div className="mb-4 rounded-xl bg-dangerSoft px-4 py-3 text-sm text-danger">
             {error}
           </div>
         )}
@@ -155,20 +185,20 @@ export function ProfileEditModal({ open, onClose, profile, onSaved, onDeleted }:
 
           {/* Academic details */}
           <div>
-            <label className="block text-sm font-medium text-textSecondary">
+            <label className="block text-sm font-medium text-textMuted">
               Clinical Phase
             </label>
             <input
               value={clinicalPhase}
               onChange={(e) => setClinicalPhase(e.target.value)}
               placeholder="e.g. P1, P2, MS3"
-              className="mt-2 w-full rounded-xl border border-textSecondary/20 bg-surfaceBg px-4 py-2.5 text-textPrimary"
+              className="mt-2 w-full rounded-xl border border-textMuted/20 bg-surface px-4 py-2.5 text-text"
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
-              <label className="block text-sm font-medium text-textSecondary">
+              <label className="block text-sm font-medium text-textMuted">
                 GPA
               </label>
               <input
@@ -179,11 +209,11 @@ export function ProfileEditModal({ open, onClose, profile, onSaved, onDeleted }:
                 min="0"
                 max="4"
                 placeholder="3.75"
-                className="mt-2 w-full rounded-xl border border-textSecondary/20 bg-surfaceBg px-4 py-2.5 text-textPrimary"
+                className="mt-2 w-full rounded-xl border border-textMuted/20 bg-surface px-4 py-2.5 text-text"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-textSecondary">
+              <label className="block text-sm font-medium text-textMuted">
                 State
               </label>
               <input
@@ -193,13 +223,13 @@ export function ProfileEditModal({ open, onClose, profile, onSaved, onDeleted }:
                 }
                 placeholder="CA"
                 maxLength={2}
-                className="mt-2 w-full rounded-xl border border-textSecondary/20 bg-surfaceBg px-4 py-2.5 text-textPrimary"
+                className="mt-2 w-full rounded-xl border border-textMuted/20 bg-surface px-4 py-2.5 text-text"
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-textSecondary">
+            <label className="block text-sm font-medium text-textMuted">
               SAI Score
             </label>
             <input
@@ -207,18 +237,18 @@ export function ProfileEditModal({ open, onClose, profile, onSaved, onDeleted }:
               onChange={(e) => setSaiScore(e.target.value)}
               type="number"
               placeholder="e.g. 1200"
-              className="mt-2 w-full rounded-xl border border-textSecondary/20 bg-surfaceBg px-4 py-2.5 text-textPrimary"
+              className="mt-2 w-full rounded-xl border border-textMuted/20 bg-surface px-4 py-2.5 text-text"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-textSecondary">
+            <label className="block text-sm font-medium text-textMuted">
               Metropolitan Area
             </label>
             <select
               value={metroArea}
               onChange={(e) => setMetroArea(e.target.value)}
-              className="mt-2 w-full rounded-xl border border-textSecondary/20 bg-surfaceBg px-4 py-2.5 text-textPrimary"
+              className="mt-2 w-full rounded-xl border border-textMuted/20 bg-surface px-4 py-2.5 text-text"
             >
               <option value="">Any / Not specified</option>
               {getMetrosForState(stateResidence).map((m) => (
@@ -231,28 +261,28 @@ export function ProfileEditModal({ open, onClose, profile, onSaved, onDeleted }:
 
           {/* Background */}
           <div className="flex gap-6">
-            <label className="flex items-center gap-2 text-sm text-textPrimary">
+            <label className="flex items-center gap-2 text-sm text-text">
               <input
                 type="checkbox"
                 checked={firstGen}
                 onChange={(e) => setFirstGen(e.target.checked)}
-                className="h-4 w-4 accent-crayolaBlue"
+                className="h-4 w-4 accent-primary"
               />
               First-Generation
             </label>
-            <label className="flex items-center gap-2 text-sm text-textPrimary">
+            <label className="flex items-center gap-2 text-sm text-text">
               <input
                 type="checkbox"
                 checked={minorityFlag}
                 onChange={(e) => setMinorityFlag(e.target.checked)}
-                className="h-4 w-4 accent-crayolaBlue"
+                className="h-4 w-4 accent-primary"
               />
               Minority / Underrepresented
             </label>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-textSecondary">
+            <label className="block text-sm font-medium text-textMuted">
               Professional Affiliations
             </label>
             <div className="mt-2 flex flex-wrap gap-2">
@@ -263,8 +293,8 @@ export function ProfileEditModal({ open, onClose, profile, onSaved, onDeleted }:
                   onClick={() => toggleAffiliation(a)}
                   className={`rounded-full px-3 py-1.5 text-sm transition ${
                     affiliations.includes(a)
-                      ? "bg-crayolaBlue text-surfaceBg"
-                      : "border border-textSecondary/20 text-textSecondary"
+                      ? "bg-primary text-surface"
+                      : "border border-textMuted/20 text-textMuted"
                   }`}
                 >
                   {a}
@@ -274,14 +304,14 @@ export function ProfileEditModal({ open, onClose, profile, onSaved, onDeleted }:
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-textSecondary">
+            <label className="block text-sm font-medium text-textMuted">
               Hobbies / Interests (comma-separated)
             </label>
             <input
               value={hobbies}
               onChange={(e) => setHobbies(e.target.value)}
               placeholder="research, volunteering, music"
-              className="mt-2 w-full rounded-xl border border-textSecondary/20 bg-surfaceBg px-4 py-2.5 text-textPrimary"
+              className="mt-2 w-full rounded-xl border border-textMuted/20 bg-surface px-4 py-2.5 text-text"
             />
           </div>
         </div>
@@ -290,38 +320,38 @@ export function ProfileEditModal({ open, onClose, profile, onSaved, onDeleted }:
         <div className="mt-8 flex items-center justify-end gap-3">
           <button
             onClick={onClose}
-            className="text-sm text-textSecondary hover:text-textPrimary"
+            className="text-sm text-textMuted hover:text-text"
           >
             Cancel
           </button>
           <button
             onClick={handleSave}
             disabled={saving}
-            className="rounded-full bg-crayolaBlue px-6 py-2.5 text-sm font-medium text-surfaceBg disabled:opacity-50"
+            className="rounded-full bg-primary px-6 py-2.5 text-sm font-medium text-surface disabled:opacity-50"
           >
             {saving ? "Saving…" : "Save Changes"}
           </button>
         </div>
 
         {/* Permanently Delete */}
-        <div className="rounded-2xl border border-red-200/70 bg-red-50/40 p-5 mt-6">
-          <h3 className="text-red-700 font-semibold text-sm mb-1">
+        <div className="rounded-2xl border border-danger/30 bg-dangerSoft/40 p-5 mt-6">
+          <h3 className="text-danger font-semibold text-sm mb-1">
             Permanently Delete
           </h3>
-          <p className="mt-1 text-xs text-textSecondary">
+          <p className="mt-1 text-xs text-textMuted">
             Permanently delete your account, cancel any active subscription,
-            and remove all saved scholarships, budgets, and reports. This
+            and remove all tracked opportunities, budgets, and reports. This
             action cannot be undone.
           </p>
           <button
             onClick={() => setConfirmDeleteOpen(true)}
             disabled={deleting}
-            className="mt-3 rounded-full border-2 border-red-500 px-5 py-2 text-sm font-medium text-red-600 transition hover:bg-red-500 hover:text-white disabled:opacity-50"
+            className="mt-3 rounded-full border-2 border-danger px-5 py-2 text-sm font-medium text-danger transition hover:bg-danger hover:text-white disabled:opacity-50"
           >
             Delete Account & Data
           </button>
           {deleteError && (
-            <p className="mt-2 text-xs text-red-600">{deleteError}</p>
+            <p className="mt-2 text-xs text-danger">{deleteError}</p>
           )}
         </div>
       </div>
@@ -329,32 +359,45 @@ export function ProfileEditModal({ open, onClose, profile, onSaved, onDeleted }:
       {/* Confirmation modal */}
       {confirmDeleteOpen && (
         <div
-          className="fixed inset-0 z-[60] flex items-center justify-center bg-textPrimary/50 backdrop-blur-sm"
+          className="fixed inset-0 z-[60] flex items-start justify-center overflow-y-auto bg-text/50 p-4 backdrop-blur-sm"
           onClick={() => !deleting && setConfirmDeleteOpen(false)}
         >
           <div
-            className="w-full max-w-md rounded-3xl bg-surfaceBg p-6 shadow-2xl"
+            className="mx-auto w-[calc(100%-2rem)] max-w-md rounded-2xl bg-surface p-6 shadow-2xl sm:w-full sm:rounded-3xl"
             onClick={(e) => e.stopPropagation()}
+            role="alertdialog"
+            aria-modal="true"
+            aria-label="Delete account confirmation"
           >
-            <h3 className="font-serif text-lg font-bold text-red-700">
+            <h3 className="font-serif text-lg font-bold text-danger">
               Delete Account?
             </h3>
-            <p className="mt-2 text-sm text-textSecondary">
-              Are you sure? This will cancel your subscription immediately and
-              permanently delete your profile, budget, and saved scholarships.
+            <p className="mt-2 break-words text-sm text-textMuted">
+              Are you sure? This will immediately terminate any active
+              subscription and permanently delete your profile, budget, and
+              tracked opportunities. Type{" "}
+              <span className="font-bold text-danger">DELETE</span> to confirm.
             </p>
-            <div className="mt-5 flex items-center justify-end gap-3">
+            <input
+              type="text"
+              value={deleteConfirmText}
+              onChange={(e) => setDeleteConfirmText(e.target.value)}
+              placeholder="Type DELETE to confirm"
+              aria-label="Type DELETE to confirm account deletion"
+              className="mt-4 w-full rounded-xl border border-danger/30 bg-white px-4 py-2.5 text-sm text-text focus:border-danger focus:outline-none focus:ring-2 focus:ring-danger/20"
+            />
+            <div className="mt-5 flex flex-wrap items-center justify-end gap-3">
               <button
                 onClick={() => setConfirmDeleteOpen(false)}
                 disabled={deleting}
-                className="text-sm text-textSecondary hover:text-textPrimary disabled:opacity-50"
+                className="text-sm text-textMuted hover:text-text disabled:opacity-50"
               >
                 Cancel
               </button>
               <button
                 onClick={handleDeleteAccount}
-                disabled={deleting}
-                className="rounded-full bg-red-600 px-5 py-2 text-sm font-medium text-white transition hover:bg-red-700 disabled:opacity-50"
+                disabled={deleting || deleteConfirmText.trim() !== "DELETE"}
+                className="rounded-full bg-danger px-5 py-2 text-sm font-medium text-white transition hover:bg-danger disabled:opacity-50"
               >
                 {deleting ? "Deleting…" : "Yes, delete my account"}
               </button>
@@ -370,6 +413,8 @@ export function ProfileEditModal({ open, onClose, profile, onSaved, onDeleted }:
     setDeleteError(null);
     try {
       await api.deleteAccount();
+      // Clear the cached profile so deleted state never re-hydrates
+      try { localStorage.removeItem("grantrx_profile"); } catch {}
       // Sign out of Supabase client auth
       if (supabase) {
         try {

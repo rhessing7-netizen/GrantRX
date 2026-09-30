@@ -1,23 +1,21 @@
 """Profile service — account lifecycle operations.
 
-Currently provides self-serve account deletion that:
-  1. Cancels any active Stripe subscription to stop recurring charges.
-  2. Cascades deletion across user-owned records (budget, tracked
-     scholarships, reports filed by the user).
-  3. Removes the profile row itself.
-  4. Purges Supabase Auth credentials when SUPABASE_URL + SUPABASE_KEY
-     are configured (graceful no-op otherwise).
+Account deletion is intentionally fail-safe around external systems:
+  1. An active Stripe subscription must be canceled before local deletion.
+     If Stripe cannot confirm cancellation, deletion stops so GrantRx never
+     removes the account while recurring billing may still be active.
+  2. User-owned database records are deleted and committed atomically.
+  3. Supabase Auth is deleted only *after* the database commit succeeds, so
+     an auth identity is never removed before GrantRx has committed deletion.
 
-All steps are wrapped so that a failure in one external system (Stripe or
-Supabase) does not prevent local data deletion, which is the user's
-primary intent. Errors are logged and surfaced in the response summary.
+Supabase cleanup is best-effort after the irreversible local commit. A failed
+Auth cleanup is reported explicitly for operations follow-up; it cannot roll
+back already-deleted personal data.
 """
-
 from __future__ import annotations
 
 import logging
 import os
-from typing import Optional
 
 from sqlalchemy.orm import Session
 
@@ -26,16 +24,20 @@ from ..models.models import Profile, ScholarshipReport, StudentCollegeBudget, Us
 logger = logging.getLogger(__name__)
 
 
+class SubscriptionCancellationError(RuntimeError):
+    """Raised when account deletion cannot safely stop an active subscription."""
+
+
 def _cancel_stripe_subscription(subscription_id: str) -> bool:
-    """Cancel a Stripe subscription immediately. Returns True on success."""
+    """Cancel a Stripe subscription immediately. Returns True only on confirmation."""
     try:
         import stripe  # type: ignore
     except ImportError:
-        logger.warning("stripe package not installed — cannot cancel subscription %s", subscription_id)
+        logger.error("stripe package not installed — cannot cancel subscription %s", subscription_id)
         return False
 
     if not stripe.api_key:
-        logger.info("STRIPE_SECRET_KEY not set — skipping Stripe cancellation for %s", subscription_id)
+        logger.error("STRIPE_SECRET_KEY not set — cannot cancel subscription %s", subscription_id)
         return False
 
     try:
@@ -48,14 +50,11 @@ def _cancel_stripe_subscription(subscription_id: str) -> bool:
 
 
 def _delete_supabase_user(user_id: str) -> bool:
-    """Delete the user from Supabase Auth via the Admin API.
-
-    Returns True on success, False on failure or when not configured.
-    """
+    """Delete the user from Supabase Auth via the Admin API."""
     supabase_url = os.getenv("SUPABASE_URL")
     supabase_key = os.getenv("SUPABASE_KEY")
     if not supabase_url or not supabase_key:
-        logger.info("SUPABASE_URL/SUPABASE_KEY not set — skipping Supabase user deletion")
+        logger.error("SUPABASE_URL/SUPABASE_KEY not set — Supabase user cleanup required for %s", user_id)
         return False
 
     try:
@@ -71,47 +70,53 @@ def _delete_supabase_user(user_id: str) -> bool:
 
 
 def delete_account(db: Session, user_id: str) -> dict:
-    """Permanently delete a user's account and all associated data.
+    """Permanently delete a user's account without risking post-deletion billing.
 
-    Order of operations:
-      1. Load profile (needed for Stripe customer/subscription IDs).
-      2. Cancel Stripe subscription if active.
-      3. Delete user_scholarships rows.
-      4. Delete student_college_budgets rows.
-      5. Delete scholarship_reports filed by the user.
-      6. Delete the profile row.
-      7. Purge Supabase Auth credentials.
-      8. Commit.
-
-    Returns a summary dict with status and per-step indicators.
+    Active/trialing subscriptions are a hard precondition: Stripe must confirm
+    cancellation before destructive local work begins. Database deletion is then
+    committed before Supabase Auth deletion, preventing an auth-first partial
+    failure. Supabase failure is surfaced as ``auth_cleanup_required`` so it can
+    be retried operationally without restoring personal data.
     """
     profile = db.query(Profile).filter(Profile.id == user_id).first()
     if not profile:
-        return {
-            "status": "not_found",
-            "message": "Profile not found.",
-        }
+        return {"status": "not_found", "message": "Profile not found."}
 
+    has_active_subscription = bool(
+        profile.stripe_subscription_id
+        and profile.stripe_subscription_status in ("active", "trialing")
+    )
     stripe_canceled = False
-    if profile.stripe_subscription_id and profile.stripe_subscription_status in ("active", "trialing"):
+    if has_active_subscription:
         stripe_canceled = _cancel_stripe_subscription(profile.stripe_subscription_id)
+        if not stripe_canceled:
+            raise SubscriptionCancellationError(
+                "Active subscription could not be canceled. Account deletion was not performed."
+            )
 
-    # Cascade-delete user-owned records
-    db.query(UserScholarship).filter(UserScholarship.user_id == user_id).delete(synchronize_session=False)
-    db.query(StudentCollegeBudget).filter(StudentCollegeBudget.user_id == user_id).delete(synchronize_session=False)
-    db.query(ScholarshipReport).filter(ScholarshipReport.reported_by == user_id).delete(synchronize_session=False)
+    try:
+        db.query(UserScholarship).filter(UserScholarship.user_id == user_id).delete(synchronize_session=False)
+        db.query(StudentCollegeBudget).filter(StudentCollegeBudget.user_id == user_id).delete(synchronize_session=False)
+        db.query(ScholarshipReport).filter(ScholarshipReport.reported_by == user_id).delete(synchronize_session=False)
+        db.query(Profile).filter(Profile.id == user_id).delete(synchronize_session=False)
+        db.commit()
+    except Exception:
+        db.rollback()
+        logger.exception("Database account deletion failed for user %s", user_id)
+        raise
 
-    # Delete the profile itself
-    db.query(Profile).filter(Profile.id == user_id).delete(synchronize_session=False)
-
-    # Purge Supabase Auth credentials
+    # External auth deletion occurs only after the database transaction is durable.
     supabase_deleted = _delete_supabase_user(user_id)
-
-    db.commit()
-
+    status = "deleted" if supabase_deleted else "deleted_auth_cleanup_required"
+    message = (
+        "Account, subscription, and personal data permanently purged."
+        if supabase_deleted
+        else "Personal data was deleted, but authentication cleanup requires follow-up."
+    )
     return {
-        "status": "deleted",
-        "message": "Account, subscription, and personal data permanently purged.",
+        "status": status,
+        "message": message,
         "stripe_canceled": stripe_canceled,
         "supabase_deleted": supabase_deleted,
+        "auth_cleanup_required": not supabase_deleted,
     }

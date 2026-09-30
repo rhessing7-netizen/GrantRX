@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
-import { setAuthToken } from "@/lib/api";
+import { api, setAuthToken } from "@/lib/api";
+import { BrandMark } from "@/components/Brand";
 import type { Profile } from "@/lib/types";
 
 export type AuthModalProps = {
@@ -58,6 +59,15 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
   const [otpCode, setOtpCode] = useState("");
   const [pendingEmail, setPendingEmail] = useState("");
   const [success, setSuccess] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [open, onClose]);
 
   if (!open) return null;
 
@@ -114,12 +124,7 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
       }
     }
 
-    if (!supabase) {
-      // Dev mode without Supabase configured — simulate auth
-      setAuthToken("grantrx-dev-demo");
-      onAuthSuccess(null);
-      return;
-    }
+    if (!supabase) { setError("Authentication is not configured."); return; }
 
     try {
       const redirectTo = `${window.location.origin}/auth/callback`;
@@ -138,7 +143,7 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
           sbError.message.includes("OAuth")
         ) {
           setError(
-            "OAuth provider is not yet enabled in Supabase. Please sign up using email and password.",
+            "This sign-in option isn't available yet. Please continue with email and password.",
           );
         } else {
           setError(sbError.message);
@@ -146,15 +151,12 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
       }
     } catch {
       setError(
-        "OAuth provider is not yet enabled in Supabase. Please sign up using email and password.",
+        "This sign-in option isn't available yet. Please continue with email and password.",
       );
     }
   };
 
   const handleSubmit = async () => {
-    console.log("[AuthModal] Submitting with mode:", mode);
-    console.log("[AuthModal] NEXT_PUBLIC_API_URL:", process.env.NEXT_PUBLIC_API_URL);
-    console.log("[AuthModal] NEXT_PUBLIC_SUPABASE_URL:", process.env.NEXT_PUBLIC_SUPABASE_URL);
     setTouched({ email: true, password: true });
     if (!emailValid || !passwordValid) return;
     if (mode === "signup" && !termsAccepted) {
@@ -177,16 +179,9 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
     setSubmitting(true);
     setError(null);
     try {
-      if (!supabase) {
-        // Dev mode without Supabase configured — simulate auth
-        console.log("[AuthModal] No Supabase client — using dev demo token");
-        setAuthToken("grantrx-dev-demo");
-        onAuthSuccess(null);
-        return;
-      }
+      if (!supabase) { setError("Authentication is not configured."); return; }
 
       if (mode === "signup") {
-        console.log("[AuthModal] Key length:", process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.length);
         let signUpData: { user?: { id?: string; email_confirmed_at?: string | null } | null; session?: { access_token?: string } | null } | null = null;
         let signUpError: Error | null = null;
         try {
@@ -220,51 +215,16 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
 
         // Set the auth token for API calls if a session was returned
         if (signUpData?.session?.access_token) {
-          console.log("[AuthModal] Signup: setAuthToken with session token, length:", signUpData.session.access_token.length);
           setAuthToken(signUpData.session.access_token);
         }
 
-        // Construct default base profile so the session never resets to null.
-        const studentProfile = {
-          id: signUpData?.user?.id || "usr_" + Date.now(),
-          user_id: signUpData?.user?.id || "usr_" + Date.now(),
-          full_name: fullName.trim(),
-          email: email.trim(),
-          primary_discipline: "pharmacy",
-          target_credential: "PharmD",
-          clinical_phase: "Professional (P1-P4)",
-          gpa: 3.5,
-          state_residence: "OH",
-          updated_at: new Date().toISOString(),
-        };
-
-        // Store in localStorage immediately
-        try {
-          localStorage.setItem("grantrx_profile", JSON.stringify(studentProfile));
-        } catch {
-          // localStorage may be unavailable (private mode) — proceed anyway
-        }
-
-        // Attempt direct profile initialization via Supabase (best-effort)
-        try {
-          if (signUpData?.user?.id) {
-            await supabase.from("profiles").upsert({
-              id: signUpData.user.id,
-              user_id: signUpData.user.id,
-              full_name: fullName.trim(),
-              email: email.trim(),
-              terms_accepted_at: new Date().toISOString(),
-              privacy_accepted_at: new Date().toISOString(),
-              marketing_opt_in: marketingOptIn,
-              marketing_opt_in_at: marketingOptIn ? new Date().toISOString() : null,
-            });
-          }
-        } catch (dbErr) {
-          console.warn("Profile table upsert skipped:", dbErr);
-        }
-
-        // Advance user to the app with the student profile
-        onAuthSuccess(studentProfile as unknown as Profile);
+        if (signUpData?.session?.access_token) {
+          try {
+            const created = await api.createProfile({ full_name: fullName.trim() || undefined, email: email.trim(), terms_accepted: true, privacy_accepted: true, marketing_opt_in: marketingOptIn });
+            try { localStorage.setItem("grantrx_profile", JSON.stringify(created)); } catch {}
+            onAuthSuccess(created);
+          } catch { onAuthSuccess(null); }
+        } else { onAuthSuccess(null); }
       } else {
         const { data, error: authError } =
           await supabase.auth.signInWithPassword({ email, password });
@@ -275,21 +235,16 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
         }
 
         if (data.session?.access_token) {
-          console.log("[AuthModal] Signin: setAuthToken with session token, length:", data.session.access_token.length);
           setAuthToken(data.session.access_token);
         }
 
         // Advance user — profile will be loaded from Supabase or localStorage
         onAuthSuccess(null);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("[AuthModal Catch] Detailed error object:", err);
-      console.error("[AuthModal Catch] Error stack:", err?.stack);
-      setError(
-        err?.stack
-          ? `${err.message} (${err.stack.split("\n")[1]?.trim() || ""})`
-          : err?.message || "Registration failed",
-      );
+      const e = err instanceof Error ? err : null;
+      setError(e?.message || "Something went wrong. Please try again.");
     } finally {
       setSubmitting(false);
     }
@@ -303,6 +258,7 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
     setSubmitting(true);
     setError(null);
     try {
+      if (!supabase) { setError("Authentication is not configured."); return; }
       const { data, error: verifyError } = await supabase.auth.verifyOtp({
         email: pendingEmail,
         token: otpCode.trim(),
@@ -319,49 +275,21 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
         setAuthToken(data.session.access_token);
       }
 
-      // Construct the student profile after successful verification
-      const studentProfile = {
-        id: data.user?.id || "usr_" + Date.now(),
-        user_id: data.user?.id || "usr_" + Date.now(),
-        full_name: fullName.trim(),
-        email: pendingEmail,
-        primary_discipline: "pharmacy",
-        target_credential: "PharmD",
-        clinical_phase: "Professional (P1-P4)",
-        gpa: 3.5,
-        state_residence: "OH",
-        updated_at: new Date().toISOString(),
-      };
-
+      let createdProfile: Profile | null = null;
       try {
-        localStorage.setItem("grantrx_profile", JSON.stringify(studentProfile));
-      } catch {
-        // localStorage may be unavailable — proceed anyway
-      }
-
-      // Best-effort profile upsert
-      try {
-        if (data.user?.id) {
-          await supabase.from("profiles").upsert({
-            id: data.user.id,
-            user_id: data.user.id,
-            full_name: fullName.trim(),
-            email: pendingEmail,
-            terms_accepted_at: new Date().toISOString(),
-            privacy_accepted_at: new Date().toISOString(),
-            marketing_opt_in: marketingOptIn,
-            marketing_opt_in_at: marketingOptIn ? new Date().toISOString() : null,
-          });
-        }
-      } catch (dbErr) {
-        console.warn("Profile table upsert skipped:", dbErr);
-      }
+        createdProfile = await api.createProfile({ full_name: fullName.trim() || undefined, email: pendingEmail, terms_accepted: true, privacy_accepted: true, marketing_opt_in: marketingOptIn });
+        try { localStorage.setItem("grantrx_profile", JSON.stringify(createdProfile)); } catch {}
+      } catch {}
 
       setVerifyScreen(false);
-      onAuthSuccess(studentProfile as unknown as Profile);
-    } catch (err: any) {
+      onAuthSuccess(createdProfile);
+    } catch (err: unknown) {
       console.error("[AuthModal] OTP verification error:", err);
-      setError(err?.message || "Verification failed. Please try again.");
+      setError(
+        err instanceof Error && err.message
+          ? err.message
+          : "Verification failed. Please try again.",
+      );
     } finally {
       setSubmitting(false);
     }
@@ -377,6 +305,7 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
     setError(null);
     setSuccess(null);
     try {
+      if (!supabase) { setError("Authentication is not configured."); return; }
       const { error: resetErr } = await supabase.auth.resetPasswordForEmail(
         email.trim(),
       );
@@ -386,8 +315,12 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
       }
       setSuccess("Recovery code sent to " + email.trim());
       setMode("verify_reset_otp");
-    } catch (err: any) {
-      setError(err?.message || "Failed to send reset code. Please try again.");
+    } catch (err: unknown) {
+      setError(
+        err instanceof Error && err.message
+          ? err.message
+          : "Failed to send reset code. Please try again.",
+      );
     } finally {
       setSubmitting(false);
     }
@@ -411,6 +344,7 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
     setError(null);
     setSuccess(null);
     try {
+      if (!supabase) { setError("Authentication is not configured."); return; }
       // 1. Verify the recovery OTP to establish recovery session
       const { data, error: verifyErr } = await supabase.auth.verifyOtp({
         email: email.trim(),
@@ -435,9 +369,13 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
       setTimeout(() => {
         onAuthSuccess(null);
       }, 1200);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("[AuthModal] Password reset error:", err);
-      setError(err?.message || "Password reset failed. Please try again.");
+      setError(
+        err instanceof Error && err.message
+          ? err.message
+          : "Password reset failed. Please try again.",
+      );
     } finally {
       setSubmitting(false);
     }
@@ -445,17 +383,20 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-textPrimary/40 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-text/40 p-4 backdrop-blur-sm"
       onClick={onClose}
     >
       <div
-        className="max-w-md w-full max-h-[90vh] overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl relative"
+        className="relative mx-auto w-[calc(100%-2rem)] max-w-md max-h-[90dvh] overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl sm:w-full sm:p-8"
         onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Sign in or create account"
       >
         {/* Close button */}
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 transition"
+          className="absolute top-4 right-4 text-textMuted hover:text-text transition"
           aria-label="Close"
         >
           <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
@@ -467,28 +408,35 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
         {verifyScreen ? (
           <div className="text-center">
             <div className="mb-4 pr-6">
-              <h2 className="font-serif text-xl font-bold text-textPrimary">
+              <h2 className="font-serif text-xl font-bold text-text">
                 Verify Your Email
               </h2>
-              <p className="mt-1 text-sm text-textSecondary">
+              <p className="mt-1 text-sm text-textMuted">
                 We sent a 6-digit code to{" "}
-                <span className="font-medium text-textPrimary">{pendingEmail}</span>.
+                <span className="font-medium text-text">{pendingEmail}</span>.
                 Enter it below to complete your registration.
               </p>
             </div>
 
             {error && (
-              <div className="mb-3 rounded-xl bg-red-50 px-4 py-2.5 text-sm text-red-700">
+              <div className="mb-3 rounded-xl bg-dangerSoft px-4 py-2.5 text-sm text-danger">
                 {error}
               </div>
             )}
             {success && (
-              <div className="mb-3 rounded-xl bg-aquamarine/20 px-4 py-2.5 text-sm text-textPrimary">
+              <div className="mb-3 rounded-xl bg-accentSoft/20 px-4 py-2.5 text-sm text-text">
                 {success}
               </div>
             )}
 
-            <div className="space-y-4">
+            <form
+              className="space-y-4"
+              noValidate
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleVerifyOtp();
+              }}
+            >
               <input
                 type="text"
                 value={otpCode}
@@ -497,29 +445,33 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
                 maxLength={6}
                 inputMode="numeric"
                 autoComplete="one-time-code"
-                className="w-full rounded-xl border border-textSecondary/20 bg-surfaceBg px-4 py-3 text-center text-2xl font-bold tracking-[0.5em] text-textPrimary focus:border-crayolaBlue"
+                autoFocus
+                className="w-full rounded-xl border border-textMuted/20 bg-surface px-4 py-3 text-center text-2xl font-bold tracking-[0.5em] text-text focus:border-primary"
               />
               <button
-                onClick={handleVerifyOtp}
+                type="submit"
                 disabled={submitting || otpCode.length !== 6}
-                className="w-full rounded-full bg-crayolaBlue px-6 py-2.5 text-sm font-medium text-surfaceBg disabled:opacity-40"
+                className="w-full rounded-full bg-primary px-6 py-2.5 text-sm font-medium text-surface disabled:opacity-40"
               >
                 {submitting ? "Verifying…" : "Verify Code"}
               </button>
               <div className="flex items-center justify-between">
                 <button
+                  type="button"
                   onClick={() => {
                     setVerifyScreen(false);
                     setOtpCode("");
                     setError(null);
                   }}
-                  className="text-xs text-textSecondary hover:text-textPrimary"
+                  className="text-xs text-textMuted hover:text-text"
                 >
                   Back to sign up
                 </button>
                 <button
+                  type="button"
                   onClick={async () => {
                     try {
+                      if (!supabase) { setError("Authentication is not configured."); return; }
                       const { error: resendErr } = await supabase.auth.resend({
                         type: "signup",
                         email: pendingEmail,
@@ -534,39 +486,46 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
                       setError("Failed to resend code. Please try again.");
                     }
                   }}
-                  className="text-xs text-crayolaBlue hover:underline"
+                  className="text-xs text-primary hover:underline"
                 >
                   Resend code
                 </button>
               </div>
-            </div>
+            </form>
           </div>
         ) : mode === "forgot_password" ? (
           <div className="text-center">
             <div className="mb-4 pr-6">
-              <h2 className="font-serif text-xl font-bold text-textPrimary">
+              <h2 className="font-serif text-xl font-bold text-text">
                 Reset Your Password
               </h2>
-              <p className="mt-1 text-sm text-textSecondary">
+              <p className="mt-1 text-sm text-textMuted">
                 Enter your registered email address and we will send you a
                 6-digit recovery code.
               </p>
             </div>
 
             {error && (
-              <div className="mb-3 rounded-xl bg-red-50 px-4 py-2.5 text-sm text-red-700">
+              <div className="mb-3 rounded-xl bg-dangerSoft px-4 py-2.5 text-sm text-danger">
                 {error}
               </div>
             )}
             {success && (
-              <div className="mb-3 rounded-xl bg-aquamarine/20 px-4 py-2.5 text-sm text-textPrimary">
+              <div className="mb-3 rounded-xl bg-accentSoft/20 px-4 py-2.5 text-sm text-text">
                 {success}
               </div>
             )}
 
-            <div className="space-y-4 text-left">
+            <form
+              className="space-y-4 text-left"
+              noValidate
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleSendResetCode();
+              }}
+            >
               <div>
-                <label className="block text-sm font-medium text-textSecondary">
+                <label className="block text-sm font-medium text-textMuted">
                   Email Address
                 </label>
                 <input
@@ -575,70 +534,80 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
                   onBlur={() => setTouched((t) => ({ ...t, email: true }))}
                   type="email"
                   placeholder="jane@example.com"
-                  className={`mt-1 w-full rounded-xl border bg-surfaceBg px-4 py-2 text-textPrimary transition ${
+                  autoFocus
+                  className={`mt-1 w-full rounded-xl border bg-surface px-4 py-2 text-text transition ${
                     showEmailError
-                      ? "border-red-400 ring-1 ring-red-200"
-                      : "border-textSecondary/20 focus:border-crayolaBlue"
+                      ? "border-danger ring-1 ring-danger/30"
+                      : "border-textMuted/20 focus:border-primary"
                   }`}
                 />
                 {showEmailError && (
-                  <p className="mt-1 text-xs text-red-500">
+                  <p className="mt-1 text-xs text-danger">
                     Please enter a valid email address.
                   </p>
                 )}
               </div>
 
               <button
-                onClick={handleSendResetCode}
+                type="submit"
                 disabled={!canSendResetCode || submitting}
-                className="w-full rounded-full bg-crayolaBlue px-6 py-2.5 text-sm font-medium text-surfaceBg disabled:opacity-40"
+                className="w-full rounded-full bg-primary px-6 py-2.5 text-sm font-medium text-surface disabled:opacity-40"
               >
                 {submitting ? "Sending…" : "Send Reset Code"}
               </button>
 
               <button
+                type="button"
                 onClick={() => {
                   setMode("signin");
                   setError(null);
                   setSuccess(null);
                 }}
-                className="w-full text-xs text-textSecondary hover:text-textPrimary"
+                className="w-full text-xs text-textMuted hover:text-text"
               >
                 Back to Sign In
               </button>
-            </div>
+            </form>
           </div>
         ) : mode === "verify_reset_otp" ? (
           <div className="text-center">
             <div className="mb-4 pr-6">
-              <h2 className="font-serif text-xl font-bold text-textPrimary">
+              <h2 className="font-serif text-xl font-bold text-text">
                 Enter Recovery Code
               </h2>
-              <p className="mt-1 text-sm text-textSecondary">
+              <p className="mt-1 text-sm text-textMuted">
                 Enter the 6-digit code sent to{" "}
-                <span className="font-medium text-textPrimary">{email}</span>{" "}
+                <span className="font-medium text-text">{email}</span>{" "}
                 and choose your new password.
               </p>
             </div>
 
             {error && (
-              <div className="mb-3 rounded-xl bg-red-50 px-4 py-2.5 text-sm text-red-700">
+              <div className="mb-3 rounded-xl bg-dangerSoft px-4 py-2.5 text-sm text-danger">
                 {error}
               </div>
             )}
             {success && (
-              <div className="mb-3 rounded-xl bg-aquamarine/20 px-4 py-2.5 text-sm text-textPrimary">
+              <div className="mb-3 rounded-xl bg-accentSoft/20 px-4 py-2.5 text-sm text-text">
                 {success}
               </div>
             )}
 
-            <div className="space-y-4 text-left">
+            <form
+              className="space-y-4 text-left"
+              noValidate
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleVerifyResetOtp();
+              }}
+            >
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                <label className="block text-xs font-semibold text-text mb-1">
                   Recovery Code
                 </label>
                 <input
                   type="text"
+                  autoFocus
                   value={otpCode}
                   onChange={(e) =>
                     setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))
@@ -647,12 +616,12 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
                   maxLength={6}
                   inputMode="numeric"
                   autoComplete="one-time-code"
-                  className="w-full rounded-xl border border-textSecondary/20 bg-surfaceBg px-4 py-3 text-center text-2xl font-bold tracking-[0.5em] text-textPrimary focus:border-crayolaBlue"
+                  className="w-full rounded-xl border border-textMuted/20 bg-surface px-4 py-3 text-center text-2xl font-bold tracking-[0.5em] text-text focus:border-primary"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                <label className="block text-xs font-semibold text-text mb-1">
                   New Password
                 </label>
                 <div className="relative">
@@ -661,12 +630,12 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="At least 6 characters"
-                    className="w-full rounded-xl border border-slate-200 pl-3.5 pr-10 py-2.5 text-sm text-slate-800 placeholder-slate-400 focus:border-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-100 transition-all font-sans tracking-normal"
+                    className="w-full rounded-xl border border-border pl-3.5 pr-10 py-2.5 text-sm text-text placeholder:text-textMuted/50 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-sans tracking-normal"
                   />
                   <button
                     type="button"
                     onClick={() => setShowResetPassword(!showResetPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 focus:outline-none p-1"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-textMuted hover:text-text focus:outline-none p-1"
                     aria-label={showResetPassword ? "Hide password" : "Show password"}
                   >
                     {showResetPassword ? <EyeOffIcon /> : <EyeIcon />}
@@ -675,7 +644,7 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                <label className="block text-xs font-semibold text-text mb-1">
                   Confirm New Password
                 </label>
                 <div className="relative">
@@ -687,12 +656,12 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
                       if (error && error.includes("match")) setError(null);
                     }}
                     placeholder="Re-enter your new password"
-                    className="w-full rounded-xl border border-slate-200 pl-3.5 pr-10 py-2.5 text-sm text-slate-800 placeholder-slate-400 focus:border-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-100 transition-all font-sans tracking-normal"
+                    className="w-full rounded-xl border border-border pl-3.5 pr-10 py-2.5 text-sm text-text placeholder:text-textMuted/50 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-sans tracking-normal"
                   />
                   <button
                     type="button"
                     onClick={() => setShowConfirmResetPassword(!showConfirmResetPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 focus:outline-none p-1"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-textMuted hover:text-text focus:outline-none p-1"
                     aria-label={showConfirmResetPassword ? "Hide password" : "Show password"}
                   >
                     {showConfirmResetPassword ? <EyeOffIcon /> : <EyeIcon />}
@@ -701,15 +670,16 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
               </div>
 
               <button
-                onClick={handleVerifyResetOtp}
+                type="submit"
                 disabled={!canResetPassword || submitting}
-                className="w-full rounded-full bg-crayolaBlue px-6 py-2.5 text-sm font-medium text-surfaceBg disabled:opacity-40"
+                className="w-full rounded-full bg-primary px-6 py-2.5 text-sm font-medium text-surface disabled:opacity-40"
               >
                 {submitting ? "Updating…" : "Update Password"}
               </button>
 
               <div className="flex items-center justify-between">
                 <button
+                  type="button"
                   onClick={() => {
                     setMode("signin");
                     setOtpCode("");
@@ -718,13 +688,15 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
                     setError(null);
                     setSuccess(null);
                   }}
-                  className="text-xs text-textSecondary hover:text-textPrimary"
+                  className="text-xs text-textMuted hover:text-text"
                 >
                   Cancel
                 </button>
                 <button
+                  type="button"
                   onClick={async () => {
                     try {
+                      if (!supabase) { setError("Authentication is not configured."); return; }
                       const { error: resendErr } =
                         await supabase.auth.resetPasswordForEmail(email.trim());
                       if (resendErr) {
@@ -737,36 +709,39 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
                       setError("Failed to resend code. Please try again.");
                     }
                   }}
-                  className="text-xs text-crayolaBlue hover:underline"
+                  className="text-xs text-primary hover:underline"
                 >
                   Resend code
                 </button>
               </div>
-            </div>
+            </form>
           </div>
         ) : (
           <div>
         {/* Header */}
         <div className="mb-4 text-center pr-6">
-          <h2 className="font-serif text-xl font-bold text-textPrimary">
+          <div className="mb-3 flex justify-center">
+            <BrandMark />
+          </div>
+          <h2 className="font-serif text-xl font-bold text-text">
             {mode === "signup" ? "Create your account" : "Welcome back"}
           </h2>
-          <p className="mt-1 text-sm text-textSecondary">
+          <p className="mt-1 text-sm text-textMuted">
             {mode === "signup"
-              ? "Sign up to find matched scholarships"
-              : "Sign in to your GrantRx account"}
+              ? "Sign up to find matched funding opportunities"
+              : "Sign in to your EdFintia account"}
           </p>
         </div>
 
         {/* Mode toggle */}
-        <div className="mb-4 flex rounded-full bg-textSecondary/10 p-1">
+        <div className="mb-4 flex rounded-full bg-textMuted/10 p-1">
           <button
             type="button"
             onClick={() => { setMode("signup"); setConfirmPassword(""); setError(null); }}
             className={`flex-1 rounded-full px-4 py-1.5 text-sm font-medium transition ${
               mode === "signup"
-                ? "bg-crayolaBlue text-surfaceBg"
-                : "text-textSecondary"
+                ? "bg-primary text-surface"
+                : "text-textMuted"
             }`}
           >
             Sign Up
@@ -776,8 +751,8 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
             onClick={() => { setMode("signin"); setConfirmPassword(""); setError(null); }}
             className={`flex-1 rounded-full px-4 py-1.5 text-sm font-medium transition ${
               mode === "signin"
-                ? "bg-crayolaBlue text-surfaceBg"
-                : "text-textSecondary"
+                ? "bg-primary text-surface"
+                : "text-textMuted"
             }`}
           >
             Sign In
@@ -785,7 +760,7 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
         </div>
 
         {error && (
-          <div className="mb-3 rounded-xl bg-red-50 px-4 py-2.5 text-sm text-red-700">
+          <div className="mb-3 rounded-xl bg-dangerSoft px-4 py-2.5 text-sm text-danger">
             {error}
           </div>
         )}
@@ -795,7 +770,7 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
           <button
             type="button"
             onClick={() => handleOAuth("google")}
-            className="flex w-full items-center justify-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-textPrimary shadow-sm transition hover:bg-slate-50 hover:border-slate-300"
+            className="flex w-full items-center justify-center gap-3 rounded-xl border border-border bg-white px-4 py-2 text-sm font-medium text-text shadow-sm transition hover:bg-surfaceSubtle hover:border-border"
           >
             <svg className="h-5 w-5" viewBox="0 0 24 24" aria-hidden="true">
               <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
@@ -809,7 +784,7 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
           <button
             type="button"
             onClick={() => handleOAuth("linkedin_oidc")}
-            className="flex w-full items-center justify-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-textPrimary shadow-sm transition hover:bg-slate-50 hover:border-slate-300"
+            className="flex w-full items-center justify-center gap-3 rounded-xl border border-border bg-white px-4 py-2 text-sm font-medium text-text shadow-sm transition hover:bg-surfaceSubtle hover:border-border"
           >
             <svg className="h-5 w-5" viewBox="0 0 24 24" fill="#0A66C2" aria-hidden="true">
               <path d="M20.45 20.45h-3.56v-5.57c0-1.33-.02-3.04-1.85-3.04-1.85 0-2.14 1.45-2.14 2.94v5.67H9.34V9h3.41v1.56h.05c.48-.9 1.64-1.85 3.37-1.85 3.6 0 4.27 2.37 4.27 5.46v6.28zM5.34 7.43a2.06 2.06 0 1 1 0-4.12 2.06 2.06 0 0 1 0 4.12zM7.12 20.45H3.56V9h3.56v11.45zM22.22 0H1.77C.79 0 0 .77 0 1.72v20.56C0 23.23.79 24 1.77 24h20.45c.98 0 1.78-.77 1.78-1.72V1.72C24 .77 23.2 0 22.22 0z" />
@@ -820,58 +795,67 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
 
         {/* Divider */}
         <div className="my-4 flex items-center gap-3">
-          <div className="h-px flex-1 bg-slate-200" />
-          <span className="text-xs font-medium text-textSecondary">or</span>
-          <div className="h-px flex-1 bg-slate-200" />
+          <div className="h-px flex-1 bg-border" />
+          <span className="text-xs font-medium text-textMuted">or</span>
+          <div className="h-px flex-1 bg-border" />
         </div>
 
         {/* Form */}
-        <div className="space-y-3">
+        <form
+          className="space-y-3"
+          noValidate
+          onSubmit={(e) => {
+            e.preventDefault();
+            handleSubmit();
+          }}
+        >
           {mode === "signup" && (
             <div>
-              <label className="block text-sm font-medium text-textSecondary">
+              <label className="block text-sm font-medium text-textMuted">
                 Full Name
               </label>
               <input
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
                 placeholder="Jane Doe"
-                className="mt-1 w-full rounded-xl border border-textSecondary/20 bg-surfaceBg px-4 py-2 text-textPrimary"
+                autoFocus
+                className="mt-1 w-full rounded-xl border border-textMuted/20 bg-surface px-4 py-2 text-text"
               />
             </div>
           )}
 
           <div>
-            <label className="block text-sm font-medium text-textSecondary">
+            <label className="block text-sm font-medium text-textMuted">
               Email
             </label>
             <input
+              autoFocus={mode === "signin"}
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               onBlur={() => setTouched((t) => ({ ...t, email: true }))}
               type="email"
               placeholder="jane@example.com"
-              className={`mt-1 w-full rounded-xl border bg-surfaceBg px-4 py-2 text-textPrimary transition ${
+              className={`mt-1 w-full rounded-xl border bg-surface px-4 py-2 text-text transition ${
                 showEmailError
-                  ? "border-red-400 ring-1 ring-red-200"
-                  : "border-textSecondary/20 focus:border-crayolaBlue"
+                  ? "border-danger ring-1 ring-danger/30"
+                  : "border-textMuted/20 focus:border-primary"
               }`}
             />
             {showEmailError && (
-              <p className="mt-1 text-xs text-red-500">Please enter a valid email address.</p>
+              <p className="mt-1 text-xs text-danger">Please enter a valid email address.</p>
             )}
           </div>
 
           <div>
             <div className="flex items-center justify-between">
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
+              <label className="block text-xs font-semibold text-text mb-1">
                 Password
               </label>
               {mode === "signin" && (
                 <button
                   type="button"
                   onClick={() => { setMode("forgot_password"); setError(null); setSuccess(null); }}
-                  className="text-xs font-semibold text-blue-600 hover:text-blue-700"
+                  className="text-xs font-semibold text-primary hover:text-primaryHover"
                 >
                   Forgot password?
                 </button>
@@ -884,29 +868,29 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
                 onBlur={() => setTouched((t) => ({ ...t, password: true }))}
                 type={showPassword ? "text" : "password"}
                 placeholder="At least 6 characters"
-                className={`w-full rounded-xl border pl-3.5 pr-10 py-2.5 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 transition-all font-sans tracking-normal ${
+                className={`w-full rounded-xl border pl-3.5 pr-10 py-2.5 text-sm text-text placeholder:text-textMuted/50 focus:outline-none focus:ring-2 transition-all font-sans tracking-normal ${
                   showPasswordError
-                    ? "border-red-400 ring-1 ring-red-200 focus:ring-red-100"
-                    : "border-slate-200 focus:border-blue-600 focus:ring-blue-100"
+                    ? "border-danger ring-1 ring-danger/30 focus:ring-danger/20"
+                    : "border-border focus:border-primary focus:ring-primary/20"
                 }`}
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 focus:outline-none p-1"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-textMuted hover:text-text focus:outline-none p-1"
                 aria-label={showPassword ? "Hide password" : "Show password"}
               >
                 {showPassword ? <EyeOffIcon /> : <EyeIcon />}
               </button>
             </div>
             {showPasswordError && (
-              <p className="mt-1 text-xs text-red-500">Password must be at least 6 characters.</p>
+              <p className="mt-1 text-xs text-danger">Password must be at least 6 characters.</p>
             )}
           </div>
 
           {mode === "signup" && (
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
+              <label className="block text-xs font-semibold text-text mb-1">
                 Confirm Password
               </label>
               <div className="relative">
@@ -919,12 +903,12 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
                   }}
                   placeholder="Re-enter your password"
                   required
-                  className="w-full rounded-xl border border-slate-200 pl-3.5 pr-10 py-2.5 text-sm text-slate-800 placeholder-slate-400 focus:border-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-100 transition-all font-sans tracking-normal"
+                  className="w-full rounded-xl border border-border pl-3.5 pr-10 py-2.5 text-sm text-text placeholder:text-textMuted/50 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-sans tracking-normal"
                 />
                 <button
                   type="button"
                   onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 focus:outline-none p-1"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-textMuted hover:text-text focus:outline-none p-1"
                   aria-label={showConfirmPassword ? "Hide password" : "Show password"}
                 >
                   {showConfirmPassword ? <EyeOffIcon /> : <EyeIcon />}
@@ -937,14 +921,14 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
             <div className="space-y-2.5 pt-1">
               {/* Terms & Privacy — mandatory */}
               <label
-                className={`flex items-start gap-2 text-xs text-slate-600 leading-tight ${termsShake ? "animate-shake" : ""}`}
+                className={`flex items-start gap-2 text-xs text-textMuted leading-tight ${termsShake ? "animate-shake" : ""}`}
                 style={termsShake ? { animation: "shake 0.4s ease-in-out" } : undefined}
               >
                 <input
                   type="checkbox"
                   checked={termsAccepted}
                   onChange={(e) => setTermsAccepted(e.target.checked)}
-                  className={`h-4 w-4 shrink-0 rounded border-slate-300 text-blue-600 focus:ring-blue-500 mt-0.5 ${termsShake ? "ring-2 ring-red-300" : ""}`}
+                  className={`h-4 w-4 shrink-0 rounded border-border accent-primary focus:ring-primary/30 mt-0.5 ${termsShake ? "ring-2 ring-danger/40" : ""}`}
                 />
                 <span>
                   I agree to the{" "}
@@ -952,7 +936,7 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
                     href="/terms"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-crayolaBlue underline"
+                    className="text-primary underline"
                   >
                     Terms of Service
                   </Link>{" "}
@@ -961,7 +945,7 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
                     href="/privacy"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-crayolaBlue underline"
+                    className="text-primary underline"
                   >
                     Privacy Policy
                   </Link>
@@ -969,35 +953,35 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
               </label>
 
               {/* Marketing opt-in — optional */}
-              <label className="flex items-start gap-2 text-xs text-slate-600 leading-tight">
+              <label className="flex items-start gap-2 text-xs text-textMuted leading-tight">
                 <input
                   type="checkbox"
                   checked={marketingOptIn}
                   onChange={(e) => setMarketingOptIn(e.target.checked)}
-                  className="h-4 w-4 shrink-0 rounded border-slate-300 text-blue-600 focus:ring-blue-500 mt-0.5"
+                  className="h-4 w-4 shrink-0 rounded border-border accent-primary focus:ring-primary/30 mt-0.5"
                 />
                 <span>
-                  I opt in to receive scholarship alerts, updates, and email
-                  communications from GrantRx, its parent company, and
+                  I opt in to receive funding alerts, updates, and email
+                  communications from EdFintia, its parent company, and
                   subsidiaries.
                 </span>
               </label>
             </div>
           )}
-        </div>
 
         {/* Actions */}
         <div className="mt-4 flex items-center justify-between">
           <button
+            type="button"
             onClick={onClose}
-            className="text-sm text-textSecondary hover:text-textPrimary"
+            className="text-sm text-textMuted hover:text-text"
           >
             Cancel
           </button>
           <button
-            onClick={handleSubmit}
+            type="submit"
             disabled={!canSubmit || submitting}
-            className="rounded-full bg-crayolaBlue px-6 py-2 text-sm font-medium text-surfaceBg disabled:opacity-40"
+            className="rounded-full bg-primary px-6 py-2 text-sm font-medium text-surface disabled:opacity-40"
           >
             {submitting
               ? "Please wait…"
@@ -1006,6 +990,7 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
                 : "Sign In"}
           </button>
         </div>
+        </form>
           </div>
         )}
       </div>

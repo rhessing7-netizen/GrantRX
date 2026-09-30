@@ -10,9 +10,8 @@ import {
 } from "@/lib/types";
 import { getMetrosForState } from "@/lib/constants/metros";
 import { MAJOR_CATEGORIES, mapMajorToClinicalDiscipline } from "@/lib/constants/disciplines";
-import { type DegreeLevel } from "@/lib/constants/credentials";
+import { levelForCredential, type DegreeLevel } from "@/lib/constants/credentials";
 import { api } from "@/lib/api";
-import { supabase } from "@/lib/supabase";
 import { MultiSelect } from "./MultiSelect";
 import { GroupedMultiSelect } from "./GroupedMultiSelect";
 import { CascadingCredentialSelect } from "./CascadingCredentialSelect";
@@ -26,6 +25,15 @@ export type OnboardingWizardProps = {
 };
 
 export function OnboardingWizard({ onComplete, onCancel, existingProfile }: OnboardingWizardProps) {
+  useEffect(() => {
+    if (!onCancel) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onCancel();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [onCancel]);
+
   const [step, setStep] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -38,8 +46,14 @@ export function OnboardingWizard({ onComplete, onCancel, existingProfile }: Onbo
     existingProfile?.target_credentials ?? [],
   );
 
-  // Cascading credential selection
-  const [degreeLevel, setDegreeLevel] = useState<DegreeLevel | "">("");
+  // Cascading credential selection — reverse-map a previously saved
+  // credential to its degree level so the select restores the full path
+  // instead of hiding (and potentially erasing) the saved value.
+  const [degreeLevel, setDegreeLevel] = useState<DegreeLevel | "">(
+    existingProfile?.target_credential
+      ? levelForCredential(existingProfile.target_credential)
+      : "",
+  );
   const [selectedCredential, setSelectedCredential] = useState(
     existingProfile?.target_credential ?? "",
   );
@@ -65,7 +79,7 @@ export function OnboardingWizard({ onComplete, onCancel, existingProfile }: Onbo
     (existingProfile?.hobbies ?? []).join(", "),
   );
 
-  // Live matching projection — debounced preview of how many scholarships
+  // Live matching projection — debounced preview of how many opportunities
   // the user's current onboarding answers would surface.
   const [projection, setProjection] = useState<MatchPreview | null>(null);
   const [projectionLoading, setProjectionLoading] = useState(false);
@@ -81,9 +95,15 @@ export function OnboardingWizard({ onComplete, onCancel, existingProfile }: Onbo
   };
 
   const buildPayload = (): ProfileCreate => {
-    const allCredentials = selectedCredential
-      ? [...credentials, selectedCredential]
-      : credentials;
+    // Stable-order dedup: the cascading credential may already be present in
+    // the multi-select list after a previous save.
+    const allCredentials = [
+      ...new Set(
+        selectedCredential ? [...credentials, selectedCredential] : credentials,
+      ),
+    ];
+    // Explicit nulls let the upsert clear previously-set optional fields;
+    // omission would be indistinguishable from "leave unchanged".
     const payload: ProfileCreate = {
       disciplines,
       target_credentials: allCredentials,
@@ -94,18 +114,18 @@ export function OnboardingWizard({ onComplete, onCancel, existingProfile }: Onbo
         .split(",")
         .map((h) => h.trim())
         .filter(Boolean),
+      // Map the first selected major to primary_discipline for backend matching
+      primary_discipline:
+        disciplines.length > 0
+          ? mapMajorToClinicalDiscipline(disciplines[0])
+          : null,
+      target_credential: selectedCredential || null,
+      clinical_phase: clinicalPhase || null,
+      gpa: gpa ? parseFloat(gpa) : null,
+      state_residence: stateResidence ? stateResidence.toUpperCase() : null,
+      metro_area: metroArea || null,
+      sai_score: saiScore ? parseInt(saiScore, 10) : null,
     };
-    // Map the first selected major to primary_discipline for backend matching
-    if (disciplines.length > 0) {
-      payload.primary_discipline = mapMajorToClinicalDiscipline(disciplines[0]);
-    }
-    // Set target_credential from the cascading selection
-    if (selectedCredential) payload.target_credential = selectedCredential;
-    if (clinicalPhase) payload.clinical_phase = clinicalPhase;
-    if (gpa) payload.gpa = parseFloat(gpa);
-    if (stateResidence) payload.state_residence = stateResidence.toUpperCase();
-    if (metroArea) payload.metro_area = metroArea;
-    if (saiScore) payload.sai_score = parseInt(saiScore, 10);
     return payload;
   };
 
@@ -162,103 +182,10 @@ export function OnboardingWizard({ onComplete, onCancel, existingProfile }: Onbo
   const displayedProjection = hasEnoughInfo ? projection : null;
   const displayedLoading = hasEnoughInfo && projectionLoading;
 
-  /**
-   * Persist the profile via Supabase directly (primary), then fall back to
-   * the backend API, then fall back to localStorage so the user is never
-   * blocked from reaching the discovery feed.
-   * ALWAYS saves to localStorage regardless of network or database status.
-   */
-  const persistProfile = async (
-    payload: ProfileCreate,
-  ): Promise<Profile> => {
-    let savedProfile: Profile | null = null;
-
-    // --- Attempt 1: Direct Supabase upsert ---
-    if (supabase) {
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        const sbPayload = {
-          ...(user?.id ? { id: user.id, user_id: user.id } : {}),
-          disciplines: payload.disciplines ?? [],
-          target_credentials: payload.target_credentials ?? [],
-          primary_discipline: payload.primary_discipline ?? "pharmacy",
-          target_credential: payload.target_credential ?? "PharmD",
-          clinical_phase: payload.clinical_phase ?? "Professional (P1-P4)",
-          gpa: payload.gpa ?? 3.5,
-          state_residence: payload.state_residence ?? "OH",
-          metro_area: payload.metro_area ?? null,
-          sai_score: payload.sai_score ?? null,
-          first_gen: payload.first_gen ?? false,
-          minority_flag: payload.minority_flag ?? false,
-          professional_affiliations: payload.professional_affiliations ?? [],
-          hobbies: payload.hobbies ?? [],
-          updated_at: new Date().toISOString(),
-        };
-
-        const { data, error } = await supabase
-          .from("profiles")
-          .upsert(sbPayload)
-          .select()
-          .single();
-
-        if (!error && data) {
-          savedProfile = data as unknown as Profile;
-        }
-        // RLS or table issue — fall through to API attempt
-      } catch {
-        // Supabase call failed — fall through to API attempt
-      }
-    }
-
-    // --- Attempt 2: Backend API ---
-    if (!savedProfile) {
-      try {
-        savedProfile = await api.createProfile(payload);
-      } catch {
-        // API unreachable — fall through to localStorage fallback
-      }
-    }
-
-    // --- Always save to localStorage regardless of network/db status ---
-    if (!savedProfile) {
-      savedProfile = {
-        id: "local-profile",
-        disciplines: payload.disciplines ?? [],
-        target_credentials: payload.target_credentials ?? [],
-        primary_discipline: payload.primary_discipline ?? null,
-        target_credential: payload.target_credential ?? null,
-        clinical_phase: payload.clinical_phase ?? null,
-        gpa: payload.gpa ?? null,
-        state_residence: payload.state_residence ?? null,
-        metro_area: payload.metro_area ?? null,
-        sai_score: payload.sai_score ?? null,
-        first_gen: payload.first_gen ?? false,
-        minority_flag: payload.minority_flag ?? false,
-        professional_affiliations: payload.professional_affiliations ?? [],
-        hobbies: payload.hobbies ?? [],
-        subscription_tier: "free",
-        full_name: null,
-        email: null,
-        terms_accepted_at: null,
-        privacy_accepted_at: null,
-        marketing_opt_in: false,
-        marketing_opt_in_at: null,
-        has_completed_tour: false,
-        searches_used_this_week: 0,
-        search_cycle_reset_at: null,
-        feed_token: null,
-        stripe_subscription_status: null,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      };
-    }
-
-    try {
-      localStorage.setItem("grantrx_profile", JSON.stringify(savedProfile));
-    } catch {
-      // localStorage may be unavailable (private mode) — proceed anyway
-    }
-
+  /** Persist through the backend only; localStorage is only a cache. */
+  const persistProfile = async (payload: ProfileCreate): Promise<Profile> => {
+    const savedProfile = await api.createProfile(payload);
+    try { localStorage.setItem("grantrx_profile", JSON.stringify(savedProfile)); } catch {}
     return savedProfile;
   };
 
@@ -298,32 +225,49 @@ export function OnboardingWizard({ onComplete, onCancel, existingProfile }: Onbo
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-textPrimary/40 backdrop-blur-sm">
-      <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-3xl bg-surfaceBg p-8 shadow-2xl">
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-text/40 p-4 backdrop-blur-sm">
+      <div
+        className="mx-auto max-h-[90dvh] w-[calc(100%-2rem)] max-w-lg overflow-y-auto rounded-2xl bg-surface p-6 shadow-2xl sm:w-full sm:rounded-3xl sm:p-8"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Set up your profile"
+      >
+        {/* Intro — orients first-time users before any field appears */}
+        <div className="mb-5 text-center">
+          <h2 className="font-serif text-xl font-bold text-text">
+            Build your Funding Profile
+          </h2>
+          <p className="mt-1 text-sm leading-relaxed text-textMuted">
+            Tell us what you&apos;re studying so we can match you with
+            scholarships, grants, and other aid. Everything is optional and
+            you can change it later.
+          </p>
+        </div>
+
         {/* Progress */}
         <div className="mb-6 flex items-center gap-2">
           {STEPS.map((label, i) => (
             <div key={label} className="flex-1">
               <div
-                className={`h-1.5 rounded-full ${i <= step ? "bg-crayolaBlue" : "bg-textSecondary/15"}`}
+                className={`h-1.5 rounded-full ${i <= step ? "bg-primary" : "bg-textMuted/15"}`}
               />
-              <p className="mt-1.5 text-xs text-textSecondary">{label}</p>
+              <p className="mt-1.5 text-xs text-textMuted">{label}</p>
             </div>
           ))}
         </div>
 
         {error && (
-          <div className="mb-4 flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
-            <svg className="mt-0.5 h-5 w-5 shrink-0 text-red-500" fill="currentColor" viewBox="0 0 20 20">
+          <div className="mb-4 flex items-start gap-3 rounded-xl border border-danger/30 bg-dangerSoft px-4 py-3">
+            <svg className="mt-0.5 h-5 w-5 shrink-0 text-danger" fill="currentColor" viewBox="0 0 20 20">
               <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clipRule="evenodd" />
             </svg>
             <div className="flex-1">
-              <p className="text-sm font-medium text-red-800">Could not save profile</p>
-              <p className="mt-0.5 text-xs text-red-600">{error}</p>
+              <p className="text-sm font-medium text-danger">Could not save profile</p>
+              <p className="mt-0.5 text-xs text-danger">{error}</p>
             </div>
             <button
               onClick={() => setError(null)}
-              className="shrink-0 text-red-400 hover:text-red-600"
+              className="shrink-0 text-danger hover:text-danger"
               aria-label="Dismiss"
             >
               <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
@@ -370,14 +314,14 @@ export function OnboardingWizard({ onComplete, onCancel, existingProfile }: Onbo
             </div>
 
             {/* Skip button — prominent on screen 1 */}
-            <div className="rounded-xl bg-cardBg p-4 text-center">
-              <p className="text-sm text-textSecondary">
-                No specific field in mind? You can explore all grants without selecting anything.
+            <div className="rounded-xl bg-surfaceSubtle p-4 text-center">
+              <p className="text-sm text-textMuted">
+                No specific field in mind? You can explore all opportunities without selecting anything.
               </p>
               <button
                 onClick={handleSkip}
                 disabled={submitting}
-                className="mt-3 inline-flex items-center gap-2 rounded-full border-2 border-crayolaBlue px-6 py-2.5 text-sm font-semibold text-crayolaBlue transition hover:bg-crayolaBlue/5 disabled:cursor-not-allowed disabled:opacity-50"
+                className="mt-3 inline-flex items-center gap-2 rounded-full border-2 border-primary px-6 py-2.5 text-sm font-semibold text-primary transition hover:bg-primary/5 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {submitting && (
                   <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
@@ -385,7 +329,7 @@ export function OnboardingWizard({ onComplete, onCancel, existingProfile }: Onbo
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                   </svg>
                 )}
-                {submitting ? "Setting up…" : "Skip Setup & Explore All Grants"}
+                {submitting ? "Setting up…" : "Skip Setup & Explore All Opportunities"}
               </button>
             </div>
           </div>
@@ -395,20 +339,20 @@ export function OnboardingWizard({ onComplete, onCancel, existingProfile }: Onbo
         {step === 1 && (
           <div className="space-y-5">
             <div>
-              <label className="block text-sm font-medium text-textSecondary">
+              <label className="block text-sm font-medium text-textMuted">
                 Clinical Phase (optional)
               </label>
               <input
                 value={clinicalPhase}
                 onChange={(e) => setClinicalPhase(e.target.value)}
                 placeholder="e.g. P1, P2, MS3, Pre-Clinical"
-                className="mt-2 w-full rounded-xl border border-textSecondary/20 bg-surfaceBg px-4 py-2.5 text-textPrimary"
+                className="mt-2 w-full rounded-xl border border-textMuted/20 bg-surface px-4 py-2.5 text-text"
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
-                <label className="block text-sm font-medium text-textSecondary">
+                <label className="block text-sm font-medium text-textMuted">
                   Cumulative GPA (optional)
                 </label>
                 <input
@@ -419,11 +363,11 @@ export function OnboardingWizard({ onComplete, onCancel, existingProfile }: Onbo
                   min="0"
                   max="4"
                   placeholder="3.75"
-                  className="mt-2 w-full rounded-xl border border-textSecondary/20 bg-surfaceBg px-4 py-2.5 text-textPrimary"
+                  className="mt-2 w-full rounded-xl border border-textMuted/20 bg-surface px-4 py-2.5 text-text"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-textSecondary">
+                <label className="block text-sm font-medium text-textMuted">
                   State of Residence (optional)
                 </label>
                 <input
@@ -433,13 +377,13 @@ export function OnboardingWizard({ onComplete, onCancel, existingProfile }: Onbo
                   }
                   placeholder="CA"
                   maxLength={2}
-                  className="mt-2 w-full rounded-xl border border-textSecondary/20 bg-surfaceBg px-4 py-2.5 text-textPrimary"
+                  className="mt-2 w-full rounded-xl border border-textMuted/20 bg-surface px-4 py-2.5 text-text"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-textSecondary">
+              <label className="block text-sm font-medium text-textMuted">
                 SAI Score (optional)
               </label>
               <input
@@ -447,18 +391,18 @@ export function OnboardingWizard({ onComplete, onCancel, existingProfile }: Onbo
                 onChange={(e) => setSaiScore(e.target.value)}
                 type="number"
                 placeholder="e.g. 1200"
-                className="mt-2 w-full rounded-xl border border-textSecondary/20 bg-surfaceBg px-4 py-2.5 text-textPrimary"
+                className="mt-2 w-full rounded-xl border border-textMuted/20 bg-surface px-4 py-2.5 text-text"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-textSecondary">
+              <label className="block text-sm font-medium text-textMuted">
                 Metropolitan Area (optional)
               </label>
               <select
                 value={metroArea}
                 onChange={(e) => setMetroArea(e.target.value)}
-                className="mt-2 w-full rounded-xl border border-textSecondary/20 bg-surfaceBg px-4 py-2.5 text-textPrimary"
+                className="mt-2 w-full rounded-xl border border-textMuted/20 bg-surface px-4 py-2.5 text-text"
               >
                 <option value="">Any / Not specified</option>
                 {getMetrosForState(stateResidence).map((m) => (
@@ -467,10 +411,10 @@ export function OnboardingWizard({ onComplete, onCancel, existingProfile }: Onbo
                   </option>
                 ))}
               </select>
-              <p className="mt-1 text-xs text-textSecondary">
+              <p className="mt-1 text-xs text-textMuted">
                 {stateResidence
-                  ? `Metros matching ${stateResidence} are starred and shown first. Selecting a metro area helps match metro-restricted scholarships.`
-                  : "Selecting a metro area helps match metro-restricted scholarships."}
+                  ? `Metros matching ${stateResidence} are starred and shown first. Selecting a metro area helps match metro-restricted opportunities.`
+                  : "Selecting a metro area helps match metro-restricted opportunities."}
               </p>
             </div>
           </div>
@@ -479,29 +423,29 @@ export function OnboardingWizard({ onComplete, onCancel, existingProfile }: Onbo
         {/* Step 3 — Background & Interests (all optional) */}
         {step === 2 && (
           <div className="space-y-5">
-            <div className="flex gap-6">
-              <label className="flex items-center gap-2 text-sm text-textPrimary">
+            <div className="flex flex-col gap-3 sm:flex-row sm:gap-6">
+              <label className="flex min-h-[44px] items-center gap-2 text-sm text-text">
                 <input
                   type="checkbox"
                   checked={firstGen}
                   onChange={(e) => setFirstGen(e.target.checked)}
-                  className="h-4 w-4 accent-crayolaBlue"
+                  className="h-4 w-4 accent-primary"
                 />
                 First-Generation
               </label>
-              <label className="flex items-center gap-2 text-sm text-textPrimary">
+              <label className="flex min-h-[44px] items-center gap-2 text-sm text-text">
                 <input
                   type="checkbox"
                   checked={minorityFlag}
                   onChange={(e) => setMinorityFlag(e.target.checked)}
-                  className="h-4 w-4 accent-crayolaBlue"
+                  className="h-4 w-4 accent-primary"
                 />
                 Minority / Underrepresented
               </label>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-textSecondary">
+              <label className="block text-sm font-medium text-textMuted">
                 Professional Affiliations (optional)
               </label>
               <div className="mt-2 flex flex-wrap gap-2">
@@ -512,8 +456,8 @@ export function OnboardingWizard({ onComplete, onCancel, existingProfile }: Onbo
                     onClick={() => toggleAffiliation(a)}
                     className={`rounded-full px-3 py-1.5 text-sm transition ${
                       affiliations.includes(a)
-                        ? "bg-crayolaBlue text-surfaceBg"
-                        : "border border-textSecondary/20 text-textSecondary"
+                        ? "bg-primary text-surface"
+                        : "border border-textMuted/20 text-textMuted"
                     }`}
                   >
                     {a}
@@ -523,14 +467,14 @@ export function OnboardingWizard({ onComplete, onCancel, existingProfile }: Onbo
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-textSecondary">
+              <label className="block text-sm font-medium text-textMuted">
                 Hobbies / Interests (optional, comma-separated)
               </label>
               <input
                 value={hobbies}
                 onChange={(e) => setHobbies(e.target.value)}
                 placeholder="research, volunteering, music"
-                className="mt-2 w-full rounded-xl border border-textSecondary/20 bg-surfaceBg px-4 py-2.5 text-textPrimary"
+                className="mt-2 w-full rounded-xl border border-textMuted/20 bg-surface px-4 py-2.5 text-text"
               />
             </div>
           </div>
@@ -539,9 +483,9 @@ export function OnboardingWizard({ onComplete, onCancel, existingProfile }: Onbo
         {/* Live matching projection — shows on every step once enough
             info exists to project a match count. */}
         {(displayedProjection || displayedLoading) && (
-          <div className="mt-6 flex items-center gap-3 rounded-xl border border-aquamarine/40 bg-aquamarine/10 px-4 py-3">
+          <div className="mt-6 flex items-center gap-3 rounded-xl border border-accentSoft/40 bg-accentSoft/10 px-4 py-3">
             <svg
-              className="h-5 w-5 shrink-0 text-blueEnergy"
+              className="h-5 w-5 shrink-0 text-secondary"
               fill="none"
               stroke="currentColor"
               strokeWidth={2}
@@ -552,14 +496,14 @@ export function OnboardingWizard({ onComplete, onCancel, existingProfile }: Onbo
             </svg>
             <div className="text-sm">
               {displayedLoading ? (
-                <span className="text-textSecondary">
+                <span className="text-textMuted">
                   Estimating your matches…
                 </span>
               ) : displayedProjection ? (
-                <span className="text-textPrimary">
-                  <span className="font-bold text-blueEnergy">
-                    {displayedProjection.projected_count} scholarship
-                    {displayedProjection.projected_count === 1 ? "" : "s"}
+                <span className="text-text">
+                  <span className="font-bold text-secondary">
+                    {displayedProjection.projected_count} opportunit
+                    {displayedProjection.projected_count === 1 ? "y" : "ies"}
                   </span>{" "}
                   projected to match your profile
                   {displayedProjection.projected_funding_total > 0 && (
@@ -578,11 +522,11 @@ export function OnboardingWizard({ onComplete, onCancel, existingProfile }: Onbo
         )}
 
         {/* Navigation */}
-        <div className="mt-8 flex items-center justify-between">
+        <div className="mt-8 flex flex-wrap items-center justify-between gap-3">
           {onCancel && step === 0 ? (
             <button
               onClick={onCancel}
-              className="text-sm text-textSecondary hover:text-textPrimary"
+              className="text-sm text-textMuted hover:text-text"
             >
               Cancel
             </button>
@@ -590,7 +534,7 @@ export function OnboardingWizard({ onComplete, onCancel, existingProfile }: Onbo
             <button
               onClick={() => setStep((s) => s - 1)}
               disabled={step === 0}
-              className="text-sm text-textSecondary hover:text-textPrimary disabled:opacity-30"
+              className="text-sm text-textMuted hover:text-text disabled:opacity-30"
             >
               Back
             </button>
@@ -600,7 +544,7 @@ export function OnboardingWizard({ onComplete, onCancel, existingProfile }: Onbo
             <button
               onClick={() => setStep((s) => s + 1)}
               disabled={!canNext()}
-              className="rounded-full bg-crayolaBlue px-6 py-2.5 text-sm font-medium text-surfaceBg disabled:opacity-40"
+              className="rounded-full bg-primary px-6 py-2.5 text-sm font-medium text-surface disabled:opacity-40"
             >
               Continue
             </button>
@@ -608,7 +552,7 @@ export function OnboardingWizard({ onComplete, onCancel, existingProfile }: Onbo
             <button
               onClick={handleSubmit}
               disabled={submitting}
-              className="inline-flex items-center gap-2 rounded-full bg-aquamarine px-6 py-2.5 text-sm font-semibold text-textPrimary transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex items-center gap-2 rounded-full bg-primary px-6 py-2.5 text-sm font-medium text-surface transition hover:bg-primaryHover disabled:cursor-not-allowed disabled:opacity-40"
             >
               {submitting && (
                 <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">

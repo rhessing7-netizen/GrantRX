@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { BillingPlan } from "@/lib/types";
 import { api } from "@/lib/api";
 
@@ -13,10 +13,10 @@ export type UpgradeModalProps = {
 const FEATURES = [
   { label: "Keyword Searches", free: "10 / week", premium: "Unlimited" },
   { label: "Unmasked Direct Links", free: "Top 3 only", premium: "All results" },
-  { label: "Unlimited Kanban Tracking", free: "3 active apps", premium: "Unlimited" },
-  { label: "Calendar Sync (.ics)", free: "—", premium: "Included" },
-  { label: "Deadline Reminders", free: "—", premium: "7-day + 1-day alerts" },
-  { label: "Missing-Criteria Feedback", free: "Basic", premium: "Detailed" },
+  { label: "Application Tracking", free: "3 active apps", premium: "Unlimited" },
+  { label: "Calendar Sync (.ics)", free: "Included", premium: "Included" },
+  { label: "Deadline Reminders", free: "Included", premium: "Included" },
+  { label: "Missing-Criteria Feedback", free: "Included", premium: "Included" },
 ];
 
 const PLANS: {
@@ -34,6 +34,15 @@ export function UpgradeModal({ open, onClose, reason }: UpgradeModalProps) {
   const [selectedPlan, setSelectedPlan] = useState<BillingPlan>("annual");
   const [redirecting, setRedirecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !redirecting) onClose();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [open, onClose, redirecting]);
 
   if (!open) return null;
 
@@ -59,31 +68,34 @@ export function UpgradeModal({ open, onClose, reason }: UpgradeModalProps) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-textPrimary/40 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-text/40 p-4 backdrop-blur-sm"
       onClick={redirecting ? undefined : onClose}
     >
       <div
-        className="w-full max-w-lg rounded-3xl bg-surfaceBg p-8 shadow-2xl"
+        className="mx-auto w-[calc(100%-2rem)] max-w-lg rounded-2xl bg-surface p-6 shadow-2xl sm:w-full sm:rounded-3xl sm:p-8"
         onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Upgrade to Premium"
       >
         {/* Header */}
         <div className="mb-6 text-center">
-          <h2 className="font-serif text-2xl font-bold text-textPrimary">
-            Upgrade to GrantRx Premium
+          <h2 className="font-serif text-2xl font-bold text-text">
+            Upgrade to EdFintia Premium
           </h2>
           {reason && (
-            <p className="mt-2 text-sm text-textSecondary">{reason}</p>
+            <p className="mt-2 text-sm text-textMuted">{reason}</p>
           )}
         </div>
 
         {error && (
-          <div className="mb-4 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">
+          <div className="mb-4 rounded-xl bg-dangerSoft px-4 py-3 text-sm text-danger">
             {error}
           </div>
         )}
 
         {/* Plan selector */}
-        <div className="mb-6 grid grid-cols-2 gap-3">
+        <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
           {PLANS.map((plan) => (
             <button
               key={plan.id}
@@ -91,19 +103,19 @@ export function UpgradeModal({ open, onClose, reason }: UpgradeModalProps) {
               disabled={redirecting}
               className={`relative rounded-2xl border-2 p-4 text-center transition disabled:opacity-60 ${
                 selectedPlan === plan.id
-                  ? "border-crayolaBlue bg-crayolaBlue/5"
-                  : "border-textSecondary/15 hover:border-crayolaBlue/40"
+                  ? "border-primary bg-primary/5"
+                  : "border-textMuted/15 hover:border-primary/40"
               }`}
             >
               {plan.highlight && (
-                <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 rounded-full bg-aquamarine px-3 py-0.5 text-[10px] font-bold text-textPrimary">
+                <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 rounded-full bg-accentSoft px-3 py-0.5 text-[10px] font-bold text-text">
                   SAVE 27%
                 </span>
               )}
-              <p className="text-sm font-medium text-textSecondary">{plan.label}</p>
-              <p className="mt-1 font-serif text-2xl font-bold text-textPrimary">
+              <p className="text-sm font-medium text-textMuted">{plan.label}</p>
+              <p className="mt-1 font-serif text-2xl font-bold text-text">
                 {plan.price}
-                <span className="text-sm font-normal text-textSecondary">
+                <span className="text-sm font-normal text-textMuted">
                   {plan.period}
                 </span>
               </p>
@@ -112,17 +124,17 @@ export function UpgradeModal({ open, onClose, reason }: UpgradeModalProps) {
         </div>
 
         {/* Feature comparison */}
-        <div className="mb-6 overflow-hidden rounded-2xl border border-textSecondary/10">
-          <table className="w-full text-sm">
+        <div className="mb-6 overflow-x-auto rounded-2xl border border-textMuted/10">
+          <table className="min-w-full text-sm">
             <thead>
-              <tr className="bg-cardBg">
-                <th className="px-4 py-2.5 text-left font-medium text-textSecondary">
+              <tr className="bg-surfaceSubtle">
+                <th className="px-4 py-2.5 text-left font-medium text-textMuted">
                   Feature
                 </th>
-                <th className="px-4 py-2.5 text-center font-medium text-textSecondary">
+                <th className="px-4 py-2.5 text-center font-medium text-textMuted">
                   Free
                 </th>
-                <th className="px-4 py-2.5 text-center font-semibold text-crayolaBlue">
+                <th className="px-4 py-2.5 text-center font-semibold text-primary">
                   Premium
                 </th>
               </tr>
@@ -131,13 +143,13 @@ export function UpgradeModal({ open, onClose, reason }: UpgradeModalProps) {
               {FEATURES.map((f, i) => (
                 <tr
                   key={f.label}
-                  className={i % 2 === 0 ? "bg-surfaceBg" : "bg-cardBg/50"}
+                  className={i % 2 === 0 ? "bg-surface" : "bg-surfaceSubtle/50"}
                 >
-                  <td className="px-4 py-2.5 text-textPrimary">{f.label}</td>
-                  <td className="px-4 py-2.5 text-center text-textSecondary">
+                  <td className="px-4 py-2.5 text-text">{f.label}</td>
+                  <td className="px-4 py-2.5 text-center text-textMuted">
                     {f.free}
                   </td>
-                  <td className="px-4 py-2.5 text-center font-medium text-textPrimary">
+                  <td className="px-4 py-2.5 text-center font-medium text-text">
                     {f.premium}
                   </td>
                 </tr>
@@ -147,16 +159,16 @@ export function UpgradeModal({ open, onClose, reason }: UpgradeModalProps) {
         </div>
 
         {/* CTA */}
-        <p className="mb-3 text-xs text-slate-500 leading-relaxed text-center">
-          Subscription automatically renews monthly at $10.00/mo ($79.00/yr
-          for annual) until canceled. You can cancel online at any time with 1
-          click via your billing settings. No minimum commitment or phone calls
-          required.
+        <p className="mb-3 text-xs text-textMuted leading-relaxed text-center">
+          Subscription automatically renews{" "}
+          {selectedPlan === "monthly" ? "monthly at $9.00/mo" : "annually at $79.00/yr"}{" "}
+          until canceled. You can cancel online at any time with 1 click via
+          your billing settings. No minimum commitment or phone calls required.
         </p>
         <button
           onClick={handleCheckout}
           disabled={redirecting}
-          className="flex w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-aquamarine to-neonIce py-3 text-sm font-bold text-textPrimary transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+          className="flex w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-accentSoft to-accent py-3 text-sm font-bold text-text transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {redirecting ? (
             <>
@@ -190,7 +202,7 @@ export function UpgradeModal({ open, onClose, reason }: UpgradeModalProps) {
         <button
           onClick={onClose}
           disabled={redirecting}
-          className="mt-3 w-full text-center text-xs text-textSecondary hover:text-textPrimary disabled:opacity-50"
+          className="mt-3 w-full text-center text-xs text-textMuted hover:text-text disabled:opacity-50"
         >
           Maybe later
         </button>

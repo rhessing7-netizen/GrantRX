@@ -3,10 +3,11 @@ import type {
   CalendarEvent,
   CalendarFeedInfo,
   CheckoutResponse,
+  EarlyAccessSignupRequest,
+  EarlyAccessSignupResponse,
   EssayOutlineResponse,
   FinancialPlanner,
   MatchedFeed,
-  MatchedScholarship,
   MatchPreview,
   MatchPreviewRequest,
   Profile,
@@ -20,7 +21,6 @@ import type {
   UserScholarshipCreate,
   UserScholarshipUpdate,
 } from "./types";
-import { supabase } from "./supabase";
 
 const API_BASE =
   process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -35,13 +35,9 @@ const API_BASE =
 // Priority:
 //   1. Explicit token set via setAuthToken() (real Supabase session)
 //   2. NEXT_PUBLIC_DEMO_JWT env var (pre-signed JWT for testing)
-//   3. Auto-generated demo token "grantrx-dev-demo" (accepted by backend in dev mode)
 // ---------------------------------------------------------------------------
 
-const DEMO_TOKEN_FALLBACK = "grantrx-dev-demo";
-
-let authToken: string | null =
-  process.env.NEXT_PUBLIC_DEMO_JWT ?? DEMO_TOKEN_FALLBACK;
+let authToken: string | null = process.env.NEXT_PUBLIC_DEMO_JWT ?? null;
 
 export function setAuthToken(token: string | null) {
   // Sanitize at storage time so all downstream consumers get a clean token.
@@ -76,7 +72,7 @@ async function request<T>(
   // Guard against invalid URLs that would cause "Failed to execute 'fetch'"
   if (!url || typeof url !== "string" || !url.startsWith("http")) {
     console.warn("Blocked fetch call with invalid URL:", url);
-    return null as any;
+    return null as T;
   }
 
   let resp: Response;
@@ -164,135 +160,8 @@ export const api = {
   // still renders without a blocking error banner.
   getMatchedScholarships: async (query?: string): Promise<MatchedFeed> => {
     const qs = query && query.trim() ? `?query=${encodeURIComponent(query.trim())}` : "";
-    try {
-      return await request<MatchedFeed>(`/api/scholarships/matched${qs}`);
-    } catch (err) {
-      // If the backend returns 401, 500, a network error, or "Invalid token",
-      // fall back to querying Supabase directly so the feed still renders
-      // without a blocking error banner.
-      const status = (err as Error & { status?: number }).status;
-      const isFallbackEligible =
-        (err instanceof Error && err.message.includes("Invalid token")) ||
-        status === 401 ||
-        status === 500 ||
-        status === 0;
-      if (!isFallbackEligible) {
-        throw err;
-      }
-      console.warn("Backend matched feed unavailable, falling back to Supabase:", err);
-
-      // Query non-archived scholarships directly from Supabase
-      const { data, error: sbError } = await supabase
-        .from("scholarships")
-        .select("*")
-        .eq("is_archived", false)
-        .limit(20);
-
-      if (sbError || !data || data.length === 0) {
-        // Supabase returned 0 rows — return a guaranteed fallback list of
-        // 4 healthcare awards so the feed always renders matched cards.
-        const fallbackResults: MatchedScholarship[] = [
-          {
-            scholarship_id: "fb-apha-foundation",
-            title: "APhA Foundation Student Scholarship",
-            provider: "APhA Foundation",
-            portal_url: "https://www.aphafoundation.org/student-scholarship",
-            award_amount: 2500,
-            deadline: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
-            score: 92,
-            missing_criteria: [],
-            is_locked: false,
-            masked_title: null,
-            masked_provider: null,
-            metro_restrictions: [],
-            eligible_disciplines: ["pharmacy"],
-          },
-          {
-            scholarship_id: "fb-cvs-health-foundation",
-            title: "CVS Health Foundation Pharmacy Scholarship",
-            provider: "CVS Health Foundation",
-            portal_url: "https://www.cvshealthfoundation.org/scholarships",
-            award_amount: 5000,
-            deadline: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
-            score: 88,
-            missing_criteria: [],
-            is_locked: false,
-            masked_title: null,
-            masked_provider: null,
-            metro_restrictions: [],
-            eligible_disciplines: ["pharmacy", "nursing"],
-          },
-          {
-            scholarship_id: "fb-ohio-pharmacists",
-            title: "Ohio Pharmacists Association Scholarship",
-            provider: "Ohio Pharmacists Association",
-            portal_url: "https://www.ohiopharmacists.org/scholarships",
-            award_amount: 1500,
-            deadline: new Date(Date.now() + 45 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
-            score: 85,
-            missing_criteria: [],
-            is_locked: false,
-            masked_title: null,
-            masked_provider: null,
-            metro_restrictions: ["OH"],
-            eligible_disciplines: ["pharmacy"],
-          },
-          {
-            scholarship_id: "fb-walgreens-diversity",
-            title: "Walgreens Diversity in Healthcare Scholarship",
-            provider: "Walgreens",
-            portal_url: "https://www.walgreens.com/scholarships",
-            award_amount: 3000,
-            deadline: new Date(Date.now() + 75 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
-            score: 80,
-            missing_criteria: [],
-            is_locked: true,
-            masked_title: "Locked Opportunity",
-            masked_provider: "Locked Provider",
-            metro_restrictions: [],
-            eligible_disciplines: ["pharmacy", "nursing", "medicine"],
-          },
-        ];
-
-        return {
-          results: fallbackResults,
-          total: fallbackResults.length,
-          visible: fallbackResults.filter((r) => !r.is_locked).length,
-          tier: "free",
-          searches_used_this_week: 0,
-          search_limit: 10,
-          reset_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-        };
-      }
-
-      const results: MatchedScholarship[] = data.map((s: Record<string, unknown>, idx: number) => ({
-        scholarship_id: s.id as string,
-        title: s.title as string,
-        provider: s.provider as string,
-        portal_url: (s.portal_url as string) || (s.url as string) || "#",
-        award_amount: (s.award_amount as number) || 2500,
-        deadline: (s.deadline as string) || "",
-        score: Math.max(90 - idx * 5, 50),
-        missing_criteria: [],
-        is_locked: idx >= 3,
-        masked_title: idx >= 3 ? "Locked Opportunity" : null,
-        masked_provider: idx >= 3 ? "Locked Provider" : null,
-        metro_restrictions: [],
-        eligible_disciplines: [],
-      }));
-
-      const visible = results.filter((r) => !r.is_locked).length;
-
-      return {
-        results,
-        total: data.length,
-        visible,
-        tier: "free",
-        searches_used_this_week: 0,
-        search_limit: 10,
-        reset_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-      };
-    }
+    // Backend matching is authoritative; never fabricate or bypass match results.
+    return request<MatchedFeed>(`/api/scholarships/matched${qs}`);
   },
   getUsage: () => request<Usage>("/api/user/usage"),
 
@@ -334,6 +203,7 @@ export const api = {
   // Calendar
   getCalendarEvents: () => request<CalendarEvent[]>("/api/calendar/events"),
   getFeedUrl: () => request<CalendarFeedInfo>("/api/calendar/feed-url"),
+  rotateFeedToken: () => request<CalendarFeedInfo>("/api/calendar/feed-token/rotate", { method: "POST" }),
 
   // Billing
   createCheckout: (plan: BillingPlan, successUrl?: string, cancelUrl?: string) =>
@@ -455,6 +325,13 @@ export const api = {
         body: JSON.stringify(payload),
       },
     ),
+
+  // Early Access / Waitlist signup (public — no auth required)
+  submitEarlyAccess: (data: EarlyAccessSignupRequest) =>
+    request<EarlyAccessSignupResponse>("/api/v1/early-access", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
 
   // In-app AI Support Assistant
   supportChat: (message: string, conversationId?: string) =>

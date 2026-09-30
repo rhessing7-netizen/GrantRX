@@ -1,18 +1,31 @@
-name: Daily Partitioned Catalog Ingestion
+name: GrantRx Catalog Maintenance
 
 on:
   schedule:
-    # Runs every day at 03:00 UTC
+    # One authoritative scheduled catalog workflow. Runs daily at 03:00 UTC.
     - cron: '0 3 * * *'
   workflow_dispatch:
     inputs:
       category:
-        description: 'Specific category to scrape (leave empty for daily auto-partition)'
+        description: 'Optional category to scrape instead of the daily partition'
         required: false
         default: ''
+      limit:
+        description: 'Optional max number of sources for a manually selected category'
+        required: false
+        default: ''
+      skip_maintenance:
+        description: 'Skip link/deadline maintenance for this manual run'
+        required: false
+        type: boolean
+        default: false
+
+concurrency:
+  group: grantrx-catalog-maintenance
+  cancel-in-progress: false
 
 jobs:
-  partitioned-scrape:
+  catalog-maintenance:
     runs-on: ubuntu-latest
     timeout-minutes: 60
 
@@ -29,10 +42,11 @@ jobs:
 
       - name: Install dependencies
         run: |
+          python -m pip install --upgrade pip
           pip install -r backend/requirements.txt
           playwright install --with-deps chromium
 
-      - name: Run Partitioned Scrape by Day
+      - name: Run scheduled partition or manual category
         working-directory: ./backend
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
@@ -40,63 +54,48 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
         run: |
-          # If triggered manually with a category, run that category
-          if [ -n "${{ github.event.inputs.category }}" ]; then
-            python -m scrapers.runner --category="${{ github.event.inputs.category }}"
+          CATEGORY='${{ github.event.inputs.category }}'
+          LIMIT='${{ github.event.inputs.limit }}'
+
+          if [ -n "$CATEGORY" ]; then
+            LIMIT_ARG=""
+            if [ -n "$LIMIT" ]; then
+              LIMIT_ARG="--limit=$LIMIT"
+            fi
+            echo "Manual run: $CATEGORY $LIMIT_ARG"
+            python -m scrapers.runner --category="$CATEGORY" $LIMIT_ARG
             exit 0
           fi
 
-          # Day of week (1=Mon, 2=Tue, 3=Wed, 4=Thu, 5=Fri, 6=Sat, 7=Sun)
-          DOW=$(date +%u)
+          # C7: registry-driven scheduling. The source registry decides which
+          # sources are due — every enabled source has a deterministic
+          # next_check_at, so no category can silently stop being scheduled.
+          python -m scrapers.runner --sync
 
-          case $DOW in
-            1)
-              echo "Monday: Ingesting Corporate Unrestricted & Employer Tuition Benefits"
-              python -m scrapers.runner --category=corporate_unrestricted
-              python -m scrapers.runner --category=employer_tuition_benefit
-              ;;
-            2)
-              echo "Tuesday: Ingesting National Associations & Accrediting Bodies"
-              python -m scrapers.runner --category=national_association
-              python -m scrapers.runner --category=accrediting_body
-              python -m scrapers.runner --category=honor_society
-              ;;
-            3)
-              echo "Wednesday: Ingesting Hospital Systems & Clinical Employee Pipelines"
-              python -m scrapers.runner --category=hospital_system
-              python -m scrapers.runner --category=clinical_employee_pipeline
-              ;;
-            4)
-              echo "Thursday: Ingesting Diversity/Affinity & Government Employee Programs"
-              python -m scrapers.runner --category=diversity_affinity
-              python -m scrapers.runner --category=government_employee_benefit
-              python -m scrapers.runner --category=state_agency
-              ;;
-            5)
-              echo "Friday: Ingesting Hyper-Local & Regional Foundations"
-              python -m scrapers.runner --category=regional_foundation --state=OH
-              python -m scrapers.runner --category=regional_foundation --state=PA
-              python -m scrapers.runner --category=chamber_of_commerce
-              ;;
+          case "$(date +%u)" in
             6)
-              echo "Saturday: Running Outside Aid & AcademicWorks Seed Crawl"
-              python -m scrapers.runner --crawl --seeds-file=scrapers/seeds.json --max-depth=2 --limit-extract=50
+              echo 'Saturday: due sources + discovery seed queue'
+              python -m scrapers.runner --due
+              python -m scrapers.runner --dynamic-queue --queue-limit=20 --limit-extract=50
               ;;
-            7)
-              echo "Sunday: Full Link Audit & Dead URL Repair"
-              python -m scripts.repair_urls
+            *)
+              echo 'Daily: registry-scheduled source checks'
+              python -m scrapers.runner --due
               ;;
           esac
 
-      - name: Nightly Link & Deadline Maintenance
+      - name: Run link and deadline maintenance once
+        if: ${{ github.event_name == 'schedule' || github.event.inputs.skip_maintenance != 'true' }}
         working-directory: ./backend
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-        run: |
-          python -m scripts.repair_urls
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: python -m scripts.repair_urls
 
-      - name: Send Weekly Student Deadline Digests (Sundays Only)
+      - name: Send weekly student deadline digests
+        if: ${{ github.event_name == 'schedule' }}
         working-directory: ./backend
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
@@ -105,5 +104,5 @@ jobs:
           if [ "$(date +%u)" -eq 7 ]; then
             python -m app.workers.deadline_digest
           else
-            echo "Skipping digests (runs on Sundays)."
+            echo 'Skipping digest; Sunday only.'
           fi

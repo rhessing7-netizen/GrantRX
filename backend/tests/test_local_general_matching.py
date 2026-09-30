@@ -89,6 +89,12 @@ def _make_scholarship(**kwargs):
         "has_service_commitment": False,
         "service_commitment_duration_months": None,
         "vendor_platform": None,
+        "source_url": None,
+        "extraction_method": None,
+        "verified_fields": {},
+        "verified_at": None,
+
+        "verification_status": "legacy_unverified",
     }
     defaults.update(kwargs)
     obj = MagicMock()

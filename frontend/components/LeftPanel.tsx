@@ -1,12 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import type { Profile, Usage } from "@/lib/types";
 import { DISCIPLINE_LABELS } from "@/lib/types";
 import { TOP_20_METROS } from "@/lib/constants/metros";
 import { api } from "@/lib/api";
 import { startProductTour } from "@/components/InteractiveTour";
+import { BrandMark } from "@/components/Brand";
+import { DiscoverSearch } from "@/components/DiscoverSearch";
 
 export type LeftPanelProps = {
   profile: Profile | null;
@@ -22,6 +24,11 @@ export type LeftPanelProps = {
   onOpenAuth?: () => void;
   onSignOut?: () => void;
   onOpenAccountSettings?: () => void;
+  /** Prefix for nested control IDs — the panel mounts twice (desktop sidebar
+   *  + mobile menu), so the second instance must use a distinct prefix. */
+  idPrefix?: string;
+  /** True while a feed search/refresh request is in flight. */
+  busy?: boolean;
 };
 
 export function LeftPanel({
@@ -38,6 +45,8 @@ export function LeftPanel({
   onOpenAuth,
   onSignOut,
   onOpenAccountSettings,
+  idPrefix = "lp",
+  busy = false,
 }: LeftPanelProps) {
   const [portalLoading, setPortalLoading] = useState(false);
   const [portalError, setPortalError] = useState<string | null>(null);
@@ -48,12 +57,6 @@ export function LeftPanel({
   const [exitAwardAmount, setExitAwardAmount] = useState<string>("");
   const [exitComments, setExitComments] = useState<string>("");
   const [exitSubmitting, setExitSubmitting] = useState(false);
-  const hasText = search.trim().length > 0;
-  const quotaExhausted =
-    !!usage && !usage.is_premium && usage.remaining !== null && usage.remaining <= 0;
-  // Only disable the keyword search button when the user has text AND quota is exhausted.
-  // Without text, the button acts as a free match refresh.
-  const searchDisabled = hasText && quotaExhausted;
 
   // Format disciplines for display
   const disciplineDisplay = profile?.disciplines?.length
@@ -131,6 +134,16 @@ export function LeftPanel({
     return "Add remaining profile details to boost match accuracy.";
   })();
 
+  // Escape dismissal for the exit-survey dialog.
+  useEffect(() => {
+    if (!exitSurveyOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !exitSubmitting) setExitSurveyOpen(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [exitSurveyOpen, exitSubmitting]);
+
   const handleManageSubscription = () => {
     setExitSurveyOpen(true);
   };
@@ -182,28 +195,33 @@ export function LeftPanel({
 
   return (
     <div className="space-y-6">
+      {/* Brand header */}
+      <Link href="/" aria-label="EdFintia home" className="inline-block">
+        <BrandMark tagline alt="" />
+      </Link>
+
       {/* Profile summary — frosted glass */}
-      <section className="bg-white/90 backdrop-blur-xl rounded-2xl border border-slate-200/90 shadow-sm p-6 space-y-6">
+      <section className="bg-white/90 backdrop-blur-xl rounded-2xl border border-border/90 shadow-sm p-6 space-y-6">
         <div className="flex items-center justify-between">
-          <h2 className="font-serif text-slate-900 font-bold text-base tracking-tight">
+          <h2 className="font-serif text-text font-bold text-base tracking-tight">
             Student Profile
           </h2>
           <button
             onClick={onOpenOnboarding}
-            className="text-xs text-crayolaBlue hover:underline"
+            className="text-xs text-primary hover:underline"
           >
             {profile ? "Edit" : "Set up"}
           </button>
         </div>
         {profile ? (
-          <div className="mt-3 space-y-1 text-sm text-textSecondary">
+          <div className="mt-3 space-y-1 text-sm text-textMuted">
             {profile.full_name && (
-              <p className="font-serif font-bold text-slate-900 text-base">
+              <p className="font-serif font-bold text-text text-base">
                 {profile.full_name}
               </p>
             )}
             <p>
-              <span className="font-medium text-textPrimary">
+              <span className="font-medium text-text">
                 {disciplineDisplay}
               </span>
             </p>
@@ -221,7 +239,7 @@ export function LeftPanel({
               {onOpenAccountSettings && (
                 <button
                   onClick={onOpenAccountSettings}
-                  className="flex-1 rounded-lg bg-slate-100 hover:bg-slate-200/80 text-slate-700 font-medium border border-slate-200/70 px-3 py-2 text-xs transition"
+                  className="flex-1 rounded-lg bg-surfaceSubtle hover:bg-border/80 text-text font-medium border border-border/70 px-3 py-2 text-xs transition"
                 >
                   Account Settings
                 </button>
@@ -229,7 +247,7 @@ export function LeftPanel({
               {onSignOut && (
                 <button
                   onClick={onSignOut}
-                  className="flex-1 rounded-lg bg-slate-100 hover:bg-slate-200/80 text-slate-700 font-medium border border-slate-200/70 px-3 py-2 text-xs transition"
+                  className="flex-1 rounded-lg bg-surfaceSubtle hover:bg-border/80 text-text font-medium border border-border/70 px-3 py-2 text-xs transition"
                 >
                   Sign Out
                 </button>
@@ -242,14 +260,14 @@ export function LeftPanel({
                 <button
                   onClick={handleManageSubscription}
                   disabled={portalLoading}
-                  className="w-full rounded-lg bg-slate-100 hover:bg-slate-200/80 text-slate-700 font-medium border border-slate-200/70 px-4 py-2 text-xs transition disabled:opacity-50"
+                  className="w-full rounded-lg bg-surfaceSubtle hover:bg-border/80 text-text font-medium border border-border/70 px-4 py-2 text-xs transition disabled:opacity-50"
                 >
                   {portalLoading
                     ? "Opening portal…"
                     : "Manage Subscription & Invoices"}
                 </button>
                 {portalError && (
-                  <p className="mt-1.5 text-xs text-red-600">{portalError}</p>
+                  <p className="mt-1.5 text-xs text-danger">{portalError}</p>
                 )}
               </div>
             )}
@@ -257,25 +275,25 @@ export function LeftPanel({
             {/* Profile Strength meter */}
             <div className="mt-4" data-tour="profile-strength">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-medium text-textSecondary">
+                <span className="text-xs font-medium text-textMuted">
                   Profile Strength
                 </span>
                 {profileStrength > 70 && (
-                  <span className="text-xs font-semibold text-blueEnergy bg-skyAqua/15 px-2 py-0.5 rounded-md">
+                  <span className="text-xs font-semibold text-secondary bg-accent/15 px-2 py-0.5 rounded-md">
                     {"\u26A1"} High Match Ready
                   </span>
                 )}
               </div>
-              <div className="mt-1.5 bg-slate-100 rounded-full h-3 overflow-hidden p-0.5">
+              <div className="mt-1.5 bg-surfaceSubtle rounded-full h-3 overflow-hidden p-0.5">
                 <div
-                  className="bg-gradient-to-r from-skyAqua via-blueEnergy to-aquamarine h-full rounded-full transition-all duration-500"
+                  className="bg-gradient-to-r from-accent via-secondary to-accentSoft h-full rounded-full transition-all duration-500"
                   style={{ width: `${profileStrength}%` }}
                 />
               </div>
               {strengthPrompt && (
                 <p
                   className={`mt-2 text-xs leading-relaxed ${
-                    profileStrength > 70 ? "text-blueEnergy font-medium" : "text-textSecondary"
+                    profileStrength > 70 ? "text-secondary font-medium" : "text-textMuted"
                   }`}
                 >
                   {"\u26A1"} {strengthPrompt}
@@ -285,23 +303,23 @@ export function LeftPanel({
               {/* Dynamic unlock guidance — missing profile vectors */}
               {unlockGuidance && unlockGuidance.length > 0 && (
                 <div className="mt-3 space-y-1.5">
-                  <p className="text-xs font-medium text-textSecondary/70">
+                  <p className="text-xs font-medium text-textMuted/70">
                     Unlock more matches by adding:
                   </p>
                   <div className="flex flex-wrap gap-1.5">
                     {unlockGuidance.slice(0, 5).map((field) => (
                       <span
                         key={field}
-                        className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 text-xs text-textSecondary border border-slate-200"
+                        className="inline-flex items-center gap-1 rounded-full bg-surfaceSubtle px-2.5 py-1 text-xs text-textMuted border border-border"
                       >
-                        <svg className="h-3 w-3 text-textSecondary/50" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                        <svg className="h-3 w-3 text-textMuted/50" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                         </svg>
                         {field}
                       </span>
                     ))}
                     {unlockGuidance.length > 5 && (
-                      <span className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-1 text-xs text-textSecondary border border-slate-200">
+                      <span className="inline-flex items-center rounded-full bg-surfaceSubtle px-2.5 py-1 text-xs text-textMuted border border-border">
                         +{unlockGuidance.length - 5} more
                       </span>
                     )}
@@ -312,13 +330,13 @@ export function LeftPanel({
           </div>
         ) : (
           <div className="mt-3 space-y-3">
-            <p className="text-sm text-textSecondary">
+            <p className="text-sm text-textMuted">
               Complete onboarding to start matching.
             </p>
             {onOpenAuth && (
               <button
                 onClick={onOpenAuth}
-                className="rounded-full bg-crayolaBlue px-4 py-2 text-xs font-medium text-surfaceBg"
+                className="rounded-full bg-primary px-4 py-2 text-xs font-medium text-surface"
               >
                 Sign In / Sign Up
               </button>
@@ -330,94 +348,35 @@ export function LeftPanel({
       {/* Product Walkthrough restart */}
       <button
         onClick={startProductTour}
-        className="w-full rounded-lg bg-slate-100 hover:bg-slate-200/80 text-slate-600 font-medium border border-slate-200/70 px-4 py-2 text-xs transition"
+        className="w-full rounded-lg bg-surfaceSubtle hover:bg-border/80 text-textMuted font-medium border border-border/70 px-4 py-2 text-xs transition"
       >
         Product Walkthrough
       </button>
 
       {/* Search — frosted glass */}
-      <section className="bg-white/90 backdrop-blur-xl rounded-2xl border border-slate-200/90 shadow-sm p-6 space-y-6">
-        <label className="text-sm font-medium text-textSecondary">
-          Keyword Search
-        </label>
-        <div className="relative mt-2">
-          <input
-            value={search}
-            onChange={(e) => onSearchChange(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                if (hasText && !quotaExhausted) onKeywordSearch();
-                else if (!hasText) onRefreshFeed();
-              }
-            }}
-            placeholder="Keyword, provider, or tag"
-            className="w-full rounded-xl border border-textSecondary/20 bg-surfaceBg px-4 py-2.5 pr-10 text-textPrimary placeholder:text-textSecondary/50"
-          />
-          {/* Search icon button */}
-          <button
-            onClick={() => {
-              if (hasText && !quotaExhausted) onKeywordSearch();
-              else if (!hasText) onRefreshFeed();
-            }}
-            disabled={searchDisabled}
-            className="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-textSecondary hover:text-crayolaBlue disabled:cursor-not-allowed disabled:opacity-40"
-            aria-label="Search"
-          >
-            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
-          </button>
-        </div>
-        {/* Keyword search button — consumes quota only when text is present */}
-        <button
-          onClick={() => {
-            if (hasText) onKeywordSearch();
-            else onRefreshFeed();
-          }}
-          disabled={searchDisabled}
-          className="mt-3 w-full rounded-full bg-blueEnergy hover:bg-[#3b7ed6] text-white font-semibold shadow-sm hover:shadow-md transition-all active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          {searchDisabled
-            ? "Keyword Search Limit Reached"
-            : hasText
-              ? "Search Grants"
-              : "Search Grants"}
-        </button>
-
-        {/* Free refresh button — always free, no quota deduction */}
-        <button
-          onClick={onRefreshFeed}
-          className="mt-2 w-full rounded-lg bg-slate-100 hover:bg-slate-200/80 text-slate-700 font-medium border border-slate-200/70 px-4 py-2 text-xs transition"
-        >
-          Refresh Matches (free)
-        </button>
-
-        {searchDisabled && (
-          <p className="mt-2 text-xs text-textSecondary">
-            You&apos;ve used all 10 free keyword searches this week.{" "}
-            {onUpgrade && (
-              <button
-                onClick={onUpgrade}
-                className="text-crayolaBlue hover:underline"
-              >
-                Upgrade to Premium
-              </button>
-            )}{" "}
-            for unlimited keyword searches. Filter adjustments and match
-            refreshes remain free.
-          </p>
-        )}
+      <section className="bg-white/90 backdrop-blur-xl rounded-2xl border border-border/90 shadow-sm p-6 space-y-6">
+        <DiscoverSearch
+          search={search}
+          onSearchChange={onSearchChange}
+          onKeywordSearch={onKeywordSearch}
+          onRefreshFeed={onRefreshFeed}
+          usage={usage}
+          onUpgrade={onUpgrade}
+          idPrefix={idPrefix}
+          busy={busy}
+        />
       </section>
 
       {/* Metro Area filter — frosted glass */}
-      <section className="bg-white/90 backdrop-blur-xl rounded-2xl border border-slate-200/90 shadow-sm p-6 space-y-6">
-        <label className="text-sm font-medium text-textSecondary">
+      <section className="bg-white/90 backdrop-blur-xl rounded-2xl border border-border/90 shadow-sm p-6 space-y-6">
+        <label className="text-sm font-medium text-textMuted">
           Metro Area Filter
         </label>
         <select
           value={metroFilter}
           onChange={(e) => onMetroFilterChange(e.target.value)}
-          className="mt-2 w-full rounded-xl border border-textSecondary/20 bg-surfaceBg px-4 py-2.5 text-textPrimary"
+          aria-label="Metro area filter"
+          className="mt-2 w-full rounded-xl border border-textMuted/20 bg-surface px-4 py-2.5 text-text"
         >
           <option value="">All metros</option>
           {TOP_20_METROS.map((m) => (
@@ -429,7 +388,7 @@ export function LeftPanel({
         {metroFilter && (
           <button
             onClick={() => onMetroFilterChange("")}
-            className="mt-2 text-xs text-crayolaBlue hover:underline"
+            className="mt-2 text-xs text-primary hover:underline"
           >
             Clear metro filter
           </button>
@@ -438,26 +397,26 @@ export function LeftPanel({
 
       {/* Usage tracker — frosted glass */}
       {usage && (
-        <section className="bg-white/90 backdrop-blur-xl rounded-2xl border border-slate-200/90 shadow-sm p-6 space-y-6">
-          <h3 className="font-serif text-slate-900 font-bold text-base tracking-tight">
+        <section className="bg-white/90 backdrop-blur-xl rounded-2xl border border-border/90 shadow-sm p-6 space-y-6">
+          <h3 className="font-serif text-text font-bold text-base tracking-tight">
             Keyword Search Quota
           </h3>
           {usage.is_premium ? (
-            <p className="mt-2 text-sm text-textSecondary">
+            <p className="mt-2 text-sm text-textMuted">
               Unlimited searches (Premium)
             </p>
           ) : (
             <>
-              <p className="mt-2 text-sm text-textPrimary">
+              <p className="mt-2 text-sm text-text">
                 Keyword searches this week:{" "}
                 <span className="font-semibold">
                   {usage.searches_used_this_week}
                 </span>{" "}
                 / {usage.search_limit ?? 10}
               </p>
-              <div className="mt-2 h-2.5 overflow-hidden rounded-full bg-textSecondary/15">
+              <div className="mt-2 h-2.5 overflow-hidden rounded-full bg-textMuted/15">
                 <div
-                  className="h-full rounded-full bg-gradient-to-r from-aquamarine to-neonIce transition-all duration-500 ease-out"
+                  className="h-full rounded-full bg-gradient-to-r from-accentSoft to-accent transition-all duration-500 ease-out"
                   style={{
                     width: `${Math.min(
                       100,
@@ -468,12 +427,12 @@ export function LeftPanel({
                   }}
                 />
               </div>
-              <p className="mt-2 text-xs text-textSecondary">
+              <p className="mt-2 text-xs text-textMuted">
                 {usage.search_limit
                   ? `${usage.search_limit - usage.searches_used_this_week} keyword search${usage.search_limit - usage.searches_used_this_week === 1 ? "" : "es"} left this week. Filter adjustments and match refreshes are unlimited.`
                   : "Unlimited keyword searches (Premium)."}
               </p>
-              <p className="mt-1 text-xs text-textSecondary">
+              <p className="mt-1 text-xs text-textMuted">
                 Resets {formatResetCountdown(usage.reset_at)}
               </p>
             </>
@@ -483,14 +442,14 @@ export function LeftPanel({
 
       {/* Upgrade CTA */}
       {usage && !usage.is_premium && (
-        <section className="rounded-2xl bg-gradient-to-r from-aquamarine to-neonIce p-5 text-textPrimary">
-          <h3 className="font-serif text-slate-900 font-bold text-base tracking-tight">Upgrade to Premium</h3>
+        <section className="rounded-2xl bg-gradient-to-r from-accentSoft to-accent p-5 text-text">
+          <h3 className="font-serif text-text font-bold text-base tracking-tight">Upgrade to Premium</h3>
           <p className="mt-1 text-sm">
-            Unlimited searches, unmasked results, and deadline reminders.
+            Unlimited searches, unlimited active applications, and full unmasked results.
           </p>
           <button
             onClick={onUpgrade}
-            className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-blueEnergy hover:bg-[#3b7ed6] text-white font-semibold shadow-sm hover:shadow-md transition-all active:scale-[0.99]"
+            className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-primary hover:bg-primaryHover text-white font-semibold shadow-sm hover:shadow-md transition-all active:scale-[0.99]"
           >
             <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
               <path d="M11.983 1.908a.963.963 0 00-1.306.196L6.95 7.075A.963.963 0 007.646 8.6h2.09l-1.39 4.36a.963.963 0 001.548.963l4.727-4.97a.963.963 0 00-.696-1.617h-2.09l1.39-4.36a.963.963 0 00-.732-1.068z" />
@@ -502,15 +461,15 @@ export function LeftPanel({
 
       {/* Legal footer */}
       <footer className="pt-2 text-center">
-        <p className="text-xs text-textSecondary/60">
-          © 2026 GrantRx. All rights reserved.
+        <p className="text-xs text-textMuted/60">
+          © 2026 EdFintia. All rights reserved.
         </p>
         <p className="mt-1 text-xs">
-          <Link href="/terms" className="text-textSecondary/60 hover:text-crayolaBlue hover:underline">
+          <Link href="/terms" className="text-textMuted/60 hover:text-primary hover:underline">
             Terms of Service
           </Link>
           {" · "}
-          <Link href="/privacy" className="text-textSecondary/60 hover:text-crayolaBlue hover:underline">
+          <Link href="/privacy" className="text-textMuted/60 hover:text-primary hover:underline">
             Privacy Policy
           </Link>
         </p>
@@ -519,25 +478,28 @@ export function LeftPanel({
       {/* Exit Survey modal — shown before redirecting to Stripe Billing Portal */}
       {exitSurveyOpen && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-textPrimary/40 backdrop-blur-sm"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-text/40 backdrop-blur-sm"
           onClick={() => !exitSubmitting && setExitSurveyOpen(false)}
         >
           <div
-            className="w-full max-w-md rounded-3xl bg-surfaceBg p-6 shadow-2xl"
+            className="w-full max-w-md rounded-3xl bg-surface p-6 shadow-2xl"
             onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Before you go — optional feedback"
           >
-            <h2 className="font-serif text-slate-900 font-bold text-base tracking-tight">
+            <h2 className="font-serif text-text font-bold text-base tracking-tight">
               Before you go
             </h2>
-            <p className="mt-1 text-sm text-textSecondary">
-              Help us improve GrantRx — why are you managing your billing?
+            <p className="mt-1 text-sm text-textMuted">
+              Help us improve EdFintia — why are you managing your billing?
             </p>
 
             <div className="mt-4 space-y-2">
               {[
                 { value: "won_scholarship", label: "I won a scholarship!" },
                 { value: "too_expensive", label: "Too expensive / Tight student budget" },
-                { value: "not_enough_opportunities", label: "Not enough opportunities in my clinical discipline" },
+                { value: "not_enough_opportunities", label: "Not enough opportunities in my field of study" },
                 { value: "finished_cycle", label: "Finished applying for this academic cycle" },
                 { value: "other", label: "Other" },
               ].map((opt) => (
@@ -545,8 +507,8 @@ export function LeftPanel({
                   key={opt.value}
                   className={`flex items-center gap-2.5 rounded-xl border px-3 py-2.5 text-sm cursor-pointer transition ${
                     exitReason === opt.value
-                      ? "border-crayolaBlue bg-crayolaBlue/5 text-textPrimary"
-                      : "border-textSecondary/15 text-textSecondary hover:border-crayolaBlue/30"
+                      ? "border-primary bg-primary/5 text-text"
+                      : "border-textMuted/15 text-textMuted hover:border-primary/30"
                   }`}
                 >
                   <input
@@ -555,7 +517,7 @@ export function LeftPanel({
                     value={opt.value}
                     checked={exitReason === opt.value}
                     onChange={(e) => setExitReason(e.target.value)}
-                    className="h-4 w-4 accent-crayolaBlue"
+                    className="h-4 w-4 accent-primary"
                   />
                   {opt.label}
                 </label>
@@ -565,17 +527,17 @@ export function LeftPanel({
             {/* Conditional award amount field */}
             {exitReason === "won_scholarship" && (
               <div className="mt-3">
-                <label className="block text-xs font-medium text-textSecondary">
+                <label className="block text-xs font-medium text-textMuted">
                   Award amount (optional)
                 </label>
                 <div className="relative mt-1">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-textSecondary">$</span>
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-textMuted">$</span>
                   <input
                     type="number"
                     value={exitAwardAmount}
                     onChange={(e) => setExitAwardAmount(e.target.value)}
                     placeholder="5000"
-                    className="w-full rounded-xl border border-textSecondary/20 bg-surfaceBg pl-7 pr-3 py-2 text-sm text-textPrimary"
+                    className="w-full rounded-xl border border-textMuted/20 bg-surface pl-7 pr-3 py-2 text-sm text-text"
                   />
                 </div>
               </div>
@@ -583,7 +545,7 @@ export function LeftPanel({
 
             {/* Optional comments */}
             <div className="mt-3">
-              <label className="block text-xs font-medium text-textSecondary">
+              <label className="block text-xs font-medium text-textMuted">
                 Additional comments (optional)
               </label>
               <textarea
@@ -591,7 +553,7 @@ export function LeftPanel({
                 onChange={(e) => setExitComments(e.target.value)}
                 placeholder="Anything else you'd like to share?"
                 rows={2}
-                className="mt-1 w-full rounded-xl border border-textSecondary/20 bg-surfaceBg px-3 py-2 text-sm text-textPrimary"
+                className="mt-1 w-full rounded-xl border border-textMuted/20 bg-surface px-3 py-2 text-sm text-text"
               />
             </div>
 
@@ -599,14 +561,14 @@ export function LeftPanel({
               <button
                 onClick={handleSkipSurvey}
                 disabled={exitSubmitting}
-                className="text-sm text-textSecondary hover:text-textPrimary disabled:opacity-50"
+                className="text-sm text-textMuted hover:text-text disabled:opacity-50"
               >
                 Skip & continue
               </button>
               <button
                 onClick={handleExitSurveySubmit}
                 disabled={!exitReason || exitSubmitting}
-                className="rounded-full bg-blueEnergy hover:bg-[#3b7ed6] text-white font-semibold shadow-sm hover:shadow-md transition-all active:scale-[0.99] disabled:opacity-50"
+                className="rounded-full bg-primary hover:bg-primaryHover text-white font-semibold shadow-sm hover:shadow-md transition-all active:scale-[0.99] disabled:opacity-50"
               >
                 {exitSubmitting ? "Submitting…" : "Submit & continue"}
               </button>

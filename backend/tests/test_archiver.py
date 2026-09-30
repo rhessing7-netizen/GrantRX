@@ -2,7 +2,8 @@
 
 Tests cover:
   - upsert_scholarship creates new records
-  - upsert_scholarship updates existing records (dedup by title + portal_url)
+  - upsert_scholarship updates existing records (canonical URL or normalized
+    title+provider identity)
   - upsert_scholarship reports "unchanged" for identical data
   - archive_expired_scholarships archives past-deadline scholarships
   - archive_expired_scholarships sets estimated_next_cycle
@@ -145,8 +146,13 @@ class TestArchivalSummary:
 # ---------------------------------------------------------------------------
 
 class TestUpsertDedup:
-    def test_dedup_by_title_and_portal_url(self):
-        """The dedup key should be (title, portal_url)."""
+    def test_dedup_by_canonical_portal_url(self):
+        """Same canonical application URL identifies the same scholarship.
+
+        upsert_scholarship resolves identity via indexed filter lookups
+        and matches on the canonical URL (host/path, tracking params ignored)
+        or normalized title+provider.
+        """
         from scrapers.runner import upsert_scholarship
         from scrapers.schema import ScholarshipExtract
 
@@ -158,18 +164,45 @@ class TestUpsertDedup:
             deadline=(date.today() + timedelta(days=90)).isoformat(),
         )
 
-        # Mock DB: existing scholarship found
+        # Mock DB: existing scholarship returned by the identity lookup
         existing = _make_scholarship(
             title="Existing Scholarship",
             portal_url="https://example.com/apply",
             award_amount=3000,  # Different amount -> should update
         )
         db = MagicMock()
-        db.query.return_value.filter.return_value.first.return_value = existing
+        db.query.return_value.filter.return_value.all.return_value = [existing]
 
         model, action = upsert_scholarship(db, extract)
         assert action == "updated"
         assert existing.award_amount == 5000  # Updated to new value
+        db.commit.assert_called_once()
+
+    def test_dedup_by_normalized_title_and_provider(self):
+        """A changed portal URL still dedups when normalized title+provider match."""
+        from scrapers.runner import upsert_scholarship
+        from scrapers.schema import ScholarshipExtract
+
+        extract = ScholarshipExtract(
+            title="Existing Scholarship",
+            provider="Test Provider",
+            portal_url="https://example.com/new-application",
+            award_amount=5000,
+            deadline=(date.today() + timedelta(days=90)).isoformat(),
+        )
+
+        existing = _make_scholarship(
+            title="  Existing   Scholarship ",  # normalization: case/whitespace
+            provider="TEST PROVIDER",
+            portal_url="https://apply.example.org/old",
+            award_amount=3000,
+        )
+        db = MagicMock()
+        db.query.return_value.filter.return_value.all.return_value = [existing]
+
+        model, action = upsert_scholarship(db, extract)
+        assert action == "updated"
+        assert existing.award_amount == 5000
         db.commit.assert_called_once()
 
     def test_dedup_unchanged_when_identical(self):
@@ -193,7 +226,7 @@ class TestUpsertDedup:
             deadline=test_deadline,
         )
         db = MagicMock()
-        db.query.return_value.filter.return_value.first.return_value = existing
+        db.query.return_value.filter.return_value.all.return_value = [existing]
 
         model, action = upsert_scholarship(db, extract)
         # updated_at always changes via _to_db_dict(), so action is "updated"
@@ -214,7 +247,7 @@ class TestUpsertDedup:
         )
 
         db = MagicMock()
-        db.query.return_value.filter.return_value.first.return_value = None
+        db.query.return_value.filter.return_value.all.return_value = []
 
         model, action = upsert_scholarship(db, extract)
         assert action == "created"

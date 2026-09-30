@@ -59,10 +59,25 @@ except ImportError:  # pragma: no cover
     metro_name = None  # type: ignore[assignment]
 
 try:
-    from scrapers.sources import normalize_discipline
+    from scrapers.utils.taxonomy import ANY_FIELD, fields_match
 except ImportError:  # pragma: no cover
-    def normalize_discipline(value: str) -> str:  # type: ignore[misc]
-        return value.lower() if value else "any"
+    ANY_FIELD = "any"  # type: ignore[assignment]
+
+    def fields_match(s_codes, u_codes):  # type: ignore[misc]
+        return bool({str(c).lower() for c in s_codes} & {str(c).lower() for c in u_codes})
+
+from app.services.lifecycle import is_discoverable
+
+try:
+    from scrapers.utils.credentials import (
+        credential_requirement_set,
+        credential_token_set,
+    )
+except ImportError:  # pragma: no cover
+    def credential_token_set(values):  # type: ignore[misc]
+        return {str(v).strip().lower() for v in (values or []) if str(v).strip()}
+
+    credential_requirement_set = credential_token_set  # type: ignore[assignment]
 
 # ---------------------------------------------------------------------------
 # Result types
@@ -75,8 +90,8 @@ class MatchResult:
     title: str
     provider: str
     portal_url: str
-    award_amount: int
-    deadline: str
+    award_amount: Optional[int]
+    deadline: Optional[str]
     score: int  # 0-100
     missing_criteria: List[str] = field(default_factory=list)
     is_locked: bool = False  # set by the tier guard, not the matcher
@@ -86,7 +101,7 @@ class MatchResult:
     eligible_disciplines: List[str] = field(default_factory=list)
     # Employer / service-obligation informational fields (defaults keep
     # existing feed payloads backward-compatible).
-    funding_type: str = "scholarship"
+    funding_type: Optional[str] = None  # null = mechanism never stated
     employment_required: bool = False
     has_service_commitment: bool = False
     annual_benefit_cap: Optional[int] = None
@@ -103,6 +118,16 @@ class MatchResult:
     # Per-bucket score composition (see score_breakdown). Empty dict for
     # payloads produced before this field existed.
     score_breakdown: dict[str, int] = field(default_factory=dict)
+    # Verification state surfaced for trust display
+    # ("verified" | "needs_review" | "legacy_unverified").
+    verification_status: str = "legacy_unverified"
+    # C8 record-only eligibility dims + program tracks (defaults keep
+    # existing feed payloads backward-compatible).
+    citizenship_requirement: Optional[str] = None
+    enrollment_statuses: List[str] = field(default_factory=list)
+    institution_restrictions: List[str] = field(default_factory=list)
+    military_affiliation_requirement: Optional[str] = None
+    tracks: List[dict] = field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
@@ -144,8 +169,12 @@ def _credential_match(profile: Profile, scholarship: Scholarship) -> bool:
     user_creds = _get_profile_credentials(profile)
     if not user_creds:
         return True
-    # OR logic: match if ANY of the user's credentials are accepted
-    return any(c in scholarship.eligible_credentials for c in user_creds)
+    # OR logic: match if ANY of the user's credentials are accepted. Both
+    # sides normalize to the canonical credential vocabulary so UI labels
+    # ("Doctor of Pharmacy (PharmD)") match scraper codes ("PharmD").
+    user_tokens = credential_token_set(user_creds)
+    scholarship_tokens = credential_requirement_set(scholarship.eligible_credentials)
+    return bool(user_tokens & scholarship_tokens)
 
 
 def is_discipline_eligible(profile: Profile, scholarship: Scholarship) -> bool:
@@ -165,23 +194,27 @@ def is_discipline_eligible(profile: Profile, scholarship: Scholarship) -> bool:
     # 1. Hard Discipline Check
     eligible_disciplines = scholarship.eligible_disciplines or []
     if eligible_disciplines:
-        # Check if "any" is an allowed discipline (unrestricted)
-        if not any(str(d).lower() == "any" for d in eligible_disciplines):
+        # Check if "any" is an allowed discipline (explicitly unrestricted)
+        if not any(str(d).lower() == ANY_FIELD for d in eligible_disciplines):
             user_disciplines = _get_profile_disciplines(profile)
             if user_disciplines:
-                # Normalize both sides for comparison
-                eligible_set = {str(d).lower() for d in eligible_disciplines}
-                user_set = {normalize_discipline(d) for d in user_disciplines}
-                user_set.update({d.lower() for d in user_disciplines})
-                if not (eligible_set & user_set):
+                # C8: direction-aware canonical-field matching — a
+                # 'health_professions' award admits a 'nursing' profile and a
+                # broad profile is never hard-gated by a narrower award, but
+                # siblings ('nursing' vs 'pharmacy') stay disjoint. Compat
+                # edges preserve pre-C8 healthcare matching.
+                if not fields_match(eligible_disciplines, user_disciplines):
                     return False
 
     # 2. Hard Credential/Degree Track Check
+    # Both sides normalize to the canonical credential vocabulary so a UI
+    # label ("Doctor of Pharmacy (PharmD)") matches a scraper code ("PharmD").
     eligible_credentials = scholarship.eligible_credentials or []
     if eligible_credentials:
         user_credentials = _get_profile_credentials(profile)
-        if user_credentials and not any(
-            c in eligible_credentials for c in user_credentials
+        if user_credentials and not (
+            credential_token_set(user_credentials)
+            & credential_requirement_set(eligible_credentials)
         ):
             return False
 
@@ -521,6 +554,26 @@ def score_scholarship(profile: Profile, scholarship: Scholarship) -> tuple[int, 
         if notice not in missing:
             missing.append(notice)
 
+    # C8 record-only eligibility dimensions — surfaced as notices, never as
+    # gates: profiles cannot currently supply these attributes, so they are
+    # informational like the service-commitment notice.
+    if _opt_str(getattr(scholarship, "citizenship_requirement", None)):
+        notice = "States a citizenship/residency requirement"
+        if notice not in missing:
+            missing.append(notice)
+    if _opt_str(getattr(scholarship, "military_affiliation_requirement", None)):
+        notice = "Requires military affiliation (service member, veteran, or family)"
+        if notice not in missing:
+            missing.append(notice)
+    if _str_list(getattr(scholarship, "enrollment_statuses", None)):
+        notice = "States an enrollment-status requirement"
+        if notice not in missing:
+            missing.append(notice)
+    if _str_list(getattr(scholarship, "institution_restrictions", None)):
+        notice = "Restricted to specific institution(s)"
+        if notice not in missing:
+            missing.append(notice)
+
     return score, missing
 
 
@@ -555,8 +608,9 @@ def match_scholarships(
     results: List[MatchResult] = []
 
     for s in scholarships:
-        # Skip archived scholarships from the feed
-        if s.is_archived:
+        # Discovery surfaces published opportunities only — draft, stale, and
+        # archived records are excluded (lifecycle is authoritative).
+        if not is_discoverable(s):
             continue
 
         # Hard gate: discipline + credential strict check
@@ -577,13 +631,13 @@ def match_scholarships(
                 title=s.title,
                 provider=s.provider,
                 portal_url=s.portal_url,
-                award_amount=s.award_amount or 0,
-                deadline=s.deadline.isoformat() if s.deadline else "",
+                award_amount=s.award_amount,
+                deadline=s.deadline.isoformat() if s.deadline else None,
                 score=score,
                 missing_criteria=missing,
                 metro_restrictions=list(s.metro_restrictions or []),
                 eligible_disciplines=[str(d) for d in (s.eligible_disciplines or [])],
-                funding_type=getattr(s, "funding_type", "scholarship") or "scholarship",
+                funding_type=getattr(s, "funding_type", None) or None,
                 employment_required=bool(getattr(s, "employment_required", False)),
                 has_service_commitment=bool(getattr(s, "has_service_commitment", False)),
                 annual_benefit_cap=getattr(s, "annual_benefit_cap", None),
@@ -596,8 +650,24 @@ def match_scholarships(
                 state_restrictions=_str_list(s.state_restrictions),
                 is_general_major=getattr(s, "is_general_major", False) is True,
                 score_breakdown=breakdown,
+                verification_status=getattr(s, "verification_status", None) or "legacy_unverified",
+                citizenship_requirement=_opt_str(getattr(s, "citizenship_requirement", None)),
+                enrollment_statuses=_str_list(getattr(s, "enrollment_statuses", None)),
+                institution_restrictions=_str_list(getattr(s, "institution_restrictions", None)),
+                military_affiliation_requirement=_opt_str(getattr(s, "military_affiliation_requirement", None)),
+                tracks=[
+                    {
+                        "title": t.title,
+                        "detail_url": getattr(t, "detail_url", None),
+                        "award_amount": getattr(t, "award_amount", None),
+                        "deadline": t.deadline.isoformat() if getattr(t, "deadline", None) else None,
+                        "eligible_disciplines": _str_list(getattr(t, "eligible_disciplines", None)),
+                        "eligible_credentials": _str_list(getattr(t, "eligible_credentials", None)),
+                    }
+                    for t in (getattr(s, "tracks", None) or [])
+                ],
             )
         )
 
-    results.sort(key=lambda r: (r.score, r.award_amount), reverse=True)
+    results.sort(key=lambda r: (r.score, r.award_amount or 0), reverse=True)
     return results

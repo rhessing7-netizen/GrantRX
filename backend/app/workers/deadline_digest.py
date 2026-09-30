@@ -24,6 +24,9 @@ from sqlalchemy.orm import joinedload
 
 from ..database import SessionLocal
 from ..models.models import Profile, Scholarship, UserScholarship
+from ..services.lifecycle import ARCHIVED, current_status
+
+from ..config import APP_URL, DIGEST_FROM_EMAIL
 
 logger = logging.getLogger(__name__)
 
@@ -58,8 +61,8 @@ class DigestPayload:
     def subject(self) -> str:
         count = len(self.entries)
         if count == 1:
-            return "GrantRx: 1 scholarship deadline approaching"
-        return f"GrantRx: {count} scholarship deadlines approaching"
+            return "EdFintia: 1 scholarship deadline approaching"
+        return f"EdFintia: {count} scholarship deadlines approaching"
 
     def render_text(self) -> str:
         """Render a plain-text email body."""
@@ -80,7 +83,7 @@ class DigestPayload:
             lines.append("")
         lines.append("Stay on track!")
         lines.append("")
-        lines.append("— The GrantRx Team")
+        lines.append("— The EdFintia Team")
         return "\n".join(lines)
 
 
@@ -128,7 +131,9 @@ def build_digests(db, now: Optional[date] = None) -> List[DigestPayload]:
         entries: List[DigestEntry] = []
         for t in tracked:
             scholarship = t.scholarship
-            if not scholarship or scholarship.is_archived:
+            # Tracked history: remind for anything not archived (a stale
+            # opportunity the user is actively tracking still has a deadline).
+            if not scholarship or current_status(scholarship) == ARCHIVED:
                 continue
             deadline = scholarship.deadline
             if not deadline:
@@ -186,7 +191,7 @@ def send_via_resend(payloads: List[DigestPayload]) -> int:
         logger.error("Failed to configure Resend API key: %s", exc)
         return 0
 
-    from_email = os.getenv("DIGEST_FROM_EMAIL", "digest@grantrx.app")
+    from_email = DIGEST_FROM_EMAIL
     sent = 0
     for p in payloads:
         try:
@@ -213,7 +218,7 @@ def send_via_smtp(payloads: List[DigestPayload]) -> int:
     import smtplib
     from email.mime.text import MIMEText
 
-    from_email = os.getenv("DIGEST_FROM_EMAIL", "digest@grantrx.app")
+    from_email = DIGEST_FROM_EMAIL
     smtp_port = int(os.getenv("SMTP_PORT", "587"))
     smtp_user = os.getenv("SMTP_USER")
     smtp_pass = os.getenv("SMTP_PASSWORD")

@@ -1,9 +1,10 @@
+import re
 from datetime import date, datetime
 from enum import Enum
 from typing import Dict, List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class ClinicalDiscipline(str, Enum):
@@ -33,7 +34,7 @@ class ProfileBase(BaseModel):
     disciplines: List[str] = []
     target_credentials: List[str] = []
     # Legacy single-choice fields (kept for backward compatibility)
-    primary_discipline: Optional[ClinicalDiscipline] = None
+    primary_discipline: Optional[str] = None
     target_credential: Optional[str] = None
     clinical_phase: Optional[str] = None
     gpa: Optional[float] = Field(None, ge=0.0, le=4.0)
@@ -60,7 +61,7 @@ class ProfileUpdate(BaseModel):
     id: Optional[UUID] = None
     disciplines: Optional[List[str]] = None
     target_credentials: Optional[List[str]] = None
-    primary_discipline: Optional[ClinicalDiscipline] = None
+    primary_discipline: Optional[str] = None
     target_credential: Optional[str] = None
     clinical_phase: Optional[str] = None
     gpa: Optional[float] = Field(None, ge=0.0, le=4.0)
@@ -103,9 +104,12 @@ class ScholarshipBase(BaseModel):
     title: str
     provider: str
     portal_url: str
-    award_amount: int = Field(..., ge=0)
-    deadline: date
-    eligible_disciplines: List[ClinicalDiscipline] = []
+    award_amount: Optional[int] = Field(None, ge=0)
+    deadline: Optional[date] = None
+    # C8: canonical field-of-study codes — free text over the taxonomy
+    # registry, not the retired 6-value clinical enum. [] = unknown,
+    # ["any"] = explicitly unrestricted.
+    eligible_disciplines: List[str] = []
     eligible_credentials: List[str] = []
     min_gpa: float = 0.0
     max_sai: Optional[int] = None
@@ -118,8 +122,9 @@ class ScholarshipBase(BaseModel):
     # Academic criteria — general major & academic levels
     is_general_major: bool = False
     academic_levels: List[str] = []
-    # Geographic targeting
-    scope: str = "national"
+    # Geographic targeting — null = geography never established (unknown
+    # must not masquerade as 'national').
+    scope: Optional[str] = None
     county_restrictions: List[str] = []
     city_restrictions: List[str] = []
     # Provider alignment & local discovery
@@ -130,7 +135,8 @@ class ScholarshipBase(BaseModel):
     competition_level: str = "medium"
     target_community: Optional[str] = None
     # Employer tuition assistance, service-obligation, and vendor-platform fields
-    funding_type: str = "scholarship"
+    # null = funding mechanism never stated (unknown is not 'scholarship').
+    funding_type: Optional[str] = None
     employment_required: bool = False
     min_employment_tenure_months: Optional[int] = None
     annual_benefit_cap: Optional[int] = None
@@ -139,6 +145,29 @@ class ScholarshipBase(BaseModel):
     has_service_commitment: bool = False
     service_commitment_duration_months: Optional[int] = None
     vendor_platform: Optional[str] = None
+    # C8 eligibility dimensions (record-only)
+    citizenship_requirement: Optional[str] = None
+    enrollment_statuses: List[str] = []
+    institution_restrictions: List[str] = []
+    military_affiliation_requirement: Optional[str] = None
+
+    @field_validator("enrollment_statuses", "institution_restrictions", mode="before")
+    @classmethod
+    def _none_to_list(cls, v):
+        # ORM array columns read None on un-flushed objects — treat as empty.
+        return v or []
+
+
+class TrackOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    title: str
+    detail_url: Optional[str] = None
+    award_amount: Optional[int] = None
+    deadline: Optional[date] = None
+    eligible_disciplines: Optional[List[str]] = None
+    eligible_credentials: Optional[List[str]] = None
 
 
 class ScholarshipCreate(ScholarshipBase):
@@ -149,8 +178,17 @@ class ScholarshipOut(ScholarshipBase):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
+    # Source provenance & verification state (server-owned; never accepted
+    # from client input — ScholarshipCreate deliberately lacks these fields).
+    source_url: Optional[str] = None
+    extraction_method: Optional[str] = None
+    verification_status: str = "legacy_unverified"
+    verified_fields: dict = {}
+    verified_at: Optional[datetime] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
+    # C8: named tracks/variants within this program
+    tracks: List[TrackOut] = []
 
 
 class VaultDocument(BaseModel):
@@ -194,6 +232,7 @@ class UserScholarshipOut(UserScholarshipBase):
     id: UUID
     user_id: UUID
     scholarship_id: UUID
+    is_dismissed: bool = False
     scholarship: Optional[ScholarshipOut] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
@@ -209,8 +248,8 @@ class MatchedScholarshipOut(BaseModel):
     title: str
     provider: str
     portal_url: str
-    award_amount: int
-    deadline: str
+    award_amount: Optional[int] = None
+    deadline: Optional[str] = None
     score: int = Field(..., ge=0, le=100)
     missing_criteria: List[str] = []
     is_locked: bool = False
@@ -220,7 +259,8 @@ class MatchedScholarshipOut(BaseModel):
     eligible_disciplines: List[str] = []
     # Employer / service-obligation informational fields (defaults keep
     # existing feed payloads backward-compatible).
-    funding_type: str = "scholarship"
+    # null = funding mechanism never established — not asserted 'scholarship'.
+    funding_type: Optional[str] = None
     employment_required: bool = False
     has_service_commitment: bool = False
     annual_benefit_cap: Optional[int] = None
@@ -237,6 +277,16 @@ class MatchedScholarshipOut(BaseModel):
     # Per-bucket score composition (keys: gpa, geo, sai, affiliations,
     # local_boost). Powers the "Why am I seeing this?" popover.
     score_breakdown: Dict[str, int] = {}
+    # Verification state for consumer trust display
+    # ("verified" | "needs_review" | "legacy_unverified").
+    verification_status: str = "legacy_unverified"
+    # C8: record-only eligibility dimensions + program tracks. Defaults keep
+    # payloads backward-compatible.
+    citizenship_requirement: Optional[str] = None
+    enrollment_statuses: List[str] = []
+    institution_restrictions: List[str] = []
+    military_affiliation_requirement: Optional[str] = None
+    tracks: List[Dict] = []
 
 
 class MatchPreviewRequest(BaseModel):
@@ -294,7 +344,7 @@ class CalendarEventOut(BaseModel):
     provider: str
     deadline: str
     status: str
-    award_amount: int
+    award_amount: Optional[int] = None
     custom_deadline_reminder: Optional[datetime] = None
     user_notes: Optional[str] = None
 
@@ -446,4 +496,111 @@ class SupportEscalateRequest(BaseModel):
 class SupportEscalateResponse(BaseModel):
     ticket_id: str
     is_escalated: bool
+    message: str
+
+
+# ---------------------------------------------------------------------------
+# Early Access / Waitlist (R3)
+# ---------------------------------------------------------------------------
+
+
+class WaitlistAudienceType(str, Enum):
+    """Audience choices offered by the public early-access form."""
+
+    student = "student"
+    parent = "parent"
+    college_staff = "college_staff"
+    counselor = "counselor"
+    scholarship_organization = "scholarship_organization"
+    other = "other"
+
+
+class WaitlistEducationType(str, Enum):
+    undergraduate = "undergraduate"
+    graduate = "graduate"
+    professional = "professional"
+    trade = "trade"
+    other = "other"
+
+
+_EARLY_ACCESS_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+_CONTROL_CHARS_RE = re.compile(r"[\x00-\x08\x0b-\x1f\x7f]")
+
+# Attribution inputs are untrusted free text: bounded so arbitrary values can
+# never cause unsafe database behavior (oversized payloads, control bytes).
+_ATTRIBUTION_MAX = 120
+_LANDING_PAGE_MAX = 500
+
+
+def _clean_optional_text(value):
+    """Trim free text and strip control characters; empty -> None."""
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        return value
+    cleaned = _CONTROL_CHARS_RE.sub("", value).strip()
+    return cleaned or None
+
+
+class EarlyAccessSignupRequest(BaseModel):
+    first_name: str = Field(..., min_length=1, max_length=80)
+    email: str = Field(..., min_length=3, max_length=254)
+    audience_type: WaitlistAudienceType
+    education_type: Optional[WaitlistEducationType] = None
+    # Explicit marketing/early-access consent — required, never pre-checked.
+    consent: bool
+    consent_source: Optional[str] = Field("early_access_form", max_length=120)
+    # Acquisition attribution — channel, referral code, and UTM parameters
+    # are distinct concepts and stay in distinct fields.
+    referral_source: Optional[str] = Field(None, max_length=_ATTRIBUTION_MAX)
+    referral_code: Optional[str] = Field(None, max_length=_ATTRIBUTION_MAX)
+    referred_by: Optional[str] = Field(None, max_length=_ATTRIBUTION_MAX)
+    utm_source: Optional[str] = Field(None, max_length=_ATTRIBUTION_MAX)
+    utm_medium: Optional[str] = Field(None, max_length=_ATTRIBUTION_MAX)
+    utm_campaign: Optional[str] = Field(None, max_length=_ATTRIBUTION_MAX)
+    utm_content: Optional[str] = Field(None, max_length=_ATTRIBUTION_MAX)
+    utm_term: Optional[str] = Field(None, max_length=_ATTRIBUTION_MAX)
+    landing_page: Optional[str] = Field(None, max_length=_LANDING_PAGE_MAX)
+
+    @field_validator("email")
+    @classmethod
+    def _normalize_email(cls, v: str) -> str:
+        normalized = (v or "").strip().lower()
+        if not _EARLY_ACCESS_EMAIL_RE.match(normalized):
+            raise ValueError("Enter a valid email address.")
+        return normalized
+
+    @field_validator("consent")
+    @classmethod
+    def _consent_required(cls, v: bool) -> bool:
+        if v is not True:
+            raise ValueError("Consent is required to join the early-access list.")
+        return v
+
+    @field_validator("first_name", mode="before")
+    @classmethod
+    def _clean_first_name(cls, v):
+        return _clean_optional_text(v)
+
+    @field_validator(
+        "consent_source",
+        "referral_source",
+        "referral_code",
+        "referred_by",
+        "utm_source",
+        "utm_medium",
+        "utm_campaign",
+        "utm_content",
+        "utm_term",
+        "landing_page",
+        mode="before",
+    )
+    @classmethod
+    def _clean_attribution(cls, v):
+        return _clean_optional_text(v)
+
+
+class EarlyAccessSignupResponse(BaseModel):
+    status: str = "ok"
+    already_registered: bool = False
     message: str

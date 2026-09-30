@@ -87,6 +87,12 @@ def _make_scholarship(**kwargs):
         "has_service_commitment": False,
         "service_commitment_duration_months": None,
         "vendor_platform": None,
+        "source_url": None,
+        "extraction_method": None,
+        "verified_fields": {},
+        "verified_at": None,
+
+        "verification_status": "legacy_unverified",
     }
     defaults.update(kwargs)
     obj = MagicMock()
@@ -110,7 +116,8 @@ class TestSchemaSerialization:
             award_amount=1000,
             deadline=date.today() + timedelta(days=30),
         )
-        assert s.funding_type == "scholarship"
+        # C8: an unstated funding mechanism is NULL, not 'scholarship'.
+        assert s.funding_type is None
         assert s.employment_required is False
         assert s.min_employment_tenure_months is None
         assert s.annual_benefit_cap is None
@@ -157,7 +164,8 @@ class TestSchemaSerialization:
             score=75,
         )
         out = MatchedScholarshipOut(**result.__dict__)
-        assert out.funding_type == "scholarship"
+        # C8: unstated funding mechanism serializes as null.
+        assert out.funding_type is None
         assert out.employment_required is False
         assert out.has_service_commitment is False
         assert out.annual_benefit_cap is None
@@ -205,7 +213,8 @@ class TestRunnerDbDict:
             deadline="2026-12-31",
         )
         data = _to_db_dict(extract)
-        assert data["funding_type"] == "scholarship"
+        # C8: unstated funding mechanism persists NULL.
+        assert data["funding_type"] is None
         assert data["employment_required"] is False
         assert data["min_employment_tenure_months"] is None
         assert data["annual_benefit_cap"] is None

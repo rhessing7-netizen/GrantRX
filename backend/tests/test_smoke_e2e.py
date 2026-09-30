@@ -50,8 +50,8 @@ def dev_env():
 
 
 @pytest.fixture
-def client():
-    yield TestClient(app)
+def client(authenticated_client_factory):
+    yield authenticated_client_factory(app)
     app.dependency_overrides.clear()
 
 
@@ -138,6 +138,18 @@ def _make_scholarship(**kwargs):
         "has_service_commitment": False,
         "service_commitment_duration_months": None,
         "vendor_platform": None,
+        # C8 record-only eligibility dims + tracks
+        "citizenship_requirement": None,
+        "enrollment_statuses": [],
+        "institution_restrictions": [],
+        "military_affiliation_requirement": None,
+        "tracks": [],
+        "source_url": None,
+        "extraction_method": None,
+        "verified_fields": {},
+        "verified_at": None,
+
+        "verification_status": "legacy_unverified",
     }
     defaults.update(kwargs)
     obj = MagicMock()
@@ -154,6 +166,7 @@ def _make_tracking(**kwargs):
         "status": "saved",
         "is_dismissed": False,
         "is_planned": False,
+        "dismiss_only": False,
         "target_submission_date": None,
         "custom_deadline_reminder": None,
         "user_notes": None,
@@ -247,13 +260,14 @@ def _build_db(
 
         else:
             # Column query (e.g. UserScholarship.scholarship_id for dismissed ids)
+            # or a model patched out from under query() — default to "not found".
             q.filter.return_value.all.return_value = [(i,) for i in dismissed_ids]
+            q.filter.return_value.first.return_value = None
 
         return q
 
     db.query.side_effect = query_side_effect
     return db
-
 
 # ===========================================================================
 # 1. Health & Environment Validation

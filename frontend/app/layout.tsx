@@ -1,9 +1,22 @@
-import type { Metadata } from "next";
-import { Fraunces, Sora } from "next/font/google";
+import type { Metadata, Viewport } from "next";
+import {
+  Fraunces,
+  Inter,
+  Cormorant_Garamond,
+  Caveat,
+} from "next/font/google";
 import "./globals.css";
 import { SupportAssistantDrawer } from "@/components/SupportAssistantDrawer";
+import { GoogleAnalytics } from "@/components/GoogleAnalytics";
 
 export const dynamic = 'force-dynamic';
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: "#574AE2",
+};
 
 const fraunces = Fraunces({
   variable: "--font-fraunces",
@@ -11,15 +24,43 @@ const fraunces = Fraunces({
   display: "swap",
 });
 
-const sora = Sora({
-  variable: "--font-sora",
+const inter = Inter({
+  variable: "--font-inter",
   subsets: ["latin"],
   display: "swap",
 });
 
+const cormorant = Cormorant_Garamond({
+  variable: "--font-cormorant",
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  display: "swap",
+});
+
+const caveat = Caveat({
+  variable: "--font-caveat",
+  subsets: ["latin"],
+  weight: ["500", "600"],
+  display: "swap",
+});
+
 export const metadata: Metadata = {
-  title: "GrantRx",
-  description: "AI-powered scholarship matching for students",
+  title: {
+    default: "EdFintia — Your prescription for education funding",
+    template: "%s · EdFintia",
+  },
+  description:
+    "EdFintia helps you discover legitimate scholarships, grants, tuition assistance, and other education-funding opportunities you may qualify for — without searching dozens of fragmented sources.",
+  applicationName: "EdFintia",
+  icons: {
+    icon: [
+      { url: "/brand/favicon.svg", type: "image/svg+xml" },
+      { url: "/brand/favicon-32.png", sizes: "32x32" },
+      { url: "/brand/favicon-16.png", sizes: "16x16" },
+    ],
+    shortcut: "/brand/favicon-32.png",
+    apple: "/brand/apple-touch-icon.png",
+  },
 };
 
 export default function RootLayout({
@@ -31,9 +72,10 @@ export default function RootLayout({
     <html
       lang="en"
       suppressHydrationWarning
-      className={`${fraunces.variable} ${sora.variable} h-full antialiased`}
+      className={`${fraunces.variable} ${inter.variable} ${cormorant.variable} ${caveat.variable} h-full antialiased`}
     >
-      <body className="min-h-full bg-gradient-to-br from-[#F8FAFC] via-[#F1F5F9] to-[#E2E8F0]/40 text-slate-900 font-sans antialiased">
+      <body className="min-h-full bg-background text-text font-sans antialiased">
+        <GoogleAnalytics />
         {children}
         <SupportAssistantDrawer />
       </body>

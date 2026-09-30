@@ -64,7 +64,7 @@ def app_dev():
     def health():
         return {"status": "ok"}
 
-    with patch.dict(os.environ, {"ENVIRONMENT": "development", "SUPABASE_JWT_SECRET": TEST_SECRET}):
+    with patch.dict(os.environ, {"ENVIRONMENT": "development", "ALLOW_DEMO_AUTH": "true", "SUPABASE_JWT_SECRET": TEST_SECRET}):
         yield app
 
 
@@ -140,6 +140,7 @@ class TestDevModeAuth:
     def test_expired_jwt_falls_back_to_demo_in_dev(self, monkeypatch):
         """In dev mode, an expired JWT should fall back to the demo user."""
         monkeypatch.setenv("ENVIRONMENT", "development")
+        monkeypatch.setenv("ALLOW_DEMO_AUTH", "true")
         monkeypatch.setenv("SUPABASE_JWT_SECRET", TEST_SECRET)
 
         app = FastAPI()
@@ -211,3 +212,13 @@ class TestProductionAuth:
             headers={"Authorization": f"Bearer {DEMO_TOKEN}"},
         )
         assert resp.status_code == 401
+
+
+def test_missing_environment_fails_closed(monkeypatch):
+    monkeypatch.delenv("ENVIRONMENT", raising=False)
+    monkeypatch.delenv("ALLOW_DEMO_AUTH", raising=False)
+    monkeypatch.setenv("SUPABASE_JWT_SECRET", TEST_SECRET)
+    app = FastAPI(); app.add_middleware(JWTMiddleware)
+    @app.get("/protected")
+    def protected(request: Request): return {"ok": True}
+    assert TestClient(app).get("/protected").status_code == 401

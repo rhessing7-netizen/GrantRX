@@ -24,37 +24,37 @@ const SAVE_EVENT = "grantrx:tour:save-fired";
 const KANBAN_ACTION_EVENT = "grantrx:tour:kanban-action-fired";
 const START_EVENT = "grantrx:tour:start";
 
-/** CSS overrides for the driver.js popover using the Breeze palette. */
+/** CSS overrides for the driver.js popover using the EdFintia palette. */
 const TOUR_STYLES = `
 .driver-popover {
-  --driver-popover-color: #0f172a;
+  --driver-popover-color: #23203B;
   --driver-popover-bg: #ffffff;
-  --driver-popover-border: #e2e8f0;
-  font-family: var(--font-sora), 'Sora', sans-serif;
+  --driver-popover-border: #E4E0F0;
+  font-family: var(--font-inter), 'Inter', sans-serif;
   border-radius: 16px;
-  box-shadow: 0 12px 40px -8px rgba(74,143,231,0.25);
+  box-shadow: 0 12px 40px -8px rgba(87,74,226,0.25);
 }
 .driver-popover-title {
-  font-family: var(--font-sora), 'Sora', sans-serif;
-  color: #0f172a;
+  font-family: var(--font-fraunces), 'Fraunces', serif;
+  color: #23203B;
   font-weight: 700;
   font-size: 15px;
 }
 .driver-popover-description {
-  color: #334155;
+  color: #5C577A;
   font-size: 14px;
   line-height: 1.55;
 }
 .driver-popover-progress-btn {
-  background: #73FBD3;
-  color: #0f172a;
+  background: #E2ADF2;
+  color: #222A68;
   font-weight: 600;
   border-radius: 6px;
   padding: 2px 8px;
 }
 .driver-popover-next-btn,
 .driver-popover-done-btn {
-  background: #4A8FE7;
+  background: #574AE2;
   color: #ffffff;
   border-radius: 12px;
   font-weight: 600;
@@ -65,17 +65,17 @@ const TOUR_STYLES = `
 }
 .driver-popover-next-btn:hover,
 .driver-popover-done-btn:hover {
-  background: #3b74c4;
+  background: #4438C8;
 }
 .driver-popover-prev-btn {
-  color: #475569;
-  border: 1px solid #e2e8f0;
+  color: #5C577A;
+  border: 1px solid #E4E0F0;
   border-radius: 12px;
   padding: 8px 14px;
   text-shadow: none;
 }
 .driver-popover-close-btn {
-  color: #94a3b8;
+  color: #9A95B5;
 }
 .driver-popover-arrow-side-bottom.driver-popover-arrow {
   border-bottom-color: #ffffff;
@@ -128,6 +128,9 @@ export function InteractiveTour({ shouldStart, tab, onSwitchTab, profile }: Inte
   const startTour = () => {
     if (driverRef.current?.isActive()) return;
     if (typeof window !== "undefined" && localStorage.getItem(TOUR_KEY) === "true") return;
+    // The tour highlights desktop-only elements (e.g. the kanban tab is
+    // hidden below lg). Don't start on small screens.
+    if (typeof window !== "undefined" && window.innerWidth < 1024) return;
 
     const driverObj = driver({
       showProgress: true,
@@ -188,20 +191,20 @@ export function InteractiveTour({ shouldStart, tab, onSwitchTab, profile }: Inte
         {
           element: '[data-tour="match-card"]',
           popover: {
-            title: "Your Matched Scholarships",
+            title: "Your Matched Opportunities",
             description:
-              "Here are your scored clinical matches based on your discipline, GPA, and residency.",
+              "Here are your scored funding matches based on your discipline, GPA, and residency.",
             nextBtnText: "Next \u2192",
           },
         },
-        // Step 2 — Interactive: Save to Kanban (no Next button)
+        // Step 2 — Interactive: Save to My Applications (no Next button)
         {
           element: '[data-tour="save-btn"]',
           disableActiveInteraction: false,
           popover: {
             title: "Save to Your Pipeline",
             description:
-              "Click 'Save to Kanban' to add this award to your personal application tracker.",
+              "Click 'Save to My Applications' to add this award to your personal application tracker.",
             showButtons: ["close"],
           },
         },
@@ -222,7 +225,7 @@ export function InteractiveTour({ shouldStart, tab, onSwitchTab, profile }: Inte
           popover: {
             title: "Apply or Draft with AI",
             description:
-              "When you're ready, click 'Apply' to open the provider portal, or open 'Vault' to draft a 4-part outline with the AI Statement Coach.",
+              "When you're ready, click 'Apply' to open the provider portal, or open 'Details' to draft a 4-part outline with the AI Statement Coach.",
             showButtons: ["close"],
           },
         },

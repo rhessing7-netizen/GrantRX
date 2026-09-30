@@ -5,22 +5,58 @@
 }
 
 @theme inline {
-  --color-aquamarine: #73FBD3;
-  --color-neonIce: #44E5E7;
-  --color-skyAqua: #59D2FE;
-  --color-blueEnergy: #4A8FE7;
-  --color-crayolaBlue: #5C7AFF;
-  --color-surfaceBg: #FFFFFF;
-  --color-cardBg: #F8FAFC;
-  --color-textPrimary: #0F172A;
-  --color-textSecondary: #475569;
+  /* EdFintia brand palette (approved):
+     primary violet #574AE2 · deep navy #222A68 · plum #654597
+     lavender #AB81CD · light lavender #E2ADF2 */
+  --color-primary: #574AE2;
+  --color-primaryHover: #4438C8;
+  --color-secondary: #654597;
+  --color-accent: #AB81CD;
+  --color-accentSoft: #E2ADF2;
+  --color-navy: #222A68;
+
+  /* Neutrals */
+  --color-background: #FAF8F5;
+  --color-surface: #FFFFFF;
+  --color-surfaceSubtle: #F3F0FA;
+  --color-text: #23203B;
+  --color-textMuted: #5C577A;
+  --color-border: #E4E0F0;
+  --color-focus: #574AE2;
+
+  /* Status */
+  --color-success: #21704F;
+  --color-successSoft: #E3F3EC;
+  --color-warning: #8A5A18;
+  --color-warningSoft: #FAF0DC;
+  --color-danger: #9C2F46;
+  --color-dangerSoft: #FBE9EC;
+
+  /* Legacy aliases — kept in sync so older classnames still resolve.
+     New code should use the semantic tokens above. */
+  --color-crayolaBlue: var(--color-primary);
+  --color-blueEnergy: var(--color-secondary);
+  --color-skyAqua: var(--color-accent);
+  --color-aquamarine: var(--color-accentSoft);
+  --color-neonIce: var(--color-accent);
+  --color-surfaceBg: var(--color-surface);
+  --color-cardBg: var(--color-surfaceSubtle);
+  --color-textPrimary: var(--color-text);
+  --color-textSecondary: var(--color-textMuted);
   --color-slate-150: #F1F5F9;
 
-  --color-background: var(--color-surfaceBg);
-  --color-foreground: var(--color-textPrimary);
+  --color-foreground: var(--color-text);
 
-  --font-sans: var(--font-sora);
-  --font-serif: var(--font-fraunces);
+  /* Typography:
+     Fraunces — major headings / brand moments
+     Cormorant Garamond — editorial/subheading moments
+     Inter — functional UI, forms, body
+     Caveat — rare accent only */
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-serif: var(--font-fraunces), Georgia, serif;
+  --font-display: var(--font-fraunces), Georgia, serif;
+  --font-editorial: var(--font-cormorant), Georgia, serif;
+  --font-accent: var(--font-caveat), cursive;
 }
 
 html {
@@ -28,8 +64,8 @@ html {
 }
 
 body {
-  background-color: var(--color-surfaceBg);
-  color: var(--color-textPrimary);
+  background-color: var(--color-background);
+  color: var(--color-text);
 }
 
 h1,
@@ -38,7 +74,23 @@ h3,
 h4,
 h5,
 h6 {
-  font-family: var(--font-fraunces);
+  font-family: var(--font-display);
+}
+
+/* Visible, brand-consistent keyboard focus for interactive elements. */
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 @keyframes shake {

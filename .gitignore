@@ -9,3 +9,18 @@ __pycache__/
 
 __pycache__/
 *.pyc
+
+# tool caches / generated
+.ruff_cache/
+.pytest_cache/
+*.tsbuildinfo
+
+# catalog audit scratch outputs (keep the .py tooling)
+backend/scripts/*.log
+backend/scripts/*.out
+backend/scripts/*.html
+backend/scripts/*.jsonl
+backend/e4_*.json
+backend/e4_db_target.txt
+backend/q1_*.json
+backend/scripts/*_mutation_log.json

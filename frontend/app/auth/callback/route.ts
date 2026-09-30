@@ -18,10 +18,13 @@ export async function GET(request: Request) {
   const code = requestUrl.searchParams.get("code");
   const errorParam = requestUrl.searchParams.get("error");
 
-  // OAuth provider returned an error
+  // OAuth provider returned an error. Map to a small set of safe codes —
+  // raw provider error text must never surface in customer-facing UI.
   if (errorParam) {
+    const safeCode =
+      errorParam === "access_denied" ? "cancelled" : "oauth_failed";
     return NextResponse.redirect(
-      `${requestUrl.origin}/?auth_error=${encodeURIComponent(errorParam)}`,
+      `${requestUrl.origin}/?auth_error=${safeCode}`,
     );
   }
 
@@ -50,7 +53,7 @@ export async function GET(request: Request) {
 
   if (!supabaseUrl || !supabaseAnonKey) {
     return NextResponse.redirect(
-      `${requestUrl.origin}/?auth_error=supabase_not_configured`,
+      `${requestUrl.origin}/?auth_error=auth_unavailable`,
     );
   }
 
@@ -78,7 +81,7 @@ export async function GET(request: Request) {
   const { data, error } = await supabase.auth.exchangeCodeForSession(code);
   if (error || !data.session) {
     return NextResponse.redirect(
-      `${requestUrl.origin}/?auth_error=${encodeURIComponent(error?.message ?? "session_failed")}`,
+      `${requestUrl.origin}/?auth_error=session_failed`,
     );
   }
 
@@ -117,7 +120,21 @@ export async function GET(request: Request) {
     ? session.access_token.trim().replace(/[\r\n]/g, "")
     : "";
 
+  // Determine whether this is a returning user BEFORE upserting. POST
+  // /profiles is an upsert that always returns 200, so it cannot distinguish
+  // new vs. existing accounts — GET /profiles/me (404 = no profile) can.
   let profileExists = false;
+  try {
+    const meResp = await fetch(`${apiUrl}/profiles/me`, {
+      headers: {
+        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+      },
+    });
+    profileExists = meResp.ok;
+  } catch {
+    // Profile lookup failed — treat as new and continue with the upsert.
+  }
+
   try {
     const resp = await fetch(`${apiUrl}/profiles`, {
       method: "POST",
@@ -140,9 +157,6 @@ export async function GET(request: Request) {
       if (profile.primary_discipline) {
         profileExists = true;
       }
-    } else if (resp.status === 409) {
-      // Profile already exists (e.g. returning user) — they've onboarded
-      profileExists = true;
     }
   } catch (err) {
     // Profile upsert failed (network error, header rejection, timeout, etc.)

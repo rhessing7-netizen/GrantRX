@@ -22,7 +22,8 @@ from ..services.matcher import MatchResult
 FREE_SEARCH_LIMIT = 10
 SEARCH_CYCLE_DAYS = 7
 FREE_VISIBLE_RESULTS = 3
-FREE_ACTIVE_TRACKING_LIMIT = 3  # max active (non-archived) Kanban apps for free tier
+FREE_ACTIVE_TRACKING_LIMIT = 3  # max active Kanban apps for free tier
+ACTIVE_TRACKING_STATUSES = ("in_progress", "submitted")
 
 
 def _utcnow() -> datetime:
@@ -162,6 +163,7 @@ def apply_tier_gating(
                     is_locked=True,
                     masked_title=_mask_title(r.title),
                     masked_provider=_mask_provider(r.provider),
+                    verification_status=r.verification_status,
                 )
             )
     return masked

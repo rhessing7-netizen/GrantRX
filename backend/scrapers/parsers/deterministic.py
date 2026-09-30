@@ -66,7 +66,15 @@ def all_parsers() -> Dict[str, ParserFn]:
 
 
 def _soup(html: str) -> BeautifulSoup:
-    return BeautifulSoup(html, "html.parser")
+    soup = BeautifulSoup(html, "html.parser")
+    # Strip boilerplate containers before title/criteria extraction — the
+    # first <h1> in document order is often a nav landmark (e.g. "Main
+    # Navigation"), which otherwise becomes a fabricated opportunity title.
+    for tag in soup.find_all(
+            ["nav", "header", "footer", "aside", "script", "style", "noscript",
+             "form"]):
+        tag.decompose()
+    return soup
 
 
 def _find_labelled(soup: BeautifulSoup, *labels: str) -> Optional[Tag]:
@@ -138,12 +146,16 @@ def parse_apha(html: str, url: str) -> ScholarshipExtract:
     amount = _extract_amount_from_text(soup, "Award", "Amount", "Stipend", "Scholarship Amount")
     deadline = _extract_deadline_from_text(soup, "Deadline", "Application Deadline", "Due Date")
 
-    criteria_blob = _scrape_criteria_blob(soup) + " " + clean_text(soup.get_text())
+    # Eligibility inference runs on the eligibility/criteria section only —
+    # never the full page body, which manufactures false restrictions.
+    criteria_blob = _scrape_criteria_blob(soup)
     disciplines = map_disciplines(criteria_blob) or ["pharmacy"]
     credentials = map_credentials(criteria_blob)
 
     return ScholarshipExtract(
-        title=title or "APhA Scholarship",
+        # No fabricated fallback title — an absent title falls through to the
+        # LLM tier rather than manufacturing an opportunity name.
+        title=title,
         provider=provider,
         portal_url=url,
         award_amount=amount,
@@ -172,12 +184,12 @@ def parse_aacn(html: str, url: str) -> ScholarshipExtract:
     amount = _extract_amount_from_text(soup, "Award", "Amount", "Funding")
     deadline = _extract_deadline_from_text(soup, "Deadline", "Application Deadline")
 
-    criteria_blob = _scrape_criteria_blob(soup) + " " + clean_text(soup.get_text())
+    criteria_blob = _scrape_criteria_blob(soup)
     disciplines = map_disciplines(criteria_blob) or ["nursing"]
     credentials = map_credentials(criteria_blob)
 
     return ScholarshipExtract(
-        title=title or "AACN Scholarship",
+        title=title,
         provider=provider,
         portal_url=url,
         award_amount=amount,
@@ -227,7 +239,7 @@ def parse_state_board(html: str, url: str) -> ScholarshipExtract:
         state_restrictions = [state_match.group(1).upper()]
 
     return ScholarshipExtract(
-        title=title or "State Scholarship",
+        title=title,
         provider=provider,
         portal_url=url,
         award_amount=amount,
@@ -265,7 +277,7 @@ def parse_generic_scholarship(html: str, url: str) -> ScholarshipExtract:
     amount = _extract_amount_from_text(soup, "Award", "Amount", "Value", "Prize")
     deadline = _extract_deadline_from_text(soup, "Deadline", "Due", "Closes")
 
-    criteria_blob = _scrape_criteria_blob(soup) + " " + clean_text(soup.get_text())
+    criteria_blob = _scrape_criteria_blob(soup)
     disciplines = map_disciplines(criteria_blob)
     credentials = map_credentials(criteria_blob)
 

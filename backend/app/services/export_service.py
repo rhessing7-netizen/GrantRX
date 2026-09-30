@@ -13,6 +13,7 @@ import io
 from datetime import date, datetime, timedelta, timezone
 from typing import List
 from urllib.parse import quote
+from ..config import CALENDAR_UID_DOMAIN
 
 
 def generate_gcal_url(
@@ -91,7 +92,7 @@ def generate_asana_csv(planned_items: List[dict]) -> str:
             f"Apply at {portal_url}",
             notes,
             status.capitalize(),
-            "GrantRx,Scholarship",
+            "EdFintia,Scholarship",
         ])
 
     return output.getvalue()
@@ -112,7 +113,7 @@ def generate_ics_feed(user_scholarships: List[dict]) -> str:
     lines: List[str] = [
         "BEGIN:VCALENDAR",
         "VERSION:2.0",
-        "PRODID:-//GrantRx//Scholarship Deadline Calendar//EN",
+        "PRODID:-//EdFintia//Scholarship Deadline Calendar//EN",
         "CALSCALE:GREGORIAN",
         "METHOD:PUBLISH",
     ]
@@ -147,7 +148,7 @@ def generate_ics_feed(user_scholarships: List[dict]) -> str:
 
         lines.extend([
             "BEGIN:VEVENT",
-            f"UID:grantrx-{date_str}-{hash(title) & 0xFFFFFFFF:08x}@grantrx.app",
+            f"UID:grantrx-{date_str}-{hash(title) & 0xFFFFFFFF:08x}@{CALENDAR_UID_DOMAIN}",
             f"DTSTAMP:{now}",
             f"DTSTART;VALUE=DATE:{date_str}",
             f"DTEND;VALUE=DATE:{end_str}",

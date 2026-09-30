@@ -1,165 +1,2477 @@
 [
-  {"name": "APhA Foundation Student Scholarships", "url": "https://www.aphafoundation.org/student-scholarships", "category": "national_association", "primary_discipline": "Pharmacy (PharmD)", "target_credentials": ["PharmD"], "scraper_type": "deterministic"},
-  {"name": "ASHP Foundation Student Leadership Awards", "url": "https://www.ashpfoundation.org/awards-and-grants/student-awards", "category": "national_association", "primary_discipline": "Pharmacy (PharmD)", "target_credentials": ["PharmD"], "scraper_type": "playwright"},
-  {"name": "NCPA Foundation Scholarships", "url": "https://ncpafoundation.org/scholarships/", "category": "national_association", "primary_discipline": "Pharmacy (PharmD)", "target_credentials": ["PharmD"], "scraper_type": "llm_fallback"},
-  {"name": "AACP Express Scripts Pharmacy Scholarship", "url": "https://www.aacp.org/resource/express-scripts-scholars-program", "category": "national_association", "primary_discipline": "Pharmacy (PharmD)", "target_credentials": ["PharmD"], "scraper_type": "llm_fallback"},
-  {"name": "AMA Foundation Physicians of Tomorrow", "url": "https://amafoundation.org/programs/physicians-of-tomorrow/", "category": "national_association", "primary_discipline": "Medicine (MD)", "target_credentials": ["MD", "DO"], "scraper_type": "llm_fallback"},
-  {"name": "Foundation of the NSNA Scholarships", "url": "https://www.forevernursing.org/scholarships-and-grants.html", "category": "national_association", "primary_discipline": "Nursing (BSN)", "target_credentials": ["Associate", "Bachelor", "Master"], "scraper_type": "playwright"},
-  {"name": "AACN Student Scholarship Directory", "url": "https://www.aacnnursing.org/students/financial-aid-scholarships", "category": "national_association", "primary_discipline": "Nursing (BSN)", "target_credentials": ["Bachelor", "Master", "DNP"], "scraper_type": "llm_fallback"},
-  {"name": "APTA Mary McMillan Scholarship Award", "url": "https://www.apta.org/apta-awards/mary-mcmillan-scholarship-award", "category": "national_association", "primary_discipline": "Physical Therapy (DPT/PTA)", "target_credentials": ["DPT", "Associate"], "scraper_type": "llm_fallback"},
-  {"name": "AOTF Scholarship Program", "url": "https://www.aotf.org/Scholarships", "category": "national_association", "primary_discipline": "Occupational Therapy (OTD/COTA)", "target_credentials": ["Master", "OTD", "Associate"], "scraper_type": "llm_fallback"},
-  {"name": "PA Foundation Student Scholarships", "url": "https://pa-foundation.org/scholarships-fellowships/student-scholarships/", "category": "national_association", "primary_discipline": "Physician Assistant (PA/MPAS)", "target_credentials": ["Master"], "scraper_type": "llm_fallback"},
-  {"name": "ADA Foundation Dental Student Scholarships", "url": "https://www.adafoundation.org/en/how-we-help/dental-student-scholarships", "category": "national_association", "primary_discipline": "Dentistry (DDS/DMD)", "target_credentials": ["DDS", "DMD"], "scraper_type": "llm_fallback"},
-  {"name": "ADEA Crest Oral-B Scholarships", "url": "https://www.adea.org/studentawards/", "category": "national_association", "primary_discipline": "Dentistry (DDS/DMD)", "target_credentials": ["DDS", "DMD", "Associate"], "scraper_type": "llm_fallback"},
-  {"name": "ASHFoundation Graduate Student Scholarships", "url": "https://www.ashfoundation.org/apply/graduate-student-scholarship/", "category": "national_association", "primary_discipline": "Speech-Language Pathology (MS-SLP)", "target_credentials": ["Master", "AuD"], "scraper_type": "llm_fallback"},
-  {"name": "ACHE Foster G. McGaw Scholarships", "url": "https://www.ache.org/membership/student-resources/foster-g-mcgaw-scholarship", "category": "national_association", "primary_discipline": "Health Administration (MHA)", "target_credentials": ["Master"], "scraper_type": "llm_fallback"},
-
-  {"name": "Alabama Board of Medical Scholarship Awards", "url": "https://bmsa.alabama.gov/", "category": "state_agency", "primary_discipline": "Medicine (MD)", "state_restriction": "AL", "scraper_type": "llm_fallback"},
-  {"name": "Alaska SHARP Health Workforce Program", "url": "https://health.alaska.gov/dph/HealthPlanning/Pages/sharp/default.aspx", "category": "state_agency", "primary_discipline": "any", "state_restriction": "AK", "scraper_type": "playwright"},
-  {"name": "Arizona Primary Care Loan Repayment (ADHS)", "url": "https://www.azdhs.gov/prevention/health-systems-development/workforce-programs/", "category": "state_agency", "primary_discipline": "any", "state_restriction": "AZ", "scraper_type": "playwright"},
-  {"name": "Arkansas Rural Medical Practice Program", "url": "https://medschool.uams.edu/students/financial-services/rural-practice-programs/", "category": "state_agency", "primary_discipline": "Medicine (MD)", "state_restriction": "AR", "scraper_type": "llm_fallback"},
-  {"name": "California HCAI Allied Health & Nursing Grants", "url": "https://hcai.ca.gov/loans-scholarships-grants/scholarships/", "category": "state_agency", "primary_discipline": "any", "state_restriction": "CA", "scraper_type": "playwright"},
-  {"name": "Colorado Health Service Corps", "url": "https://cdphe.colorado.gov/colorado-health-service-corps", "category": "state_agency", "primary_discipline": "any", "state_restriction": "CO", "scraper_type": "llm_fallback"},
-  {"name": "Connecticut State Loan Repayment Program (CT DPH)", "url": "https://portal.ct.gov/dph/Provider-Partner-Resources/State-Loan-Repayment-Program/State-Loan-Repayment-Program", "category": "state_agency", "primary_discipline": "any", "state_restriction": "CT", "scraper_type": "llm_fallback"},
-  {"name": "Delaware Health Care Commission SLRP", "url": "https://dhss.delaware.gov/dhss/dhcc/slrp.html", "category": "state_agency", "primary_discipline": "any", "state_restriction": "DE", "scraper_type": "llm_fallback"},
-  {"name": "Florida Nursing Student Loan Forgiveness", "url": "https://www.floridahealth.gov/provider-and-partner-resources/community-partners/nursing-student-loan-forgiveness/index.html", "category": "state_agency", "primary_discipline": "Nursing (BSN)", "state_restriction": "FL", "scraper_type": "llm_fallback"},
-  {"name": "Georgia Board of Health Care Workforce Grants", "url": "https://healthcareworkforce.georgia.gov/scholarships-loans", "category": "state_agency", "primary_discipline": "any", "state_restriction": "GA", "scraper_type": "llm_fallback"},
-  {"name": "Hawaii State Loan Repayment Program", "url": "https://ahec.hawaii.edu/slrp/", "category": "state_agency", "primary_discipline": "any", "state_restriction": "HI", "scraper_type": "playwright"},
-  {"name": "Idaho Rural Physician Incentive Program", "url": "https://boardofed.idaho.gov/scholarships/rural-physician-incentive-program-rpip/", "category": "state_agency", "primary_discipline": "Medicine (MD)", "state_restriction": "ID", "scraper_type": "llm_fallback"},
-  {"name": "Illinois IDPH Nursing Education Scholarship", "url": "https://dph.illinois.gov/topics-services/life-stages-populations/rural-underserved-populations/nursing-education-scholarship-program.html", "category": "state_agency", "primary_discipline": "Nursing (BSN)", "state_restriction": "IL", "scraper_type": "playwright"},
-  {"name": "Indiana Primary Care Scholarship (CHE)", "url": "https://www.in.gov/che/4504.htm", "category": "state_agency", "primary_discipline": "Medicine (MD)", "state_restriction": "IN", "scraper_type": "llm_fallback"},
-  {"name": "Iowa Health Care Professional Recruitment", "url": "https://www.iowacollegeaid.gov/HealthCareProfessionalRecruitmentProgram", "category": "state_agency", "primary_discipline": "any", "state_restriction": "IA", "scraper_type": "llm_fallback"},
-  {"name": "Kansas Medical Student Service Scholarship", "url": "https://www.kansasregents.org/students/student_financial_aid/medical_student_service_scholarship", "category": "state_agency", "primary_discipline": "Medicine (MD)", "state_restriction": "KS", "scraper_type": "playwright"},
-  {"name": "Kentucky KHEAA Osteopathic Medicine Scholarship", "url": "https://www.kheaa.com/website/kheaa/osteo?main=1", "category": "state_agency", "primary_discipline": "Osteopathic Medicine (DO)", "state_restriction": "KY", "scraper_type": "llm_fallback"},
-  {"name": "Louisiana State Loan Repayment Program", "url": "https://ldh.la.gov/page/4488", "category": "state_agency", "primary_discipline": "any", "state_restriction": "LA", "scraper_type": "llm_fallback"},
-  {"name": "Finance Authority of Maine (FAME) Doctors for Maine", "url": "https://www.famemaine.com/affording-education/pay-for-school/financial-aid-programs/doctors-for-maines-future-merit-scholarship/", "category": "state_agency", "primary_discipline": "Medicine (MD)", "state_restriction": "ME", "scraper_type": "playwright"},
-  {"name": "Maryland MHEC Workforce Shortage Grants", "url": "https://mhec.maryland.gov/preparing/Pages/FinancialAid/ProgramDescriptions/prog_waf.aspx", "category": "state_agency", "primary_discipline": "any", "state_restriction": "MD", "scraper_type": "llm_fallback"},
-  {"name": "Massachusetts DPH State Loan Repayment", "url": "https://www.mass.gov/service-details/massachusetts-state-loan-repayment-program-slrp", "category": "state_agency", "primary_discipline": "any", "state_restriction": "MA", "scraper_type": "playwright"},
-  {"name": "Michigan State Loan Repayment Program (MDHHS)", "url": "https://www.michigan.gov/mdhhs/inside-mdhhs/legislationpolicy/healthworkforce/mslrp", "category": "state_agency", "primary_discipline": "any", "state_restriction": "MI", "scraper_type": "llm_fallback"},
-  {"name": "Minnesota MDH Health Care Loan Forgiveness", "url": "https://www.health.state.mn.us/facilities/ruralhealth/funding/loans/index.html", "category": "state_agency", "primary_discipline": "any", "state_restriction": "MN", "scraper_type": "llm_fallback"},
-  {"name": "Mississippi Health Care Professions Scholarship", "url": "https://www.msfinancialaid.org/hcps/", "category": "state_agency", "primary_discipline": "any", "state_restriction": "MS", "scraper_type": "llm_fallback"},
-  {"name": "Missouri Health Professional Loan Repayment", "url": "https://health.mo.gov/living/families/primarycare/loanrepayment.php", "category": "state_agency", "primary_discipline": "any", "state_restriction": "MO", "scraper_type": "llm_fallback"},
-  {"name": "Montana Rural Physician Incentive Program", "url": "https://mus.edu/ruralphys/default.html", "category": "state_agency", "primary_discipline": "Medicine (MD)", "state_restriction": "MT", "scraper_type": "playwright"},
-  {"name": "Nebraska Rural Health Student Loan Program", "url": "https://dhhs.ne.gov/Pages/Rural-Health-Student-Loans.aspx", "category": "state_agency", "primary_discipline": "any", "state_restriction": "NE", "scraper_type": "llm_fallback"},
-  {"name": "Nevada Primary Care Workforce Assistance", "url": "https://dpbh.nv.gov/Programs/PCO/Primary_Care_Office-Home/", "category": "state_agency", "primary_discipline": "any", "state_restriction": "NV", "scraper_type": "llm_fallback"},
-  {"name": "New Hampshire State Loan Repayment Program", "url": "https://www.dhhs.nh.gov/programs-services/health-care/rural-health-primary-care/state-loan-repayment-program", "category": "state_agency", "primary_discipline": "any", "state_restriction": "NH", "scraper_type": "playwright"},
-  {"name": "New Jersey HESAA Primary Care Practitioner Redemption", "url": "https://www.hesaa.org/Pages/NJLoanRedemptionPrograms.aspx", "category": "state_agency", "primary_discipline": "any", "state_restriction": "NJ", "scraper_type": "llm_fallback"},
-  {"name": "New Mexico Health Professional Loan-for-Service", "url": "https://hed.nm.gov/financial-aid/loan-service-programs", "category": "state_agency", "primary_discipline": "any", "state_restriction": "NM", "scraper_type": "llm_fallback"},
-  {"name": "New York HESC Nurses Across New York", "url": "https://www.hesc.ny.gov/pay-for-college/financial-aid/types-of-financial-aid/nys-grants-scholarships-awards/nurses-across-new-york-loan-forgiveness.html", "category": "state_agency", "primary_discipline": "Nursing (BSN)", "state_restriction": "NY", "scraper_type": "playwright"},
-  {"name": "North Carolina CFNC Forgivable Education Loans (FELS)", "url": "https://www.cfnc.org/pay-for-college/scholarships-and-grants/forgivable-education-loans-for-service-fels/", "category": "state_agency", "primary_discipline": "any", "state_restriction": "NC", "scraper_type": "playwright"},
-  {"name": "North Dakota Health Care Professional Student Repayment", "url": "https://www.hhs.nd.gov/health/primary-care-office/repayment-programs", "category": "state_agency", "primary_discipline": "any", "state_restriction": "ND", "scraper_type": "llm_fallback"},
-  {"name": "Ohio Nurse Education Assistance Loan Program (NEALP)", "url": "https://highered.ohio.gov/initiatives/affordability/nealp", "category": "state_agency", "primary_discipline": "Nursing (BSN)", "state_restriction": "OH", "scraper_type": "playwright"},
-  {"name": "Oklahoma PMTC Nursing and Medical Scholarships", "url": "https://pmtc.ok.gov/", "category": "state_agency", "primary_discipline": "any", "state_restriction": "OK", "scraper_type": "playwright"},
-  {"name": "Oregon Health Authority Primary Care Loan Forgiveness", "url": "https://www.oregon.gov/oha/HPA/HP-PCO/Pages/Loan-Repayment-Programs.aspx", "category": "state_agency", "primary_discipline": "any", "state_restriction": "OR", "scraper_type": "playwright"},
-  {"name": "Pennsylvania Primary Care Loan Repayment (PCLRP)", "url": "https://www.health.pa.gov/topics/Health-Planning/Pages/Primary-Care-Loan-Repayment.aspx", "category": "state_agency", "primary_discipline": "any", "state_restriction": "PA", "scraper_type": "playwright"},
-  {"name": "Rhode Island Health Professional Loan Repayment", "url": "https://health.ri.gov/programs/detail.php?pgm_id=141", "category": "state_agency", "primary_discipline": "any", "state_restriction": "RI", "scraper_type": "playwright"},
-  {"name": "South Carolina AHEC Rural Health Grants", "url": "https://www.scahec.net/rural-incentive-grants", "category": "state_agency", "primary_discipline": "any", "state_restriction": "SC", "scraper_type": "llm_fallback"},
-  {"name": "South Dakota Recruitment Assistance Program", "url": "https://doh.sd.gov/providers/rural-health/recruitment-assistance/", "category": "state_agency", "primary_discipline": "any", "state_restriction": "SD", "scraper_type": "llm_fallback"},
-  {"name": "Tennessee Rural Health Loan Forgiveness (TSAC)", "url": "https://www.tn.gov/collegepays/money-for-college/grant-programs/tennessee-rural-health-loan-forgiveness-program.html", "category": "state_agency", "primary_discipline": "any", "state_restriction": "TN", "scraper_type": "llm_fallback"},
-  {"name": "Texas Higher Education Coordinating Board (PELRP)", "url": "https://www.highered.texas.gov/initiatives/student-financial-aid/physician-education-loan-repayment-program/", "category": "state_agency", "primary_discipline": "Medicine (MD)", "state_restriction": "TX", "scraper_type": "playwright"},
-  {"name": "Utah Primary Care Network Educational Grants", "url": "https://ruralhealth.health.utah.gov/loan-repayment/", "category": "state_agency", "primary_discipline": "any", "state_restriction": "UT", "scraper_type": "llm_fallback"},
-  {"name": "Vermont VSAC Freeman Medical Scholarship", "url": "https://www.vsac.org/freeman-medical-scholarship", "category": "state_agency", "primary_discipline": "Medicine (MD)", "state_restriction": "VT", "scraper_type": "playwright"},
-  {"name": "Virginia State Loan Repayment Program (VDH)", "url": "https://www.vdh.virginia.gov/health-equity/division-of-primary-care-and-rural-health/virginia-state-loan-repayment-program-vslrp/", "category": "state_agency", "primary_discipline": "any", "state_restriction": "VA", "scraper_type": "llm_fallback"},
-  {"name": "Washington Health Corps (WSAC)", "url": "https://wsac.wa.gov/health-corps", "category": "state_agency", "primary_discipline": "any", "state_restriction": "WA", "scraper_type": "playwright"},
-  {"name": "West Virginia Health Sciences Service Program", "url": "https://www.cfwv.com/financial-aid/wv-health-sciences-service-program/", "category": "state_agency", "primary_discipline": "any", "state_restriction": "WV", "scraper_type": "llm_fallback"},
-  {"name": "Wisconsin Health Professions Loan Assistance (HPLAP)", "url": "https://www.dhs.wisconsin.gov/primarycare/loan-repayment.htm", "category": "state_agency", "primary_discipline": "any", "state_restriction": "WI", "scraper_type": "playwright"},
-  {"name": "Wyoming Healthcare Professional Loan Program", "url": "https://health.wyo.gov/publichealth/rural-and-frontier-health/provider-recruitment-and-retention/", "category": "state_agency", "primary_discipline": "any", "state_restriction": "WY", "scraper_type": "llm_fallback"},
-
-  {"name": "Mayo Clinic Health Career Scholarships", "url": "https://college.mayo.edu/academics/residencies-and-fellowships/mayo-clinic-health-system-scholarship-program/", "category": "hospital_system", "primary_discipline": "any", "scraper_type": "playwright"},
-  {"name": "Kaiser Permanente Health Care Career Scholarship", "url": "https://kpnursing.org/scholarships/", "category": "hospital_system", "primary_discipline": "Nursing (BSN)", "scraper_type": "playwright"},
-  {"name": "Cleveland Clinic ASPIRE Nurse Scholars", "url": "https://my.clevelandclinic.org/departments/nursing/careers/aspire", "category": "hospital_system", "primary_discipline": "Nursing (BSN)", "state_restriction": "OH", "scraper_type": "playwright"},
-  {"name": "Geisinger Primary Care Scholars Program", "url": "https://www.geisinger.org/education/student-programs/primary-care-scholars", "category": "hospital_system", "primary_discipline": "Medicine (MD)", "state_restriction": "PA", "scraper_type": "llm_fallback"},
-  {"name": "UPMC Schools of Nursing Tuition Forgiveness", "url": "https://www.upmc.com/careers/nursing/schools/tuition-forgiveness", "category": "hospital_system", "primary_discipline": "Nursing (BSN)", "state_restriction": "PA", "scraper_type": "deterministic"},
-  {"name": "Sutter Health Sutter Scholars Program", "url": "https://www.sutterhealth.org/giving/sutter-scholars", "category": "hospital_system", "primary_discipline": "any", "state_restriction": "CA", "scraper_type": "playwright"},
-  {"name": "Intermountain Health Healthcare Foundation Grants", "url": "https://intermountainhealthcare.org/about/giving-and-volunteering/intermountain-foundation/scholarships/", "category": "hospital_system", "primary_discipline": "any", "scraper_type": "llm_fallback"},
-
-  {"name": "CVS Health Foundation Pharmacy Scholarship", "url": "https://www.cvshealth.com/social-responsibility/community-investment/scholarships.html", "category": "corporate_healthcare", "primary_discipline": "Pharmacy (PharmD)", "scraper_type": "llm_fallback"},
-  {"name": "Walgreens Diversity in Pharmacy Scholarship", "url": "https://www.walgreens.com/topic/pharmacy/diversity-scholarship.jsp", "category": "corporate_healthcare", "primary_discipline": "Pharmacy (PharmD)", "scraper_type": "playwright"},
-  {"name": "Walmart Health Equity Scholarship Program", "url": "https://www.aacp.org/resource/walmart-health-equity-scholarship", "category": "corporate_healthcare", "primary_discipline": "Pharmacy (PharmD)", "scraper_type": "llm_fallback"},
-  {"name": "Genesis HealthCare Therapy & Nursing Scholarships", "url": "https://www.genesishcc.com/careers/scholarships", "category": "corporate_healthcare", "primary_discipline": "Nursing (BSN)", "scraper_type": "llm_fallback"},
-  {"name": "Encompass Health Inpatient Therapy Scholarships", "url": "https://encompasshealth.com/careers/student-center", "category": "corporate_healthcare", "primary_discipline": "Physical Therapy (DPT/PTA)", "scraper_type": "llm_fallback"},
-
-  {"name": "National Medical Fellowships (NMF) Scholarships", "url": "https://nmfonline.org/scholarships-programs/", "category": "diversity_affinity", "primary_discipline": "Medicine (MD)", "target_credentials": ["MD", "DO"], "scraper_type": "playwright"},
-  {"name": "National Black Nurses Association (NBNA) Scholarships", "url": "https://www.nbna.org/scholarships", "category": "diversity_affinity", "primary_discipline": "Nursing (BSN)", "target_credentials": ["Associate", "Bachelor", "Master", "DNP"], "scraper_type": "llm_fallback"},
-  {"name": "National Hispanic Health Foundation Scholarships", "url": "https://www.nhhfscholars.org/", "category": "diversity_affinity", "primary_discipline": "any", "target_credentials": ["MD", "DO", "PharmD", "DDS", "BSN"], "scraper_type": "llm_fallback"},
-  {"name": "Association of American Indian Physicians Scholarships", "url": "https://www.aaip.org/programs/student-programs/", "category": "diversity_affinity", "primary_discipline": "Medicine (MD)", "scraper_type": "llm_fallback"},
-  {"name": "National Association of Hispanic Nurses (NAHN) Grants", "url": "https://nahnnet.org/scholarships", "category": "diversity_affinity", "primary_discipline": "Nursing (BSN)", "scraper_type": "llm_fallback"},
-  {"name": "Point Foundation LGBTQ Healthcare Flagship Scholarship", "url": "https://pointfoundation.org/scholarships/flagship", "category": "diversity_affinity", "primary_discipline": "any", "scraper_type": "playwright"},
-
-  {"name": "Lambda Kappa Sigma Educational Grants", "url": "https://lks.org/educational-grants-program/", "category": "honor_society", "primary_discipline": "Pharmacy (PharmD)", "target_credentials": ["PharmD"], "scraper_type": "deterministic"},
-  {"name": "Rho Chi Society Chapter and Graduate Awards", "url": "https://rhochi.org/awards/", "category": "honor_society", "primary_discipline": "Pharmacy (PharmD)", "target_credentials": ["PharmD", "PhD"], "scraper_type": "llm_fallback"},
-  {"name": "Phi Lambda Sigma Leadership Scholarships", "url": "https://philambdasigma.org/awards/", "category": "honor_society", "primary_discipline": "Pharmacy (PharmD)", "target_credentials": ["PharmD"], "scraper_type": "llm_fallback"},
-  {"name": "Sigma Theta Tau International Nursing Grants", "url": "https://www.sigmanursing.org/advance-elevate/grants", "category": "honor_society", "primary_discipline": "Nursing (BSN)", "target_credentials": ["Bachelor", "Master", "DNP", "PhD"], "scraper_type": "playwright"},
-  {"name": "Alpha Omega Alpha Carolyn L. Kuckein Fellowship", "url": "https://www.alphaomegaalpha.org/fellowships/", "category": "honor_society", "primary_discipline": "Medicine (MD)", "target_credentials": ["MD"], "scraper_type": "llm_fallback"},
-  {"name": "Chi Eta Phi Sorority Nursing Scholarships", "url": "https://chietaphi.org/scholarships/", "category": "honor_society", "primary_discipline": "Nursing (BSN)", "scraper_type": "llm_fallback"},
-
-  {"name": "Coca-Cola Scholars Foundation", "url": "https://www.coca-colascholarsfoundation.org/apply/", "category": "corporate_unrestricted", "primary_discipline": "any", "target_credentials": ["Bachelor"], "scraper_type": "llm_fallback"},
-  {"name": "Taco Bell Live Mas Scholarship", "url": "https://www.tacobellfoundation.org/live-mas-scholarship/", "category": "corporate_unrestricted", "primary_discipline": "any", "target_credentials": ["Associate", "Bachelor", "Master", "Doctorate"], "scraper_type": "deterministic"},
-  {"name": "Burger King Foundation Scholars", "url": "https://burgerking.scholarsapply.org/", "category": "corporate_unrestricted", "primary_discipline": "any", "target_credentials": ["Associate", "Bachelor"], "scraper_type": "playwright"},
-  {"name": "Chick-fil-A Community Scholars", "url": "https://www.chick-fil-a.com/community-scholars", "category": "corporate_unrestricted", "primary_discipline": "any", "target_credentials": ["Associate", "Bachelor", "Master"], "scraper_type": "llm_fallback"},
-  {"name": "Dell Scholars Program", "url": "https://www.dellscholars.org/scholarship/", "category": "corporate_unrestricted", "primary_discipline": "any", "target_credentials": ["Bachelor"], "scraper_type": "llm_fallback"},
-  {"name": "Dr Pepper Tuition Giveaway", "url": "https://www.drpepper.com/tuition/", "category": "corporate_unrestricted", "primary_discipline": "any", "target_credentials": ["Associate", "Bachelor", "Master", "Doctorate"], "scraper_type": "playwright"},
-
-  {"name": "Community Foundation of Greater Birmingham", "url": "https://www.cfbham.org/scholarships/", "category": "regional_foundation", "primary_discipline": "any", "state_restriction": "AL", "scraper_type": "llm_fallback"},
-  {"name": "Alaska Community Foundation", "url": "https://alaskacf.org/scholarships/", "category": "regional_foundation", "primary_discipline": "any", "state_restriction": "AK", "scraper_type": "llm_fallback"},
-  {"name": "Arizona Community Foundation", "url": "https://www.azfoundation.org/scholarships/", "category": "regional_foundation", "primary_discipline": "any", "state_restriction": "AZ", "scraper_type": "playwright"},
-  {"name": "Arkansas Community Foundation", "url": "https://www.arcf.org/apply/scholarships/", "category": "regional_foundation", "primary_discipline": "any", "state_restriction": "AR", "scraper_type": "llm_fallback"},
-  {"name": "California Community Foundation", "url": "https://www.calfund.org/nonprofits/scholarships/", "category": "regional_foundation", "primary_discipline": "any", "state_restriction": "CA", "scraper_type": "playwright"},
-  {"name": "The Denver Foundation", "url": "https://denverfoundation.org/scholarships/", "category": "regional_foundation", "primary_discipline": "any", "state_restriction": "CO", "scraper_type": "llm_fallback"},
-  {"name": "Hartford Foundation for Public Giving", "url": "https://www.hfpg.org/scholarships", "category": "regional_foundation", "primary_discipline": "any", "state_restriction": "CT", "scraper_type": "llm_fallback"},
-  {"name": "Delaware Community Foundation", "url": "https://www.delcf.org/scholarships/", "category": "regional_foundation", "primary_discipline": "any", "state_restriction": "DE", "scraper_type": "llm_fallback"},
-  {"name": "Community Foundation for Northeast Florida", "url": "https://www.jaxcf.org/scholarships", "category": "regional_foundation", "primary_discipline": "any", "state_restriction": "FL", "scraper_type": "llm_fallback"},
-  {"name": "Community Foundation for Greater Atlanta", "url": "https://cfgreateratlanta.org/scholarships/", "category": "regional_foundation", "primary_discipline": "any", "state_restriction": "GA", "scraper_type": "llm_fallback"},
-  {"name": "Hawaii Community Foundation", "url": "https://www.hawaiicommunityfoundation.org/scholarships", "category": "regional_foundation", "primary_discipline": "any", "state_restriction": "HI", "scraper_type": "playwright"},
-  {"name": "Idaho Community Foundation", "url": "https://www.idahocf.org/receive/scholarships", "category": "regional_foundation", "primary_discipline": "any", "state_restriction": "ID", "scraper_type": "llm_fallback"},
-  {"name": "The Chicago Community Trust", "url": "https://www.cct.org/what-we-offer/scholarships/", "category": "regional_foundation", "primary_discipline": "any", "state_restriction": "IL", "scraper_type": "playwright"},
-  {"name": "Central Indiana Community Foundation", "url": "https://www.cicf.org/scholarships/", "category": "regional_foundation", "primary_discipline": "any", "state_restriction": "IN", "scraper_type": "llm_fallback"},
-  {"name": "Community Foundation of Greater Des Moines", "url": "https://www.desmoinesfoundation.org/scholarships", "category": "regional_foundation", "primary_discipline": "any", "state_restriction": "IA", "scraper_type": "llm_fallback"},
-  {"name": "Greater Kansas City Community Foundation", "url": "https://www.growyourgiving.org/scholarships/", "category": "regional_foundation", "primary_discipline": "any", "state_restriction": "KS", "scraper_type": "playwright"},
-  {"name": "Community Foundation of Louisville", "url": "https://www.cflouisville.org/scholarships/", "category": "regional_foundation", "primary_discipline": "any", "state_restriction": "KY", "scraper_type": "llm_fallback"},
-  {"name": "Greater New Orleans Foundation", "url": "https://www.gnof.org/scholarships/", "category": "regional_foundation", "primary_discipline": "any", "state_restriction": "LA", "scraper_type": "llm_fallback"},
-  {"name": "Maine Community Foundation", "url": "https://www.mainecf.org/find-a-scholarship/", "category": "regional_foundation", "primary_discipline": "any", "state_restriction": "ME", "scraper_type": "playwright"},
-  {"name": "Baltimore Community Foundation", "url": "https://bcf.org/scholarships/", "category": "regional_foundation", "primary_discipline": "any", "state_restriction": "MD", "scraper_type": "llm_fallback"},
-  {"name": "The Boston Foundation", "url": "https://www.tbf.org/what-we-do/scholarships", "category": "regional_foundation", "primary_discipline": "any", "state_restriction": "MA", "scraper_type": "playwright"},
-  {"name": "Community Foundation for Southeast Michigan", "url": "https://cfsem.org/apply/scholarships/", "category": "regional_foundation", "primary_discipline": "any", "state_restriction": "MI", "scraper_type": "llm_fallback"},
-  {"name": "The Minneapolis Foundation", "url": "https://www.minneapolisfoundation.org/scholarships/", "category": "regional_foundation", "primary_discipline": "any", "state_restriction": "MN", "scraper_type": "llm_fallback"},
-  {"name": "Community Foundation for Mississippi", "url": "https://formississippi.org/scholarships/", "category": "regional_foundation", "primary_discipline": "any", "state_restriction": "MS", "scraper_type": "llm_fallback"},
-  {"name": "St. Louis Community Foundation", "url": "https://stlgives.org/community/scholarships/", "category": "regional_foundation", "primary_discipline": "any", "state_restriction": "MO", "scraper_type": "llm_fallback"},
-  {"name": "Montana Community Foundation", "url": "https://mtcf.org/scholarships", "category": "regional_foundation", "primary_discipline": "any", "state_restriction": "MT", "scraper_type": "playwright"},
-  {"name": "Omaha Community Foundation", "url": "https://omahafoundation.org/scholarships/", "category": "regional_foundation", "primary_discipline": "any", "state_restriction": "NE", "scraper_type": "llm_fallback"},
-  {"name": "Nevada Community Foundation", "url": "https://www.nevadacf.org/scholarships/", "category": "regional_foundation", "primary_discipline": "any", "state_restriction": "NV", "scraper_type": "llm_fallback"},
-  {"name": "New Hampshire Charitable Foundation", "url": "https://www.nhcf.org/how-can-we-help-you/apply-for-a-scholarship/", "category": "regional_foundation", "primary_discipline": "any", "state_restriction": "NH", "scraper_type": "playwright"},
-  {"name": "Community Foundation of New Jersey", "url": "https://cfnj.org/scholarships/", "category": "regional_foundation", "primary_discipline": "any", "state_restriction": "NJ", "scraper_type": "llm_fallback"},
-  {"name": "Albuquerque Community Foundation", "url": "https://abqcf.org/scholarships/", "category": "regional_foundation", "primary_discipline": "any", "state_restriction": "NM", "scraper_type": "llm_fallback"},
-  {"name": "The New York Community Trust", "url": "https://www.nycommunitytrust.org/information-for/scholarship-applicants/", "category": "regional_foundation", "primary_discipline": "any", "state_restriction": "NY", "scraper_type": "playwright"},
-  {"name": "Foundation For The Carolinas", "url": "https://www.fftc.org/scholarships", "category": "regional_foundation", "primary_discipline": "any", "state_restriction": "NC", "scraper_type": "playwright"},
-  {"name": "North Dakota Community Foundation", "url": "https://www.ndcf.net/receive/scholarships/", "category": "regional_foundation", "primary_discipline": "any", "state_restriction": "ND", "scraper_type": "llm_fallback"},
-  {"name": "The Cleveland Foundation", "url": "https://www.clevelandfoundation.org/scholarships/", "category": "regional_foundation", "primary_discipline": "any", "state_restriction": "OH", "scraper_type": "playwright"},
-  {"name": "Wayne County Community Foundation", "url": "https://www.waynecountycommunityfoundation.org/scholarships", "category": "regional_foundation", "primary_discipline": "any", "state_restriction": "OH", "scraper_type": "playwright"},
-  {"name": "Oklahoma City Community Foundation", "url": "https://occf.org/scholarships/", "category": "regional_foundation", "primary_discipline": "any", "state_restriction": "OK", "scraper_type": "playwright"},
-  {"name": "The Oregon Community Foundation", "url": "https://oregoncf.org/grants-and-scholarships/scholarships/", "category": "regional_foundation", "primary_discipline": "any", "state_restriction": "OR", "scraper_type": "playwright"},
-  {"name": "The Pittsburgh Foundation", "url": "https://pittsburghfoundation.org/scholarships", "category": "regional_foundation", "primary_discipline": "any", "state_restriction": "PA", "scraper_type": "playwright"},
-  {"name": "Rhode Island Foundation", "url": "https://rifoundation.org/scholarships", "category": "regional_foundation", "primary_discipline": "any", "state_restriction": "RI", "scraper_type": "playwright"},
-  {"name": "Central Carolina Community Foundation", "url": "https://yourfoundation.org/scholarships/", "category": "regional_foundation", "primary_discipline": "any", "state_restriction": "SC", "scraper_type": "llm_fallback"},
-  {"name": "South Dakota Community Foundation", "url": "https://www.sdcommunityfoundation.org/scholarships", "category": "regional_foundation", "primary_discipline": "any", "state_restriction": "SD", "scraper_type": "llm_fallback"},
-  {"name": "Community Foundation of Greater Memphis", "url": "https://www.cfgm.org/scholarships", "category": "regional_foundation", "primary_discipline": "any", "state_restriction": "TN", "scraper_type": "llm_fallback"},
-  {"name": "Communities Foundation of Texas", "url": "https://www.cftexas.org/scholarships", "category": "regional_foundation", "primary_discipline": "any", "state_restriction": "TX", "scraper_type": "playwright"},
-  {"name": "Community Foundation of Utah", "url": "https://utahcf.org/receive/scholarships", "category": "regional_foundation", "primary_discipline": "any", "state_restriction": "UT", "scraper_type": "llm_fallback"},
-  {"name": "Vermont Community Foundation", "url": "https://www.vermontcf.org/our-impact/scholarships/", "category": "regional_foundation", "primary_discipline": "any", "state_restriction": "VT", "scraper_type": "playwright"},
-  {"name": "The Community Foundation for a greater Richmond", "url": "https://www.cfrichmond.org/scholarships", "category": "regional_foundation", "primary_discipline": "any", "state_restriction": "VA", "scraper_type": "llm_fallback"},
-  {"name": "Seattle Foundation", "url": "https://www.seattlefoundation.org/scholarships/", "category": "regional_foundation", "primary_discipline": "any", "state_restriction": "WA", "scraper_type": "playwright"},
-  {"name": "The Greater Kanawha Valley Foundation", "url": "https://tgkvf.org/scholarships/", "category": "regional_foundation", "primary_discipline": "any", "state_restriction": "WV", "scraper_type": "llm_fallback"},
-  {"name": "Greater Milwaukee Foundation", "url": "https://www.greatermilwaukeefoundation.org/scholarships/", "category": "regional_foundation", "primary_discipline": "any", "state_restriction": "WI", "scraper_type": "playwright"},
-  {"name": "Wyoming Community Foundation", "url": "https://wycf.org/scholarships/", "category": "regional_foundation", "primary_discipline": "any", "state_restriction": "WY", "scraper_type": "playwright"},
-
-  {"name": "Cleveland Clinic Tuition Assistance Program", "url": "https://my.clevelandclinic.org/about/careers/benefits/tuition-assistance", "category": "employer_tuition_benefit", "primary_discipline": "any", "state_restriction": "OH", "scraper_type": "llm_fallback"},
-  {"name": "Kaiser Permanente Allied Health Pipeline", "url": "https://careers.kaiserpermanente.org/jobs/allied-health", "category": "clinical_employee_pipeline", "primary_discipline": "any", "state_restriction": "CA", "scraper_type": "llm_fallback"},
-  {"name": "VA Health Professional Education (NNEI/EISP)", "url": "https://www.va.gov/education/health-professional-training/", "category": "government_employee_benefit", "primary_discipline": "any", "scraper_type": "llm_fallback"},
-  {"name": "Indian Health Service Loan Repayment Program", "url": "https://www.ihs.gov/scholarship/loanrepayment/", "category": "government_employee_benefit", "primary_discipline": "any", "scraper_type": "llm_fallback"},
-  {"name": "Guild Education Employer Partner Network", "url": "https://www.guildeducation.com/partners", "category": "employer_tuition_benefit", "primary_discipline": "any", "scraper_type": "llm_fallback"},
-  {"name": "InStride Education Programs", "url": "https://www.instride.com/education-programs", "category": "employer_tuition_benefit", "primary_discipline": "any", "scraper_type": "llm_fallback"},
-  {"name": "Bright Horizons EdAssist Solutions", "url": "https://www.brighthorizons.com/clients/ed-assist", "category": "employer_tuition_benefit", "primary_discipline": "any", "scraper_type": "llm_fallback"},
-  {"name": "Duquesne University External Scholarships", "url": "https://www.duq.edu/financial-aid/scholarships-and-grants/external-scholarships", "category": "institutional_department", "primary_discipline": "any", "state_restriction": "PA", "scraper_type": "llm_fallback"},
-  {"name": "Ohio State University Outside Scholarships", "url": "https://oaa.osu.edu/scholarships-and-awards/outside-scholarships.html", "category": "institutional_department", "primary_discipline": "any", "state_restriction": "OH", "scraper_type": "llm_fallback"},
-  {"name": "University of Pittsburgh Outside Scholarships", "url": "https://www.pitt.edu/admissions/financial-aid/scholarships/outside-scholarships", "category": "institutional_department", "primary_discipline": "any", "state_restriction": "PA", "scraper_type": "llm_fallback"}
+ {
+  "name": "APhA Foundation Student Scholarships",
+  "url": "https://www.aphafoundation.org/student-scholarships",
+  "category": "national_association",
+  "primary_discipline": "Pharmacy (PharmD)",
+  "target_credentials": [
+   "PharmD"
+  ],
+  "scraper_type": "deterministic"
+ },
+ {
+  "name": "ASHP Foundation Student Leadership Awards",
+  "url": "https://www.ashpfoundation.org/awards-and-grants/student-awards",
+  "category": "national_association",
+  "primary_discipline": "Pharmacy (PharmD)",
+  "target_credentials": [
+   "PharmD"
+  ],
+  "scraper_type": "playwright"
+ },
+ {
+  "name": "NCPA Foundation Scholarships",
+  "url": "https://www.ncpafoundation.org/scholarships/",
+  "category": "national_association",
+  "primary_discipline": "Pharmacy (PharmD)",
+  "target_credentials": [
+   "PharmD"
+  ],
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "AACP Express Scripts Pharmacy Scholarship",
+  "url": "https://www.aacp.org/resource/express-scripts-scholars-program",
+  "category": "national_association",
+  "primary_discipline": "Pharmacy (PharmD)",
+  "target_credentials": [
+   "PharmD"
+  ],
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "AMA Foundation Physicians of Tomorrow",
+  "url": "https://amafoundation.org/physicians-of-tomorrow",
+  "category": "national_association",
+  "primary_discipline": "Medicine (MD)",
+  "target_credentials": [
+   "MD",
+   "DO"
+  ],
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "Foundation of the NSNA Scholarships",
+  "url": "https://www.forevernursing.org/scholarships-and-grants.html",
+  "category": "national_association",
+  "primary_discipline": "Nursing (BSN)",
+  "target_credentials": [
+   "Associate",
+   "Bachelor",
+   "Master"
+  ],
+  "scraper_type": "playwright"
+ },
+ {
+  "name": "AACN Student Scholarship Directory",
+  "url": "https://www.aacnnursing.org/students",
+  "category": "national_association",
+  "primary_discipline": "Nursing (BSN)",
+  "target_credentials": [
+   "Bachelor",
+   "Master",
+   "DNP"
+  ],
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "APTA Mary McMillan Scholarship Award",
+  "url": "https://www.apta.org/apta-and-you/honors-awards/mary-mcmillan-scholarship-award",
+  "category": "national_association",
+  "primary_discipline": "Physical Therapy (DPT/PTA)",
+  "target_credentials": [
+   "DPT",
+   "Associate"
+  ],
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "AOTF Scholarship Program",
+  "url": "https://www.aotf.org/funding/funding-overview/",
+  "category": "national_association",
+  "primary_discipline": "Occupational Therapy (OTD/COTA)",
+  "target_credentials": [
+   "Master",
+   "OTD",
+   "Associate"
+  ],
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "PA Foundation Student Scholarships",
+  "url": "https://pa-foundation.org/pa-student-scholarships/",
+  "category": "national_association",
+  "primary_discipline": "Physician Assistant (PA/MPAS)",
+  "target_credentials": [
+   "Master"
+  ],
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "ADA Foundation Dental Student Scholarships",
+  "url": "https://www.adafoundation.org/dental-student-scholarship-program",
+  "category": "national_association",
+  "primary_discipline": "Dentistry (DDS/DMD)",
+  "target_credentials": [
+   "DDS",
+   "DMD"
+  ],
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "ADEA Crest Oral-B Scholarships",
+  "url": "https://www.adea.org/home/education/ADEA-Scholarships-Awards-and-Fellowships/for-students",
+  "category": "national_association",
+  "primary_discipline": "Dentistry (DDS/DMD)",
+  "target_credentials": [
+   "DDS",
+   "DMD",
+   "Associate"
+  ],
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "ASHFoundation Graduate Student Scholarships",
+  "url": "https://www.ashfoundation.org/apply/graduate-student-scholarship/",
+  "category": "national_association",
+  "primary_discipline": "Speech-Language Pathology (MS-SLP)",
+  "target_credentials": [
+   "Master",
+   "AuD"
+  ],
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "ACHE Foster G. McGaw Scholarships",
+  "url": "https://www.ache.org/Career-Resources/Start-Your-Career/Opportunities-for-Students/Dent-and-McGaw-Graduate-Student-Scholarship",
+  "category": "national_association",
+  "primary_discipline": "Health Administration (MHA)",
+  "target_credentials": [
+   "Master"
+  ],
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "Alabama Board of Medical Scholarship Awards",
+  "url": "https://bmsa.alabama.gov/",
+  "category": "state_agency",
+  "primary_discipline": "Medicine (MD)",
+  "state_restriction": "AL",
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "Alaska SHARP Health Workforce Program",
+  "url": "https://health.alaska.gov/dph/HealthPlanning/Pages/sharp/default.aspx",
+  "category": "state_agency",
+  "primary_discipline": "any",
+  "state_restriction": "AK",
+  "scraper_type": "playwright"
+ },
+ {
+  "name": "Arizona Primary Care Loan Repayment (ADHS)",
+  "url": "https://www.azdhs.gov/prevention/health-systems-development/workforce-programs/",
+  "category": "state_agency",
+  "primary_discipline": "any",
+  "state_restriction": "AZ",
+  "scraper_type": "playwright"
+ },
+ {
+  "name": "Arkansas Rural Medical Practice Program",
+  "url": "https://medschool.uams.edu/students/financial-services/rural-practice-programs/",
+  "category": "state_agency",
+  "primary_discipline": "Medicine (MD)",
+  "state_restriction": "AR",
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "California HCAI Allied Health & Nursing Grants",
+  "url": "https://hcai.ca.gov/loans-scholarships-grants/scholarships/",
+  "category": "state_agency",
+  "primary_discipline": "any",
+  "state_restriction": "CA",
+  "scraper_type": "playwright"
+ },
+ {
+  "name": "Colorado Health Service Corps",
+  "url": "https://cdphe.colorado.gov/colorado-health-service-corps",
+  "category": "state_agency",
+  "primary_discipline": "any",
+  "state_restriction": "CO",
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "Connecticut State Loan Repayment Program (CT DPH)",
+  "url": "https://portal.ct.gov/dph/knowledge-base/articles/primary-care-office/student-loan-repayment-program",
+  "category": "state_agency",
+  "primary_discipline": "any",
+  "state_restriction": "CT",
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "Delaware Health Care Commission SLRP",
+  "url": "https://dhss.delaware.gov/dhcc/slrp/",
+  "category": "state_agency",
+  "primary_discipline": "any",
+  "state_restriction": "DE",
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "Florida Nursing Student Loan Forgiveness",
+  "url": "https://www.floridastudentfinancialaid.org/FFELP/Nursing_Loan_Forgiveness/NursingLoanForgiveness.html",
+  "category": "state_agency",
+  "primary_discipline": "Nursing (BSN)",
+  "state_restriction": "FL",
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "Georgia Board of Health Care Workforce Grants",
+  "url": "https://healthcareworkforce.georgia.gov/loan-repayment-programs/loan-repayment-programs",
+  "category": "state_agency",
+  "primary_discipline": "any",
+  "state_restriction": "GA",
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "Hawaii State Loan Repayment Program",
+  "url": "https://ahec.hawaii.edu/slrp/",
+  "category": "state_agency",
+  "primary_discipline": "any",
+  "state_restriction": "HI",
+  "scraper_type": "playwright"
+ },
+ {
+  "name": "Idaho Rural Physician Incentive Program",
+  "url": "https://healthandwelfare.idaho.gov/providers/rural-health-and-underserved-areas/loan-repayment-and-grants",
+  "category": "state_agency",
+  "primary_discipline": "Medicine (MD)",
+  "state_restriction": "ID",
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "Illinois IDPH Nursing Education Scholarship",
+  "url": "https://dph.illinois.gov/topics-services/life-stages-populations/rural-underserved-populations/nursing-education-scholarship-program.html",
+  "category": "state_agency",
+  "primary_discipline": "Nursing (BSN)",
+  "state_restriction": "IL",
+  "scraper_type": "playwright"
+ },
+ {
+  "name": "Indiana Primary Care Scholarship (CHE)",
+  "url": "https://www.marian.edu/osteopathic-medical-school/financial-aid/scholarships",
+  "category": "state_agency",
+  "primary_discipline": "Medicine (MD)",
+  "state_restriction": "IN",
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "Kansas Medical Student Service Scholarship",
+  "url": "https://www.kansasregents.org/students/student_financial_aid/medical_student_service_scholarship",
+  "category": "state_agency",
+  "primary_discipline": "Medicine (MD)",
+  "state_restriction": "KS",
+  "scraper_type": "playwright"
+ },
+ {
+  "name": "Kentucky KHEAA Osteopathic Medicine Scholarship",
+  "url": "https://www.kheaa.com/web/scholarships-grants.faces",
+  "category": "state_agency",
+  "primary_discipline": "Osteopathic Medicine (DO)",
+  "state_restriction": "KY",
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "Louisiana State Loan Repayment Program",
+  "url": "https://ldh.la.gov/page/4488",
+  "category": "state_agency",
+  "primary_discipline": "any",
+  "state_restriction": "LA",
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "Finance Authority of Maine (FAME) Doctors for Maine",
+  "url": "https://www.famemaine.com/affording-education/pay-for-school/financial-aid-programs/doctors-for-maines-future-merit-scholarship/",
+  "category": "state_agency",
+  "primary_discipline": "Medicine (MD)",
+  "state_restriction": "ME",
+  "scraper_type": "playwright"
+ },
+ {
+  "name": "Maryland MHEC Workforce Shortage Grants",
+  "url": "https://mhec.maryland.gov/preparing/Pages/FinancialAid/ProgramDescriptions/prog_WSSAG.aspx",
+  "category": "state_agency",
+  "primary_discipline": "any",
+  "state_restriction": "MD",
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "Massachusetts DPH State Loan Repayment",
+  "url": "https://www.mass.gov/service-details/massachusetts-state-loan-repayment-program-slrp",
+  "category": "state_agency",
+  "primary_discipline": "any",
+  "state_restriction": "MA",
+  "scraper_type": "playwright"
+ },
+ {
+  "name": "Michigan State Loan Repayment Program (MDHHS)",
+  "url": "https://www.michigan.gov/mdhhs/inside-mdhhs/legislationpolicy/healthworkforce/mslrp",
+  "category": "state_agency",
+  "primary_discipline": "any",
+  "state_restriction": "MI",
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "Minnesota MDH Health Care Loan Forgiveness",
+  "url": "https://www.health.state.mn.us/facilities/ruralhealth/funding/loans/index.html",
+  "category": "state_agency",
+  "primary_discipline": "any",
+  "state_restriction": "MN",
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "Missouri Health Professional Loan Repayment",
+  "url": "https://health.mo.gov/providers/primary-care/health-professional-loan-repayment-programs",
+  "category": "state_agency",
+  "primary_discipline": "any",
+  "state_restriction": "MO",
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "Montana Rural Physician Incentive Program",
+  "url": "https://mus.edu/ruralphys/default.html",
+  "category": "state_agency",
+  "primary_discipline": "Medicine (MD)",
+  "state_restriction": "MT",
+  "scraper_type": "playwright"
+ },
+ {
+  "name": "Nebraska Rural Health Student Loan Program",
+  "url": "https://dhhs.ne.gov/Pages/Loan-Repayment-FAQ.aspx",
+  "category": "state_agency",
+  "primary_discipline": "any",
+  "state_restriction": "NE",
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "Nevada Primary Care Workforce Assistance",
+  "url": "https://www.dpbh.nv.gov/programs/health-planning-primary-care/primary-care-office/",
+  "category": "state_agency",
+  "primary_discipline": "any",
+  "state_restriction": "NV",
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "New Hampshire State Loan Repayment Program",
+  "url": "https://www.dhhs.nh.gov/programs-services/health-care/rural-health-primary-care/state-loan-repayment-program",
+  "category": "state_agency",
+  "primary_discipline": "any",
+  "state_restriction": "NH",
+  "scraper_type": "playwright"
+ },
+ {
+  "name": "New Jersey HESAA Primary Care Practitioner Redemption",
+  "url": "https://www.hesaa.org/Pages/HCPLRP.aspx",
+  "category": "state_agency",
+  "primary_discipline": "any",
+  "state_restriction": "NJ",
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "New Mexico Health Professional Loan-for-Service",
+  "url": "https://hed.nm.gov/financial-aid/loan-service-programs",
+  "category": "state_agency",
+  "primary_discipline": "any",
+  "state_restriction": "NM",
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "New York HESC Nurses Across New York",
+  "url": "https://www.hesc.ny.gov/pay-for-college/financial-aid/types-of-financial-aid/nys-grants-scholarships-awards/nurses-across-new-york-loan-forgiveness.html",
+  "category": "state_agency",
+  "primary_discipline": "Nursing (BSN)",
+  "state_restriction": "NY",
+  "scraper_type": "playwright"
+ },
+ {
+  "name": "North Carolina CFNC Forgivable Education Loans (FELS)",
+  "url": "https://www.cfnc.org/pay-for-college/scholarships-and-grants/forgivable-education-loans-for-service-fels/",
+  "category": "state_agency",
+  "primary_discipline": "any",
+  "state_restriction": "NC",
+  "scraper_type": "playwright"
+ },
+ {
+  "name": "North Dakota Health Care Professional Student Repayment",
+  "url": "https://www.hhs.nd.gov/health/primary-care-office/north-dakota-health-service-corps/healthcare-professional-loan-repayment",
+  "category": "state_agency",
+  "primary_discipline": "any",
+  "state_restriction": "ND",
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "Ohio Nurse Education Assistance Loan Program (NEALP)",
+  "url": "https://highered.ohio.gov/initiatives/affordability/nealp",
+  "category": "state_agency",
+  "primary_discipline": "Nursing (BSN)",
+  "state_restriction": "OH",
+  "scraper_type": "playwright"
+ },
+ {
+  "name": "Oklahoma PMTC Nursing and Medical Scholarships",
+  "url": "https://pmtc.ok.gov/",
+  "category": "state_agency",
+  "primary_discipline": "any",
+  "state_restriction": "OK",
+  "scraper_type": "playwright"
+ },
+ {
+  "name": "Oregon Health Authority Primary Care Loan Forgiveness",
+  "url": "https://www.oregon.gov/oha/HPA/HP-PCO/Pages/Loan-Repayment-Programs.aspx",
+  "category": "state_agency",
+  "primary_discipline": "any",
+  "state_restriction": "OR",
+  "scraper_type": "playwright"
+ },
+ {
+  "name": "Pennsylvania Primary Care Loan Repayment (PCLRP)",
+  "url": "https://www.health.pa.gov/topics/Health-Planning/Pages/Primary-Care-Loan-Repayment.aspx",
+  "category": "state_agency",
+  "primary_discipline": "any",
+  "state_restriction": "PA",
+  "scraper_type": "playwright"
+ },
+ {
+  "name": "Rhode Island Health Professional Loan Repayment",
+  "url": "https://health.ri.gov/programs/detail.php?pgm_id=141",
+  "category": "state_agency",
+  "primary_discipline": "any",
+  "state_restriction": "RI",
+  "scraper_type": "playwright"
+ },
+ {
+  "name": "South Carolina AHEC Rural Health Grants",
+  "url": "https://www.scahec.net/recruitment.html",
+  "category": "state_agency",
+  "primary_discipline": "any",
+  "state_restriction": "SC",
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "South Dakota Recruitment Assistance Program",
+  "url": "https://doh.sd.gov/healthcare-professionals/rural-health/careers-and-recruiting/recruitment-assistance/",
+  "category": "state_agency",
+  "primary_discipline": "any",
+  "state_restriction": "SD",
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "Tennessee Rural Health Loan Forgiveness (TSAC)",
+  "url": "https://www.tn.gov/collegepays/money-for-college/grant-programs/tennessee-rural-health-loan-forgiveness-program.html",
+  "category": "state_agency",
+  "primary_discipline": "any",
+  "state_restriction": "TN",
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "Texas Higher Education Coordinating Board (PELRP)",
+  "url": "https://www.highered.texas.gov/initiatives/student-financial-aid/physician-education-loan-repayment-program/",
+  "category": "state_agency",
+  "primary_discipline": "Medicine (MD)",
+  "state_restriction": "TX",
+  "scraper_type": "playwright"
+ },
+ {
+  "name": "Utah Primary Care Network Educational Grants",
+  "url": "https://ruralhealth.health.utah.gov/loan-repayment/",
+  "category": "state_agency",
+  "primary_discipline": "any",
+  "state_restriction": "UT",
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "Vermont VSAC Freeman Medical Scholarship",
+  "url": "https://www.vsac.org/freeman-medical-scholarship",
+  "category": "state_agency",
+  "primary_discipline": "Medicine (MD)",
+  "state_restriction": "VT",
+  "scraper_type": "playwright"
+ },
+ {
+  "name": "Virginia State Loan Repayment Program (VDH)",
+  "url": "https://www.vdh.virginia.gov/health-equity/virginia-loan-repayment-programs-2/",
+  "category": "state_agency",
+  "primary_discipline": "any",
+  "state_restriction": "VA",
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "Washington Health Corps (WSAC)",
+  "url": "https://wsac.wa.gov/health-corps",
+  "category": "state_agency",
+  "primary_discipline": "any",
+  "state_restriction": "WA",
+  "scraper_type": "playwright"
+ },
+ {
+  "name": "West Virginia Health Sciences Service Program",
+  "url": "https://www.cfwv.com/financial-aid/health-sciences-service-program/",
+  "category": "state_agency",
+  "primary_discipline": "any",
+  "state_restriction": "WV",
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "Wisconsin Health Professions Loan Assistance (HPLAP)",
+  "url": "https://www.dhs.wisconsin.gov/primarycare/loan-repayment.htm",
+  "category": "state_agency",
+  "primary_discipline": "any",
+  "state_restriction": "WI",
+  "scraper_type": "playwright"
+ },
+ {
+  "name": "Wyoming Healthcare Professional Loan Program",
+  "url": "https://health.wyo.gov/publichealth/rural/officeofruralhealth/primary-care-office/",
+  "category": "state_agency",
+  "primary_discipline": "any",
+  "state_restriction": "WY",
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "Mayo Clinic Health Career Scholarships",
+  "url": "https://college.mayo.edu/academics/residencies-and-fellowships/mayo-clinic-health-system-scholarship-program/",
+  "category": "hospital_system",
+  "primary_discipline": "any",
+  "scraper_type": "playwright"
+ },
+ {
+  "name": "Kaiser Permanente Health Care Career Scholarship",
+  "url": "https://kpnursing.org/scholarships/",
+  "category": "hospital_system",
+  "primary_discipline": "Nursing (BSN)",
+  "scraper_type": "playwright"
+ },
+ {
+  "name": "Cleveland Clinic ASPIRE Nurse Scholars",
+  "url": "https://my.clevelandclinic.org/departments/nursing/careers/aspire",
+  "category": "hospital_system",
+  "primary_discipline": "Nursing (BSN)",
+  "state_restriction": "OH",
+  "scraper_type": "playwright"
+ },
+ {
+  "name": "Geisinger Primary Care Scholars Program",
+  "url": "https://www.geisinger.edu/gchs/education/departments/division-enrollment-management/financial-aid/md-program/abigail-geisinger-scholars-program",
+  "category": "hospital_system",
+  "primary_discipline": "Medicine (MD)",
+  "state_restriction": "PA",
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "UPMC Schools of Nursing Tuition Forgiveness",
+  "url": "https://www.upmc.com/healthcare-professionals/education/schools-of-nursing/financial-aid",
+  "category": "hospital_system",
+  "primary_discipline": "Nursing (BSN)",
+  "state_restriction": "PA",
+  "scraper_type": "deterministic"
+ },
+ {
+  "name": "Sutter Health Sutter Scholars Program",
+  "url": "https://www.sutterhealth.org/giving/sutter-scholars",
+  "category": "hospital_system",
+  "primary_discipline": "any",
+  "state_restriction": "CA",
+  "scraper_type": "playwright"
+ },
+ {
+  "name": "Intermountain Health Healthcare Foundation Grants",
+  "url": "https://intermountainhealthcare.org/about/giving-and-volunteering/intermountain-foundation/scholarships/",
+  "category": "hospital_system",
+  "primary_discipline": "any",
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "CVS Health Foundation / AACP Community Pharmacy Award",
+  "url": "https://www.aacp.org/resource/2026-cvs-health-foundation-aacp-community-pharmacy-award",
+  "category": "corporate_healthcare",
+  "primary_discipline": "Pharmacy (PharmD)",
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "Walgreens Diversity in Pharmacy Scholarship",
+  "url": "https://www.walgreens.com/topic/pharmacy/diversity-scholarship.jsp",
+  "category": "corporate_healthcare",
+  "primary_discipline": "Pharmacy (PharmD)",
+  "scraper_type": "playwright"
+ },
+ {
+  "name": "Walmart Community Pharmacy Scholarship",
+  "url": "https://www.aacp.org/resource/2026-walmart-community-pharmacy-scholarship-pharmacy-students",
+  "category": "corporate_healthcare",
+  "primary_discipline": "Pharmacy (PharmD)",
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "Genesis HealthCare Therapy & Nursing Scholarships",
+  "url": "https://www.genesishcc.com/careers/scholarships",
+  "category": "corporate_healthcare",
+  "primary_discipline": "Nursing (BSN)",
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "Encompass Health Inpatient Therapy Scholarships",
+  "url": "https://encompasshealth.com/careers/student-center",
+  "category": "corporate_healthcare",
+  "primary_discipline": "Physical Therapy (DPT/PTA)",
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "National Medical Fellowships (NMF) Scholarships",
+  "url": "https://nmfonline.org/scholarships-programs/",
+  "category": "diversity_affinity",
+  "primary_discipline": "Medicine (MD)",
+  "target_credentials": [
+   "MD",
+   "DO"
+  ],
+  "scraper_type": "playwright"
+ },
+ {
+  "name": "National Black Nurses Association (NBNA) Scholarships",
+  "url": "https://nbna.org/programs-committees/programs/scholarships/",
+  "category": "diversity_affinity",
+  "primary_discipline": "Nursing (BSN)",
+  "target_credentials": [
+   "Associate",
+   "Bachelor",
+   "Master",
+   "DNP"
+  ],
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "National Hispanic Health Foundation Scholarships",
+  "url": "https://www.nhhfscholars.org/",
+  "category": "diversity_affinity",
+  "primary_discipline": "any",
+  "target_credentials": [
+   "MD",
+   "DO",
+   "PharmD",
+   "DDS",
+   "BSN"
+  ],
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "Association of American Indian Physicians Scholarships",
+  "url": "https://www.aaip.org/program/scholarships-internships-fellowships",
+  "category": "diversity_affinity",
+  "primary_discipline": "Medicine (MD)",
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "National Association of Hispanic Nurses (NAHN) Grants",
+  "url": "https://www.nahnnet.org/scholarships",
+  "category": "diversity_affinity",
+  "primary_discipline": "Nursing (BSN)",
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "Point Foundation LGBTQ Healthcare Flagship Scholarship",
+  "url": "https://pointfoundation.org/scholarships/flagship",
+  "category": "diversity_affinity",
+  "primary_discipline": "any",
+  "scraper_type": "playwright"
+ },
+ {
+  "name": "Lambda Kappa Sigma Educational Grants",
+  "url": "https://lks.org/educational-grants-program/",
+  "category": "honor_society",
+  "primary_discipline": "Pharmacy (PharmD)",
+  "target_credentials": [
+   "PharmD"
+  ],
+  "scraper_type": "deterministic"
+ },
+ {
+  "name": "Rho Chi Society Chapter and Graduate Awards",
+  "url": "https://rhochi.org/awards/",
+  "category": "honor_society",
+  "primary_discipline": "Pharmacy (PharmD)",
+  "target_credentials": [
+   "PharmD",
+   "PhD"
+  ],
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "Phi Lambda Sigma Leadership Scholarships",
+  "url": "https://philambdasigma.org/awards/",
+  "category": "honor_society",
+  "primary_discipline": "Pharmacy (PharmD)",
+  "target_credentials": [
+   "PharmD"
+  ],
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "Sigma Theta Tau International Nursing Grants",
+  "url": "https://www.sigmanursing.org/advance-elevate/grants",
+  "category": "honor_society",
+  "primary_discipline": "Nursing (BSN)",
+  "target_credentials": [
+   "Bachelor",
+   "Master",
+   "DNP",
+   "PhD"
+  ],
+  "scraper_type": "playwright"
+ },
+ {
+  "name": "Alpha Omega Alpha Carolyn L. Kuckein Fellowship",
+  "url": "https://www.alphaomegaalpha.org/programs/carolyn-l-kuckein-student-research-fellowship/",
+  "category": "honor_society",
+  "primary_discipline": "Medicine (MD)",
+  "target_credentials": [
+   "MD"
+  ],
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "Chi Eta Phi Sorority Nursing Scholarships",
+  "url": "https://chietaphi.org/scholarships/",
+  "category": "honor_society",
+  "primary_discipline": "Nursing (BSN)",
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "Coca-Cola Scholars Foundation",
+  "url": "https://www.coca-colascholarsfoundation.org/apply/",
+  "category": "corporate_unrestricted",
+  "primary_discipline": "any",
+  "target_credentials": [
+   "Bachelor"
+  ],
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "Taco Bell Live Mas Scholarship",
+  "url": "https://tacobellfoundation.org/live-mas-scholarship/",
+  "category": "corporate_unrestricted",
+  "primary_discipline": "any",
+  "target_credentials": [
+   "Associate",
+   "Bachelor",
+   "Master",
+   "Doctorate"
+  ],
+  "scraper_type": "deterministic"
+ },
+ {
+  "name": "Burger King Foundation Scholars",
+  "url": "https://burgerking.scholarsapply.org/",
+  "category": "corporate_unrestricted",
+  "primary_discipline": "any",
+  "target_credentials": [
+   "Associate",
+   "Bachelor"
+  ],
+  "scraper_type": "playwright"
+ },
+ {
+  "name": "Chick-fil-A Community Scholars",
+  "url": "https://www.chick-fil-a.com/community-scholars",
+  "category": "corporate_unrestricted",
+  "primary_discipline": "any",
+  "target_credentials": [
+   "Associate",
+   "Bachelor",
+   "Master"
+  ],
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "Dell Scholars Program",
+  "url": "https://www.dellscholars.org/students/",
+  "category": "corporate_unrestricted",
+  "primary_discipline": "any",
+  "target_credentials": [
+   "Bachelor"
+  ],
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "Dr Pepper Tuition Giveaway",
+  "url": "https://www.drpepper.com/tuition/",
+  "category": "corporate_unrestricted",
+  "primary_discipline": "any",
+  "target_credentials": [
+   "Associate",
+   "Bachelor",
+   "Master",
+   "Doctorate"
+  ],
+  "scraper_type": "playwright"
+ },
+ {
+  "name": "Community Foundation of Greater Birmingham",
+  "url": "https://www.cfbham.org/grants/scholarships/",
+  "category": "regional_foundation",
+  "primary_discipline": "any",
+  "state_restriction": "AL",
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "Alaska Community Foundation",
+  "url": "https://alaskacf.org/scholarships/",
+  "category": "regional_foundation",
+  "primary_discipline": "any",
+  "state_restriction": "AK",
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "Arizona Community Foundation",
+  "url": "https://www.azfoundation.org/scholarships/",
+  "category": "regional_foundation",
+  "primary_discipline": "any",
+  "state_restriction": "AZ",
+  "scraper_type": "playwright"
+ },
+ {
+  "name": "Arkansas Community Foundation",
+  "url": "https://www.arcf.org/apply/scholarships/",
+  "category": "regional_foundation",
+  "primary_discipline": "any",
+  "state_restriction": "AR",
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "California Community Foundation",
+  "url": "https://www.calfund.org/nonprofits/scholarships/",
+  "category": "regional_foundation",
+  "primary_discipline": "any",
+  "state_restriction": "CA",
+  "scraper_type": "playwright"
+ },
+ {
+  "name": "The Denver Foundation",
+  "url": "https://denverfoundation.org/scholarships/",
+  "category": "regional_foundation",
+  "primary_discipline": "any",
+  "state_restriction": "CO",
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "Hartford Foundation for Public Giving",
+  "url": "https://www.hfpg.org/scholarships/",
+  "category": "regional_foundation",
+  "primary_discipline": "any",
+  "state_restriction": "CT",
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "Delaware Community Foundation",
+  "url": "https://delcf.org/scholarships/",
+  "category": "regional_foundation",
+  "primary_discipline": "any",
+  "state_restriction": "DE",
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "Community Foundation for Northeast Florida",
+  "url": "https://www.jaxcf.org/apply-for-grants-or-scholarships/",
+  "category": "regional_foundation",
+  "primary_discipline": "any",
+  "state_restriction": "FL",
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "Community Foundation for Greater Atlanta",
+  "url": "https://cfgreateratlanta.org/scholarships/",
+  "category": "regional_foundation",
+  "primary_discipline": "any",
+  "state_restriction": "GA",
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "Hawaii Community Foundation",
+  "url": "https://www.hawaiicommunityfoundation.org/scholarships",
+  "category": "regional_foundation",
+  "primary_discipline": "any",
+  "state_restriction": "HI",
+  "scraper_type": "playwright"
+ },
+ {
+  "name": "Idaho Community Foundation",
+  "url": "https://www.idahocf.org/grants-scholarships",
+  "category": "regional_foundation",
+  "primary_discipline": "any",
+  "state_restriction": "ID",
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "The Chicago Community Trust",
+  "url": "https://www.cct.org/what-we-offer/scholarships/",
+  "category": "regional_foundation",
+  "primary_discipline": "any",
+  "state_restriction": "IL",
+  "scraper_type": "playwright"
+ },
+ {
+  "name": "Central Indiana Community Foundation",
+  "url": "https://www.cicf.org/scholarships/",
+  "category": "regional_foundation",
+  "primary_discipline": "any",
+  "state_restriction": "IN",
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "Community Foundation of Greater Des Moines",
+  "url": "https://www.desmoinesfoundation.org/scholarships",
+  "category": "regional_foundation",
+  "primary_discipline": "any",
+  "state_restriction": "IA",
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "Greater Kansas City Community Foundation",
+  "url": "https://www.growyourgiving.org/scholarships/",
+  "category": "regional_foundation",
+  "primary_discipline": "any",
+  "state_restriction": "KS",
+  "scraper_type": "playwright"
+ },
+ {
+  "name": "Community Foundation of Louisville",
+  "url": "https://www.cflouisville.org/scholarships/",
+  "category": "regional_foundation",
+  "primary_discipline": "any",
+  "state_restriction": "KY",
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "Greater New Orleans Foundation",
+  "url": "https://www.gnof.org/nonprofits/grants/scholarships/",
+  "category": "regional_foundation",
+  "primary_discipline": "any",
+  "state_restriction": "LA",
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "Maine Community Foundation",
+  "url": "https://www.mainecf.org/find-a-scholarship/",
+  "category": "regional_foundation",
+  "primary_discipline": "any",
+  "state_restriction": "ME",
+  "scraper_type": "playwright"
+ },
+ {
+  "name": "Baltimore Community Foundation",
+  "url": "https://www.bcf.org/scholarships/",
+  "category": "regional_foundation",
+  "primary_discipline": "any",
+  "state_restriction": "MD",
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "The Boston Foundation",
+  "url": "https://www.tbf.org/what-we-do/scholarships",
+  "category": "regional_foundation",
+  "primary_discipline": "any",
+  "state_restriction": "MA",
+  "scraper_type": "playwright"
+ },
+ {
+  "name": "Community Foundation for Southeast Michigan",
+  "url": "https://cfsem.org/scholarships/",
+  "category": "regional_foundation",
+  "primary_discipline": "any",
+  "state_restriction": "MI",
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "The Minneapolis Foundation",
+  "url": "https://www.minneapolisfoundation.org/funding-opportunities/",
+  "category": "regional_foundation",
+  "primary_discipline": "any",
+  "state_restriction": "MN",
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "Community Foundation for Mississippi",
+  "url": "https://formississippi.org/scholarship-awards/",
+  "category": "regional_foundation",
+  "primary_discipline": "any",
+  "state_restriction": "MS",
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "St. Louis Community Foundation",
+  "url": "https://stlgives.org/community-impact/scholarships/",
+  "category": "regional_foundation",
+  "primary_discipline": "any",
+  "state_restriction": "MO",
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "Montana Community Foundation",
+  "url": "https://mtcf.org/scholarships",
+  "category": "regional_foundation",
+  "primary_discipline": "any",
+  "state_restriction": "MT",
+  "scraper_type": "playwright"
+ },
+ {
+  "name": "Omaha Community Foundation",
+  "url": "https://omahafoundation.org/scholarships/",
+  "category": "regional_foundation",
+  "primary_discipline": "any",
+  "state_restriction": "NE",
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "Nevada Community Foundation",
+  "url": "https://www.nevadacf.org/scholarships/",
+  "category": "regional_foundation",
+  "primary_discipline": "any",
+  "state_restriction": "NV",
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "New Hampshire Charitable Foundation",
+  "url": "https://www.nhcf.org/how-can-we-help-you/apply-for-a-scholarship/",
+  "category": "regional_foundation",
+  "primary_discipline": "any",
+  "state_restriction": "NH",
+  "scraper_type": "playwright"
+ },
+ {
+  "name": "Community Foundation of New Jersey",
+  "url": "https://cfnj.org/scholarships-not-universal-application/",
+  "category": "regional_foundation",
+  "primary_discipline": "any",
+  "state_restriction": "NJ",
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "Albuquerque Community Foundation",
+  "url": "https://abqcf.org/scholarships/",
+  "category": "regional_foundation",
+  "primary_discipline": "any",
+  "state_restriction": "NM",
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "The New York Community Trust",
+  "url": "https://www.nycommunitytrust.org/information-for/scholarship-applicants/",
+  "category": "regional_foundation",
+  "primary_discipline": "any",
+  "state_restriction": "NY",
+  "scraper_type": "playwright"
+ },
+ {
+  "name": "Foundation For The Carolinas",
+  "url": "https://www.fftc.org/scholarships",
+  "category": "regional_foundation",
+  "primary_discipline": "any",
+  "state_restriction": "NC",
+  "scraper_type": "playwright"
+ },
+ {
+  "name": "North Dakota Community Foundation",
+  "url": "https://www.ndcf.net/receive/scholarships/",
+  "category": "regional_foundation",
+  "primary_discipline": "any",
+  "state_restriction": "ND",
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "The Cleveland Foundation",
+  "url": "https://www.clevelandfoundation.org/scholarships/",
+  "category": "regional_foundation",
+  "primary_discipline": "any",
+  "state_restriction": "OH",
+  "scraper_type": "playwright"
+ },
+ {
+  "name": "Wayne County Community Foundation",
+  "url": "https://www.waynecountycommunityfoundation.org/scholarships",
+  "category": "regional_foundation",
+  "primary_discipline": "any",
+  "state_restriction": "OH",
+  "scraper_type": "playwright"
+ },
+ {
+  "name": "Oklahoma City Community Foundation",
+  "url": "https://occf.org/scholarships/",
+  "category": "regional_foundation",
+  "primary_discipline": "any",
+  "state_restriction": "OK",
+  "scraper_type": "playwright"
+ },
+ {
+  "name": "The Oregon Community Foundation",
+  "url": "https://oregoncf.org/grants-and-scholarships/scholarships/",
+  "category": "regional_foundation",
+  "primary_discipline": "any",
+  "state_restriction": "OR",
+  "scraper_type": "playwright"
+ },
+ {
+  "name": "The Pittsburgh Foundation",
+  "url": "https://pittsburghfoundation.org/scholarships",
+  "category": "regional_foundation",
+  "primary_discipline": "any",
+  "state_restriction": "PA",
+  "scraper_type": "playwright"
+ },
+ {
+  "name": "Rhode Island Foundation",
+  "url": "https://rifoundation.org/scholarships",
+  "category": "regional_foundation",
+  "primary_discipline": "any",
+  "state_restriction": "RI",
+  "scraper_type": "playwright"
+ },
+ {
+  "name": "Central Carolina Community Foundation",
+  "url": "https://www.yourfoundation.org/for-students/scholarship-directory/",
+  "category": "regional_foundation",
+  "primary_discipline": "any",
+  "state_restriction": "SC",
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "South Dakota Community Foundation",
+  "url": "https://www.sdcommunityfoundation.org/scholarships",
+  "category": "regional_foundation",
+  "primary_discipline": "any",
+  "state_restriction": "SD",
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "Community Foundation of Greater Memphis",
+  "url": "https://cfgm.org/grants-scholarships/scholarships/",
+  "category": "regional_foundation",
+  "primary_discipline": "any",
+  "state_restriction": "TN",
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "Communities Foundation of Texas",
+  "url": "https://www.cftexas.org/scholarships",
+  "category": "regional_foundation",
+  "primary_discipline": "any",
+  "state_restriction": "TX",
+  "scraper_type": "playwright"
+ },
+ {
+  "name": "Community Foundation of Utah",
+  "url": "https://utahcf.org/receive/scholarships",
+  "category": "regional_foundation",
+  "primary_discipline": "any",
+  "state_restriction": "UT",
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "Vermont Community Foundation",
+  "url": "https://www.vermontcf.org/our-impact/scholarships/",
+  "category": "regional_foundation",
+  "primary_discipline": "any",
+  "state_restriction": "VT",
+  "scraper_type": "playwright"
+ },
+ {
+  "name": "The Community Foundation for a greater Richmond",
+  "url": "https://www.cfrichmond.org/scholarships",
+  "category": "regional_foundation",
+  "primary_discipline": "any",
+  "state_restriction": "VA",
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "Seattle Foundation",
+  "url": "https://www.seattlefoundation.org/scholarships/",
+  "category": "regional_foundation",
+  "primary_discipline": "any",
+  "state_restriction": "WA",
+  "scraper_type": "playwright"
+ },
+ {
+  "name": "The Greater Kanawha Valley Foundation",
+  "url": "https://tgkvf.org/scholarship-information/",
+  "category": "regional_foundation",
+  "primary_discipline": "any",
+  "state_restriction": "WV",
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "Greater Milwaukee Foundation",
+  "url": "https://www.greatermilwaukeefoundation.org/scholarships/",
+  "category": "regional_foundation",
+  "primary_discipline": "any",
+  "state_restriction": "WI",
+  "scraper_type": "playwright"
+ },
+ {
+  "name": "Wyoming Community Foundation",
+  "url": "https://wycf.org/scholarships/",
+  "category": "regional_foundation",
+  "primary_discipline": "any",
+  "state_restriction": "WY",
+  "scraper_type": "playwright"
+ },
+ {
+  "name": "Cleveland Clinic Tuition Assistance Program",
+  "url": "https://jobs.clevelandclinic.org/benefits/",
+  "category": "employer_tuition_benefit",
+  "primary_discipline": "any",
+  "state_restriction": "OH",
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "Kaiser Permanente Allied Health Pipeline",
+  "url": "https://careers.kaiserpermanente.org/jobs/allied-health",
+  "category": "clinical_employee_pipeline",
+  "primary_discipline": "any",
+  "state_restriction": "CA",
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "VA Health Professional Education (NNEI/EISP)",
+  "url": "https://vacareers.va.gov/career-guidance/va-scholarship-programs/",
+  "category": "government_employee_benefit",
+  "primary_discipline": "any",
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "Indian Health Service Loan Repayment Program",
+  "url": "https://www.ihs.gov/loanrepayment/",
+  "category": "government_employee_benefit",
+  "primary_discipline": "any",
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "Guild Education Employer Partner Network",
+  "url": "https://www.guildeducation.com/partners",
+  "category": "employer_tuition_benefit",
+  "primary_discipline": "any",
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "InStride Education Programs",
+  "url": "https://www.instride.com/education-programs",
+  "category": "employer_tuition_benefit",
+  "primary_discipline": "any",
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "Bright Horizons EdAssist Solutions",
+  "url": "https://www.brighthorizons.com/employers/edassist/employee-education-benefits",
+  "category": "employer_tuition_benefit",
+  "primary_discipline": "any",
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "Duquesne University External Scholarships",
+  "url": "https://www.duq.edu/financial-aid/scholarships-and-grants/external-scholarships",
+  "category": "institutional_department",
+  "primary_discipline": "any",
+  "state_restriction": "PA",
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "Ohio State University Outside Scholarships",
+  "url": "https://sfa.osu.edu/current-student/types-of-aid/scholarships",
+  "category": "institutional_department",
+  "primary_discipline": "any",
+  "state_restriction": "OH",
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "University of Pittsburgh Outside Scholarships",
+  "url": "https://financialaid.pitt.edu/types-of-aid/scholarships/pitt-funds-me/",
+  "category": "institutional_department",
+  "primary_discipline": "any",
+  "state_restriction": "PA",
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "DOD SMART Scholarship",
+  "url": "https://www.smartscholarship.org/smart",
+  "category": "federal_program",
+  "primary_discipline": "stem",
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "Federal TEACH Grant Program",
+  "url": "https://studentaid.gov/teach-grant-program",
+  "category": "federal_program",
+  "primary_discipline": "teaching_education",
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "Harry S. Truman Scholarship",
+  "url": "https://www.truman.gov/",
+  "category": "federal_program",
+  "primary_discipline": "public_service",
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "Society of Women Engineers Scholarships",
+  "url": "https://swe.org/scholarships-overview/",
+  "category": "national_association",
+  "primary_discipline": "engineering",
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "AICPA ThisWayToCPA Scholarships",
+  "url": "https://www.thiswaytocpa.com/education/aicpa-legacy-scholarships/",
+  "category": "national_association",
+  "primary_discipline": "accounting",
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "National FFA Scholarships",
+  "url": "https://www.ffa.org/participate/grants-and-scholarships/",
+  "category": "national_association",
+  "primary_discipline": "agriculture",
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "mikeroweWORKS Work Ethic Scholarship",
+  "url": "https://mikeroweworks.org/scholarship/",
+  "category": "national_foundation",
+  "primary_discipline": "trades_technical",
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "Jack Kent Cooke Foundation Scholarships",
+  "url": "https://www.jkcf.org/our-scholarships/",
+  "category": "national_foundation",
+  "primary_discipline": "any",
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "NSPE Education Foundation Scholarships",
+  "url": "https://www.nspe.org/career-growth/scholarships",
+  "category": "national_association",
+  "primary_discipline": "engineering",
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "NSBE Scholarships",
+  "url": "https://nsbe.org/scholarships/",
+  "category": "national_association",
+  "primary_discipline": "engineering",
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "ABA Legal Opportunity Scholarship Fund",
+  "url": "https://www.americanbar.org/groups/diversity/diversity_pipeline/projects_initiatives/legal_opportunity_scholarship/",
+  "category": "national_association",
+  "primary_discipline": "law",
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "RTDNA Foundation Scholarships",
+  "url": "https://www.rtdna.org/scholarships-and-fellowships",
+  "category": "national_association",
+  "primary_discipline": "communications_journalism",
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "NEA-Retired Jack Kinnaman Memorial Scholarship",
+  "url": "https://www.nea.org/resource-library/jack-kinnaman-scholarship",
+  "category": "national_association",
+  "primary_discipline": "teaching_education",
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "NASW Foundation Scholarships",
+  "url": "https://naswfoundation.org/Our-Work/Scholarships-Awards/Scholarships",
+  "category": "national_association",
+  "primary_discipline": "social_work",
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "ACS Undergraduate Scholarship",
+  "url": "https://www.acs.org/education/acs-undergraduate-scholarship.html",
+  "category": "national_association",
+  "primary_discipline": "chemistry",
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "MAA National Math Talent Fund",
+  "url": "https://maa.org/national-math-talent-fund/",
+  "category": "national_association",
+  "primary_discipline": "mathematics",
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "Architects Foundation Scholarships",
+  "url": "https://architectsfoundation.org/scholarships/",
+  "category": "national_foundation",
+  "primary_discipline": "design",
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "Benjamin A. Gilman International Scholarship",
+  "url": "https://www.gilmanscholarship.org/",
+  "category": "federal_program",
+  "primary_discipline": "any",
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "Hispanic Scholarship Fund Scholar Program",
+  "url": "https://www.hsf.net/scholarship/",
+  "category": "diversity_affinity",
+  "primary_discipline": "any",
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "UNCF Scholarships",
+  "url": "https://uncf.org/scholarships",
+  "category": "diversity_affinity",
+  "primary_discipline": "any",
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "APA APAGS Scholarships and Awards",
+  "url": "https://www.apa.org/apags/programs/scholarships",
+  "category": "national_association",
+  "primary_discipline": "psychology",
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "Amazon Career Choice",
+  "url": "https://careerchoice.amazon/",
+  "category": "employer_tuition_benefit",
+  "primary_discipline": "any",
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "McDonald's Archways to Opportunity",
+  "url": "https://www.archwaystoopportunity.com/",
+  "category": "employer_tuition_benefit",
+  "primary_discipline": "any",
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "AVMF Veterinary Student Scholarships",
+  "url": "https://www.avmf.org/grants-and-scholarships/scholarships/",
+  "category": "national_association",
+  "primary_discipline": "veterinary_medicine",
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "NABA Foundation Scholarships",
+  "url": "https://nabainc.org/scholarships/",
+  "category": "national_association",
+  "primary_discipline": "accounting",
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "AOA Foundation Optometry Student Scholarships",
+  "url": "https://aoafoundation.org/our-programs/optometry-student-scholarships",
+  "category": "national_association",
+  "primary_discipline": "optometry",
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "American Psychological Foundation Funding Programs",
+  "url": "https://ampsychfdn.org/funding/",
+  "category": "national_foundation",
+  "primary_discipline": "psychology",
+  "scraper_type": "llm_fallback"
+ },
+ {
+  "name": "NSF Graduate Research Fellowship Program",
+  "url": "https://www.nsfgrfp.org/",
+  "category": "federal_program",
+  "primary_discipline": "STEM",
+  "target_credentials": [
+   "Bachelor",
+   "Master",
+   "PhD"
+  ],
+  "scraper_type": "deterministic"
+ },
+ {
+  "name": "DoD NDSEG Fellowship Program",
+  "url": "https://ndseg.org/",
+  "category": "federal_program",
+  "primary_discipline": "STEM",
+  "target_credentials": [
+   "PhD"
+  ],
+  "scraper_type": "deterministic"
+ },
+ {
+  "name": "Fulbright U.S. Student Program",
+  "url": "https://us.fulbrightonline.org/",
+  "category": "federal_program",
+  "primary_discipline": "any",
+  "scraper_type": "deterministic"
+ },
+ {
+  "name": "Boren Awards for International Study",
+  "url": "https://www.borenawards.org/",
+  "category": "federal_program",
+  "primary_discipline": "any",
+  "target_credentials": [
+   "Bachelor",
+   "Graduate"
+  ],
+  "scraper_type": "deterministic"
+ },
+ {
+  "name": "Critical Language Scholarship Program",
+  "url": "https://clscholarship.org/",
+  "category": "federal_program",
+  "primary_discipline": "Foreign Languages",
+  "target_credentials": [
+   "Undergraduate",
+   "Graduate"
+  ],
+  "scraper_type": "deterministic"
+ },
+ {
+  "name": "Barry Goldwater Scholarship",
+  "url": "https://goldwaterscholarship.gov/",
+  "category": "federal_program",
+  "primary_discipline": "STEM",
+  "target_credentials": [
+   "Undergraduate"
+  ],
+  "scraper_type": "deterministic"
+ },
+ {
+  "name": "Udall Foundation Undergraduate Scholarship",
+  "url": "https://udall.gov/OurPrograms/Scholarship/Scholarship.aspx",
+  "category": "federal_program",
+  "primary_discipline": "any",
+  "target_credentials": [
+   "Undergraduate"
+  ],
+  "scraper_type": "deterministic"
+ },
+ {
+  "name": "AmeriCorps Segal Education Award",
+  "url": "https://americorps.gov/members-volunteers/segal-americorps-education-award",
+  "category": "federal_program",
+  "primary_discipline": "any",
+  "scraper_type": "playwright"
+ },
+ {
+  "name": "NIH Loan Repayment Programs",
+  "url": "https://www.lrp.nih.gov/",
+  "category": "federal_program",
+  "primary_discipline": "Medicine (MD)",
+  "target_credentials": [
+   "MD",
+   "PhD",
+   "DO"
+  ],
+  "scraper_type": "deterministic"
+ },
+ {
+  "name": "NOAA Hollings Undergraduate Scholarship",
+  "url": "https://www.noaa.gov/office-education/hollings-scholarship",
+  "category": "federal_program",
+  "primary_discipline": "Environmental Science",
+  "target_credentials": [
+   "Undergraduate"
+  ],
+  "scraper_type": "playwright"
+ },
+ {
+  "name": "Astronaut Scholarship Foundation",
+  "url": "https://astronautscholarship.org/",
+  "category": "national_foundation",
+  "primary_discipline": "STEM",
+  "target_credentials": [
+   "Bachelor",
+   "Graduate"
+  ],
+  "scraper_type": "deterministic"
+ },
+ {
+  "name": "HRSA National Health Service Corps Programs",
+  "url": "https://nhsc.hrsa.gov/",
+  "category": "federal_program",
+  "primary_discipline": "Health Professions",
+  "scraper_type": "playwright"
+ },
+ {
+  "name": "HRSA Nurse Corps Programs",
+  "url": "https://bhw.hrsa.gov/programs/nurse-corps",
+  "category": "federal_program",
+  "primary_discipline": "Nursing (BSN)",
+  "scraper_type": "playwright"
+ },
+ {
+  "name": "HRSA Faculty Loan Repayment Program",
+  "url": "https://bhw.hrsa.gov/funding/apply-loan-repayment/faculty-loan-repayment",
+  "category": "federal_program",
+  "primary_discipline": "Health Professions",
+  "target_credentials": [
+   "Doctorate"
+  ],
+  "scraper_type": "playwright"
+ },
+ {
+  "name": "VA Yellow Ribbon Program",
+  "url": "https://www.va.gov/education/about-gi-bill-benefits/post-9-11/yellow-ribbon-program/",
+  "category": "government_employee_benefit",
+  "primary_discipline": "any",
+  "scraper_type": "deterministic"
+ },
+ {
+  "name": "U.S. Army ROTC Scholarships",
+  "url": "https://armyrotc.army.mil/scholarships/",
+  "category": "federal_program",
+  "primary_discipline": "any",
+  "target_credentials": [
+   "Undergraduate"
+  ],
+  "scraper_type": "deterministic"
+ },
+ {
+  "name": "DOE Science Graduate Student Research Program",
+  "url": "https://science.osti.gov/wdts/scgsr",
+  "category": "federal_program",
+  "primary_discipline": "STEM",
+  "target_credentials": [
+   "PhD"
+  ],
+  "scraper_type": "deterministic"
+ },
+ {
+  "name": "CIA Undergraduate Scholarship Program",
+  "url": "https://www.cia.gov/careers/student-programs/undergraduate-scholarship-program/",
+  "category": "federal_program",
+  "primary_discipline": "any",
+  "target_credentials": [
+   "Undergraduate"
+  ],
+  "scraper_type": "deterministic"
+ },
+ {
+  "name": "Presidential Management Fellows Program",
+  "url": "https://www.pmf.gov/",
+  "category": "federal_program",
+  "primary_discipline": "Public Administration",
+  "target_credentials": [
+   "Master",
+   "Doctorate"
+  ],
+  "scraper_type": "deterministic"
+ },
+ {
+  "name": "Georgia HOPE & Zell Miller Scholarships",
+  "url": "https://www.gafutures.org/hope-state-aid-programs/hope-zell-miller-scholarships/",
+  "category": "state_agency",
+  "primary_discipline": "any",
+  "state_restriction": "GA",
+  "scraper_type": "deterministic"
+ },
+ {
+  "name": "Florida OSFA State Financial Aid Programs",
+  "url": "https://www.floridastudentfinancialaidsg.org/",
+  "category": "state_agency",
+  "primary_discipline": "any",
+  "state_restriction": "FL",
+  "scraper_type": "playwright"
+ },
+ {
+  "name": "New York HESC Grants and Scholarships",
+  "url": "https://www.hesc.ny.gov/pay-for-college/financial-aid/types-of-financial-aid.html",
+  "category": "state_agency",
+  "primary_discipline": "any",
+  "state_restriction": "NY",
+  "scraper_type": "deterministic"
+ },
+ {
+  "name": "Texas College for All Texans Financial Aid Programs",
+  "url": "https://www.highered.texas.gov/student-financial-aid-programs/grant-loan-programs/",
+  "category": "state_agency",
+  "primary_discipline": "any",
+  "state_restriction": "TX",
+  "scraper_type": "deterministic"
+ },
+ {
+  "name": "California Student Aid Commission Cal Grants",
+  "url": "https://www.csac.ca.gov/cal-grants",
+  "category": "state_agency",
+  "primary_discipline": "any",
+  "state_restriction": "CA",
+  "scraper_type": "playwright"
+ },
+ {
+  "name": "Louisiana LOSFA Scholarships and Grants",
+  "url": "https://mylosfa.la.gov/paying-for-college/scholarships-grants/",
+  "category": "state_agency",
+  "primary_discipline": "any",
+  "state_restriction": "LA",
+  "scraper_type": "deterministic"
+ },
+ {
+  "name": "South Carolina CHE Financial Aid",
+  "url": "https://che.sc.gov/students-families-and-military/scholarships-and-grants-sc-residents",
+  "category": "state_agency",
+  "primary_discipline": "any",
+  "state_restriction": "SC",
+  "scraper_type": "deterministic"
+ },
+ {
+  "name": "Massachusetts OSFA Financial Aid Programs",
+  "url": "https://www.mass.edu/osfa/programs/programs.asp",
+  "category": "state_agency",
+  "primary_discipline": "any",
+  "state_restriction": "MA",
+  "scraper_type": "deterministic"
+ },
+ {
+  "name": "Maryland MHEC Financial Aid Program Descriptions",
+  "url": "https://mhec.maryland.gov/preparing/Pages/FinancialAid/descriptions.aspx",
+  "category": "state_agency",
+  "primary_discipline": "any",
+  "state_restriction": "MD",
+  "scraper_type": "deterministic"
+ },
+ {
+  "name": "Tennessee TSAC Money for College",
+  "url": "https://www.tn.gov/thec/students-families/financial-aid/tsac.html",
+  "category": "state_agency",
+  "primary_discipline": "any",
+  "state_restriction": "TN",
+  "scraper_type": "playwright"
+ },
+ {
+  "name": "Indiana CHE State Financial Aid by Program",
+  "url": "https://www.in.gov/che/state-financial-aid/state-financial-aid-by-program/",
+  "category": "state_agency",
+  "primary_discipline": "any",
+  "state_restriction": "IN",
+  "scraper_type": "deterministic"
+ },
+ {
+  "name": "Oregon OSAC Scholarships",
+  "url": "https://oregonstudentaid.gov/scholarships/",
+  "category": "state_agency",
+  "primary_discipline": "any",
+  "state_restriction": "OR",
+  "scraper_type": "deterministic"
+ },
+ {
+  "name": "Nevada NSHE Scholarships and Grants",
+  "url": "https://nshe.nevada.edu/system-administration/departments/asa/students/financial-aid/",
+  "category": "state_agency",
+  "primary_discipline": "any",
+  "state_restriction": "NV",
+  "scraper_type": "deterministic"
+ },
+ {
+  "name": "Idaho State Board of Education Scholarships",
+  "url": "https://boardofed.idaho.gov/scholarships/",
+  "category": "state_agency",
+  "primary_discipline": "any",
+  "state_restriction": "ID",
+  "scraper_type": "deterministic"
+ },
+ {
+  "name": "Utah System of Higher Education State Aid",
+  "url": "https://ushe.edu/office-of-commissioner/state-aid/",
+  "category": "state_agency",
+  "primary_discipline": "any",
+  "state_restriction": "UT",
+  "scraper_type": "deterministic"
+ },
+ {
+  "name": "Wyoming Hathaway Scholarship",
+  "url": "https://hathawayscholarship.org/",
+  "category": "state_agency",
+  "primary_discipline": "any",
+  "state_restriction": "WY",
+  "scraper_type": "deterministic"
+ },
+ {
+  "name": "Missouri DHEWD Grants and Scholarships",
+  "url": "https://dhewd.mo.gov/ppc/grants/",
+  "category": "state_agency",
+  "primary_discipline": "any",
+  "state_restriction": "MO",
+  "scraper_type": "deterministic"
+ },
+ {
+  "name": "Virginia SCHEV Financial Aid",
+  "url": "https://www.schev.edu/students/paying-for-college",
+  "category": "state_agency",
+  "primary_discipline": "any",
+  "state_restriction": "VA",
+  "scraper_type": "playwright"
+ },
+ {
+  "name": "Washington College Grant (WSAC)",
+  "url": "https://wsac.wa.gov/wcg",
+  "category": "state_agency",
+  "primary_discipline": "any",
+  "state_restriction": "WA",
+  "scraper_type": "deterministic"
+ },
+ {
+  "name": "Wisconsin HEAB Financial Aid Programs",
+  "url": "https://heab.state.wi.us/programs.html",
+  "category": "state_agency",
+  "primary_discipline": "any",
+  "state_restriction": "WI",
+  "scraper_type": "deterministic"
+ },
+ {
+  "name": "Michigan MiSSG Financial Aid Programs",
+  "url": "https://www.michigan.gov/mistudentaid/programs",
+  "category": "state_agency",
+  "primary_discipline": "any",
+  "state_restriction": "MI",
+  "scraper_type": "playwright"
+ },
+ {
+  "name": "New Jersey HESAA Grants and Scholarships",
+  "url": "https://www.hesaa.org/Pages/NJGrantsHome.aspx",
+  "category": "state_agency",
+  "primary_discipline": "any",
+  "state_restriction": "NJ",
+  "scraper_type": "deterministic"
+ },
+ {
+  "name": "Pennsylvania PHEAA State Grant Program",
+  "url": "https://www.pheaa.org/grants/state-grant-program/",
+  "category": "state_agency",
+  "primary_discipline": "any",
+  "state_restriction": "PA",
+  "scraper_type": "deterministic"
+ },
+ {
+  "name": "Connecticut OHE Financial Aid",
+  "url": "https://portal.ct.gov/ohe/knowledge-base/articles/for-students/connecticut-student-aid-programs",
+  "category": "state_agency",
+  "primary_discipline": "any",
+  "state_restriction": "CT",
+  "scraper_type": "deterministic"
+ },
+ {
+  "name": "Colorado CDHE Student Financial Aid",
+  "url": "https://cdhe.colorado.gov/students/financial-aid",
+  "category": "state_agency",
+  "primary_discipline": "any",
+  "state_restriction": "CO",
+  "scraper_type": "playwright"
+ },
+ {
+  "name": "Iowa College Aid Scholarships and Grants",
+  "url": "https://educate.iowa.gov/higher-ed/financial-aid/scholarships-grants",
+  "category": "state_agency",
+  "primary_discipline": "any",
+  "state_restriction": "IA",
+  "scraper_type": "deterministic"
+ },
+ {
+  "name": "Kansas Board of Regents Student Financial Aid",
+  "url": "https://www.kansasregents.org/students/student_financial_aid",
+  "category": "state_agency",
+  "primary_discipline": "any",
+  "state_restriction": "KS",
+  "scraper_type": "deterministic"
+ },
+ {
+  "name": "Nebraska CCPE Financial Aid",
+  "url": "https://ccpe.nebraska.gov/nebraska-opportunity-grant-nog",
+  "category": "state_agency",
+  "primary_discipline": "any",
+  "state_restriction": "NE",
+  "scraper_type": "deterministic"
+ },
+ {
+  "name": "Montana University System Scholarships",
+  "url": "https://mus.edu/Prepare/Pay/Scholarships/",
+  "category": "state_agency",
+  "primary_discipline": "any",
+  "state_restriction": "MT",
+  "scraper_type": "deterministic"
+ },
+ {
+  "name": "Alaska Commission on Postsecondary Education Financial Aid",
+  "url": "https://acpe.alaska.gov/FINANCIAL-AID",
+  "category": "state_agency",
+  "primary_discipline": "any",
+  "state_restriction": "AK",
+  "scraper_type": "deterministic"
+ },
+ {
+  "name": "University of Hawaii Hawaii Promise Scholarship",
+  "url": "https://www.uhcc.hawaii.edu/admissions/hawaii-promise.php",
+  "category": "institutional_department",
+  "primary_discipline": "any",
+  "state_restriction": "HI",
+  "scraper_type": "deterministic"
+ },
+ {
+  "name": "Vermont VSAC Grants",
+  "url": "https://www.vsac.org/pay/student-aid-options/grants",
+  "category": "state_agency",
+  "primary_discipline": "any",
+  "state_restriction": "VT",
+  "scraper_type": "deterministic"
+ },
+ {
+  "name": "Rhode Island Promise Scholarship",
+  "url": "https://www.ccri.edu/ripromise/",
+  "category": "state_agency",
+  "primary_discipline": "any",
+  "state_restriction": "RI",
+  "scraper_type": "deterministic"
+ },
+ {
+  "name": "Maine State Grant Program (FAME)",
+  "url": "https://www.famemaine.com/affording-education/pay-for-school/maine-grant-tuition-programs/maine-state-grant-program/",
+  "category": "state_agency",
+  "primary_discipline": "any",
+  "state_restriction": "ME",
+  "scraper_type": "deterministic"
+ },
+ {
+  "name": "Delaware Higher Education Office Scholarships",
+  "url": "https://delawarestudentsuccess.org/scholarships/",
+  "category": "state_agency",
+  "primary_discipline": "any",
+  "state_restriction": "DE",
+  "scraper_type": "playwright"
+ },
+ {
+  "name": "DC Tuition Assistance Grant (DCTAG)",
+  "url": "https://osse.dc.gov/dctag",
+  "category": "state_agency",
+  "primary_discipline": "any",
+  "state_restriction": "DC",
+  "scraper_type": "deterministic"
+ },
+ {
+  "name": "Ohio Department of Higher Education Affordability Programs",
+  "url": "https://highered.ohio.gov/students/pay-for-college/ohio-grants-scholarships/ocog",
+  "category": "state_agency",
+  "primary_discipline": "any",
+  "state_restriction": "OH",
+  "scraper_type": "playwright"
+ },
+ {
+  "name": "Illinois ISAC Grants",
+  "url": "https://www.isac.org/students/during-college/types-of-financial-aid/grants/",
+  "category": "state_agency",
+  "primary_discipline": "any",
+  "state_restriction": "IL",
+  "scraper_type": "deterministic"
+ },
+ {
+  "name": "New Mexico HED Financial Aid",
+  "url": "https://hed.nm.gov/financial-aid",
+  "category": "state_agency",
+  "primary_discipline": "any",
+  "state_restriction": "NM",
+  "scraper_type": "deterministic"
+ },
+ {
+  "name": "Oklahoma's Promise Scholarship",
+  "url": "https://www.okhighered.org/okpromise/",
+  "category": "state_agency",
+  "primary_discipline": "any",
+  "state_restriction": "OK",
+  "scraper_type": "deterministic"
+ },
+ {
+  "name": "Alabama Commission on Higher Education Student Assistance",
+  "url": "https://www.ache.edu/index.php/student-assistance/",
+  "category": "state_agency",
+  "primary_discipline": "any",
+  "state_restriction": "AL",
+  "scraper_type": "deterministic"
+ },
+ {
+  "name": "North Carolina CFNC Scholarships and Grants",
+  "url": "https://www.cfnc.org/pay-for-college/grants-and-scholarships/",
+  "category": "state_agency",
+  "primary_discipline": "any",
+  "state_restriction": "NC",
+  "scraper_type": "deterministic"
+ },
+ {
+  "name": "Arizona AzLEAP State Financial Aid",
+  "url": "https://azgrants.az.gov/",
+  "category": "state_agency",
+  "primary_discipline": "any",
+  "state_restriction": "AZ",
+  "scraper_type": "deterministic"
+ },
+ {
+  "name": "Kentucky KHEAA KEES Program",
+  "url": "https://www.kheaa.com/website/kheaa/kees",
+  "category": "state_agency",
+  "primary_discipline": "any",
+  "state_restriction": "KY",
+  "scraper_type": "deterministic"
+ },
+ {
+  "name": "Minnesota Office of Higher Education Financial Aid",
+  "url": "https://ohe.mn.gov/grant-scholarship",
+  "category": "state_agency",
+  "primary_discipline": "any",
+  "state_restriction": "MN",
+  "scraper_type": "deterministic"
+ },
+ {
+  "name": "AAUW Fellowships and Grants",
+  "url": "https://www.aauw.org/resources/programs/fellowships-grants/current-opportunities/",
+  "category": "national_association",
+  "primary_discipline": "any",
+  "target_credentials": [
+   "Graduate",
+   "Doctorate"
+  ],
+  "scraper_type": "deterministic"
+ },
+ {
+  "name": "P.E.O. International Educational Philanthropies",
+  "url": "https://www.peointernational.org/educational-support/",
+  "category": "national_association",
+  "primary_discipline": "any",
+  "scraper_type": "deterministic"
+ },
+ {
+  "name": "AISES Scholarships",
+  "url": "https://aises.org/scholarships/",
+  "category": "diversity_affinity",
+  "primary_discipline": "STEM",
+  "scraper_type": "deterministic"
+ },
+ {
+  "name": "SHPE Scholarships",
+  "url": "https://shpe.org/engage/programs/scholarshpe/",
+  "category": "diversity_affinity",
+  "primary_discipline": "Engineering",
+  "scraper_type": "deterministic"
+ },
+ {
+  "name": "ASME Student Scholarships",
+  "url": "https://www.asme.org/asme-programs/students-and-faculty/scholarships",
+  "category": "national_association",
+  "primary_discipline": "Engineering",
+  "target_credentials": [
+   "Undergraduate",
+   "Graduate"
+  ],
+  "scraper_type": "deterministic"
+ },
+ {
+  "name": "ASCE Scholarships",
+  "url": "https://www.asce.org/career-growth/awards-and-honors/scholarships",
+  "category": "national_association",
+  "primary_discipline": "Engineering",
+  "scraper_type": "deterministic"
+ },
+ {
+  "name": "AFCEA Educational Foundation Scholarships",
+  "url": "https://www.afcea.org/education/scholarships",
+  "category": "national_association",
+  "primary_discipline": "STEM",
+  "scraper_type": "playwright"
+ },
+ {
+  "name": "American Welding Society Foundation Scholarships",
+  "url": "https://www.aws.org/foundation/page/scholarships",
+  "category": "national_association",
+  "primary_discipline": "Welding",
+  "target_credentials": [
+   "Vocational",
+   "Associate",
+   "Bachelor"
+  ],
+  "scraper_type": "deterministic"
+ },
+ {
+  "name": "PHCC Educational Foundation Scholarships",
+  "url": "https://phccfoundation.org/scholarships/",
+  "category": "national_association",
+  "primary_discipline": "Construction Trades",
+  "target_credentials": [
+   "Vocational",
+   "Associate"
+  ],
+  "scraper_type": "deterministic"
+ },
+ {
+  "name": "Associated General Contractors Scholarships",
+  "url": "https://www.agc.org/learn/education-and-research-foundation/scholarship-program",
+  "category": "national_association",
+  "primary_discipline": "Construction Trades",
+  "scraper_type": "deterministic"
+ },
+ {
+  "name": "SkillsUSA Scholarships",
+  "url": "https://www.skillsusa.org/recognition/scholarships-and-grants/",
+  "category": "national_association",
+  "primary_discipline": "Trades & Technical",
+  "target_credentials": [
+   "Vocational",
+   "High School"
+  ],
+  "scraper_type": "deterministic"
+ },
+ {
+  "name": "National Restaurant Association Educational Foundation Scholarships",
+  "url": "https://chooserestaurants.org/scholarships",
+  "category": "national_association",
+  "primary_discipline": "Culinary Arts",
+  "scraper_type": "deterministic"
+ },
+ {
+  "name": "American Hotel & Lodging Foundation Scholarships",
+  "url": "https://www.ahlef.org/scholarships/",
+  "category": "national_association",
+  "primary_discipline": "Business Administration",
+  "scraper_type": "deterministic"
+ },
+ {
+  "name": "American Library Association Scholarships",
+  "url": "https://www.ala.org/educationcareers/scholarships",
+  "category": "national_association",
+  "primary_discipline": "any",
+  "target_credentials": [
+   "Master",
+   "Graduate"
+  ],
+  "scraper_type": "deterministic"
+ },
+ {
+  "name": "NABJ Scholarships",
+  "url": "https://nabjonline.org/student-services/scholarships/",
+  "category": "diversity_affinity",
+  "primary_discipline": "Communications",
+  "scraper_type": "deterministic"
+ },
+ {
+  "name": "NAHJ Scholarships",
+  "url": "https://nahj.org/scholarships/",
+  "category": "diversity_affinity",
+  "primary_discipline": "Communications",
+  "scraper_type": "deterministic"
+ },
+ {
+  "name": "AAJA Scholarships",
+  "url": "https://aaja.org/scholarships/",
+  "category": "diversity_affinity",
+  "primary_discipline": "Communications",
+  "scraper_type": "deterministic"
+ },
+ {
+  "name": "Society of Professional Journalists Scholarships",
+  "url": "https://www.spj.org/grants-internships-fellowships-and-scholarships/",
+  "category": "national_association",
+  "primary_discipline": "Communications",
+  "scraper_type": "deterministic"
+ },
+ {
+  "name": "Thurgood Marshall College Fund Scholarships",
+  "url": "https://www.tmcf.org/students-alumni/scholarships/",
+  "category": "diversity_affinity",
+  "primary_discipline": "any",
+  "scraper_type": "deterministic"
+ },
+ {
+  "name": "APIA Scholars",
+  "url": "https://apiascholars.org/scholarship/",
+  "category": "diversity_affinity",
+  "primary_discipline": "any",
+  "target_credentials": [
+   "Undergraduate"
+  ],
+  "scraper_type": "deterministic"
+ },
+ {
+  "name": "American Indian College Fund Scholarships",
+  "url": "https://collegefund.org/students/scholarships/",
+  "category": "diversity_affinity",
+  "primary_discipline": "any",
+  "scraper_type": "deterministic"
+ },
+ {
+  "name": "HACU Scholarships",
+  "url": "https://www.hacu.net/hacu/Scholarships.asp",
+  "category": "diversity_affinity",
+  "primary_discipline": "any",
+  "scraper_type": "deterministic"
+ },
+ {
+  "name": "Phi Kappa Phi Grants and Awards",
+  "url": "https://www.phikappaphi.org/grants-awards",
+  "category": "honor_society",
+  "primary_discipline": "any",
+  "target_credentials": [
+   "Graduate"
+  ],
+  "scraper_type": "deterministic"
+ },
+ {
+  "name": "American Meteorological Society Scholarships",
+  "url": "https://www.ametsoc.org/ams/information-for/students/ams-scholarships-and-fellowships/",
+  "category": "national_association",
+  "primary_discipline": "Physical Sciences",
+  "scraper_type": "deterministic"
+ },
+ {
+  "name": "IMA Scholarships",
+  "url": "https://www.imanet.org/scholarships",
+  "category": "national_association",
+  "primary_discipline": "Accounting",
+  "target_credentials": [
+   "Undergraduate",
+   "Graduate"
+  ],
+  "scraper_type": "deterministic"
+ },
+ {
+  "name": "Casualty Actuarial Society Trust Scholarships",
+  "url": "https://www.casact.org/scholarships",
+  "category": "national_association",
+  "primary_discipline": "Mathematics",
+  "scraper_type": "deterministic"
+ },
+ {
+  "name": "Women in Aviation International Scholarships",
+  "url": "https://www.wai.org/education/scholarships",
+  "category": "national_association",
+  "primary_discipline": "Aviation",
+  "scraper_type": "deterministic"
+ },
+ {
+  "name": "Garden Club of America Scholarships",
+  "url": "https://www.gcamerica.org/scholarships",
+  "category": "national_association",
+  "primary_discipline": "Horticulture",
+  "scraper_type": "deterministic"
+ },
+ {
+  "name": "Educators Rising Scholarships",
+  "url": "https://educatorsrising.org/scholarships",
+  "category": "national_association",
+  "primary_discipline": "Teaching & Education",
+  "target_credentials": [
+   "High School"
+  ],
+  "scraper_type": "deterministic"
+ },
+ {
+  "name": "American Legion Scholarships",
+  "url": "https://www.legion.org/scholarships",
+  "category": "national_association",
+  "primary_discipline": "any",
+  "scraper_type": "deterministic"
+ },
+ {
+  "name": "VFW Student Veterans Support Scholarships",
+  "url": "https://www.vfw.org/assistance/student-veterans-support",
+  "category": "national_association",
+  "primary_discipline": "any",
+  "scraper_type": "deterministic"
+ },
+ {
+  "name": "Elks National Foundation Scholarships",
+  "url": "https://www.elks.org/scholars/scholarships/",
+  "category": "national_association",
+  "primary_discipline": "any",
+  "target_credentials": [
+   "High School",
+   "Undergraduate"
+  ],
+  "scraper_type": "deterministic"
+ },
+ {
+  "name": "Knights of Columbus Scholarships",
+  "url": "https://www.kofc.org/en/what-we-do/scholarships/index.html",
+  "category": "national_association",
+  "primary_discipline": "any",
+  "scraper_type": "deterministic"
+ },
+ {
+  "name": "Walmart Live Better U",
+  "url": "https://careers.walmart.com/us/en/live-better-u",
+  "category": "employer_tuition_benefit",
+  "primary_discipline": "any",
+  "scraper_type": "deterministic"
+ },
+ {
+  "name": "Starbucks College Achievement Plan",
+  "url": "https://starbucks.asu.edu/",
+  "category": "employer_tuition_benefit",
+  "primary_discipline": "any",
+  "target_credentials": [
+   "Bachelor"
+  ],
+  "scraper_type": "deterministic"
+ },
+ {
+  "name": "Chipotle Education Benefits",
+  "url": "https://jobs.chipotle.com/benefits",
+  "category": "employer_tuition_benefit",
+  "primary_discipline": "any",
+  "scraper_type": "deterministic"
+ },
+ {
+  "name": "UPS Earn & Learn Program",
+  "url": "https://about.ups.com/us/en/careers/working-at-ups/earn-and-learn.html",
+  "category": "employer_tuition_benefit",
+  "primary_discipline": "any",
+  "scraper_type": "playwright"
+ },
+ {
+  "name": "KFC Foundation Education Programs",
+  "url": "https://www.kfcfoundation.org/",
+  "category": "employer_tuition_benefit",
+  "primary_discipline": "any",
+  "scraper_type": "deterministic"
+ },
+ {
+  "name": "Home Depot Education Benefits",
+  "url": "https://careers.homedepot.com/benefits/",
+  "category": "employer_tuition_benefit",
+  "primary_discipline": "any",
+  "scraper_type": "deterministic"
+ },
+ {
+  "name": "Lowe's Education Benefits",
+  "url": "https://talent.lowes.com/us/en/benefits",
+  "category": "employer_tuition_benefit",
+  "primary_discipline": "any",
+  "scraper_type": "deterministic"
+ },
+ {
+  "name": "SUNY Paying for College",
+  "url": "https://www.suny.edu/smarttrack/types-of-financial-aid/scholarships/",
+  "category": "institutional_department",
+  "primary_discipline": "any",
+  "state_restriction": "NY",
+  "scraper_type": "deterministic"
+ },
+ {
+  "name": "California State University Paying for College",
+  "url": "https://www.calstate.edu/attend/paying-for-college",
+  "category": "institutional_department",
+  "primary_discipline": "any",
+  "state_restriction": "CA",
+  "scraper_type": "deterministic"
+ },
+ {
+  "name": "University of Wisconsin System Financial Aid",
+  "url": "https://www.wisconsin.edu/financial-aid/",
+  "category": "institutional_department",
+  "primary_discipline": "any",
+  "state_restriction": "WI",
+  "scraper_type": "deterministic"
+ },
+ {
+  "name": "University of Alaska Scholarships",
+  "url": "https://www.alaska.edu/finaid/",
+  "category": "institutional_department",
+  "primary_discipline": "any",
+  "state_restriction": "AK",
+  "scraper_type": "deterministic"
+ },
+ {
+  "name": "University of Maine System Scholarship Resources",
+  "url": "https://www.maine.edu/students/scholarships-and-tuition-waivers/",
+  "category": "institutional_department",
+  "primary_discipline": "any",
+  "state_restriction": "ME",
+  "scraper_type": "deterministic"
+ },
+ {
+  "name": "Minnesota State Scholarships",
+  "url": "https://www.minnstate.edu/admissions/scholarships.html",
+  "category": "institutional_department",
+  "primary_discipline": "any",
+  "state_restriction": "MN",
+  "scraper_type": "deterministic"
+ },
+ {
+  "name": "Pennsylvania PASSHE Foundation Scholarships",
+  "url": "https://www.thepafoundation.org/student-resources",
+  "category": "institutional_department",
+  "primary_discipline": "any",
+  "state_restriction": "PA",
+  "scraper_type": "deterministic"
+ },
+ {
+  "name": "South Dakota Board of Regents Scholarships",
+  "url": "https://www.sdbor.edu/student-information/Paying%20for%20College/Scholarships/Pages/default.aspx",
+  "category": "institutional_department",
+  "primary_discipline": "any",
+  "state_restriction": "SD",
+  "scraper_type": "playwright"
+ },
+ {
+  "name": "University of North Carolina System Financial Aid",
+  "url": "https://www.northcarolina.edu/fees-financial-aid-and-scholarships/financial-aid/",
+  "category": "institutional_department",
+  "primary_discipline": "any",
+  "state_restriction": "NC",
+  "scraper_type": "deterministic"
+ },
+ {
+  "name": "HCA Healthcare Education Benefits",
+  "url": "https://careers.hcahealthcare.com/pages/education-benefits",
+  "category": "employer_tuition_benefit",
+  "primary_discipline": "Health Professions",
+  "scraper_type": "playwright"
+ },
+ {
+  "name": "AdventHealth Education Assistance",
+  "url": "https://adventhealth.guildeducation.com/partner/",
+  "category": "employer_tuition_benefit",
+  "primary_discipline": "Health Professions",
+  "scraper_type": "deterministic"
+ },
+ {
+  "name": "CommonSpirit Health Education Benefits",
+  "url": "https://www.commonspirit.careers/CHI-Health-Career-Ladder-CNA-Program",
+  "category": "employer_tuition_benefit",
+  "primary_discipline": "Health Professions",
+  "state_restriction": "NE",
+  "scraper_type": "deterministic"
+ },
+ {
+  "name": "Providence Health Education Benefits",
+  "url": "https://www.providence.jobs/benefits",
+  "category": "employer_tuition_benefit",
+  "primary_discipline": "Health Professions",
+  "scraper_type": "deterministic"
+ },
+ {
+  "name": "Tau Beta Pi Fellowship Program",
+  "url": "https://www.tbp.org/fellowships.cfm",
+  "category": "national_association",
+  "primary_discipline": "Engineering",
+  "target_credentials": [
+   "Master",
+   "PhD"
+  ],
+  "scraper_type": "deterministic"
+ },
+ {
+  "name": "Tau Beta Pi Scholarships",
+  "url": "https://www.tbp.org/scholarships.cfm",
+  "category": "national_association",
+  "primary_discipline": "Engineering",
+  "target_credentials": [
+   "Bachelor"
+  ],
+  "scraper_type": "deterministic"
+ }
 ]

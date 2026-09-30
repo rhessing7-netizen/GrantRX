@@ -95,6 +95,12 @@ def _make_scholarship(**kwargs):
         "has_service_commitment": False,
         "service_commitment_duration_months": None,
         "vendor_platform": None,
+        "source_url": None,
+        "extraction_method": None,
+        "verified_fields": {},
+        "verified_at": None,
+        "verification_status": "legacy_unverified",
+
     }
     defaults.update(kwargs)
     obj = MagicMock()
@@ -336,19 +342,25 @@ class TestMatchScholarships:
         assert results == []
 
     def test_discipline_normalization_for_science_majors(self):
-        """User majors like 'Geology' should match scholarships with 'medicine'."""
+        """C8: majors normalize to canonical field codes; compat edges keep
+        the pre-C8 behavior where science majors match 'medicine' awards."""
         from scrapers.sources import normalize_discipline
-        assert normalize_discipline("Geology") == "medicine"
+        assert normalize_discipline("Geology") == "physical_sciences"
         assert normalize_discipline("Exercise Science") == "therapeutics_rehab"
         assert normalize_discipline("Public Health") == "public_health_emergency"
+        # The behavioral guarantee the old assertions encoded: a Geology
+        # major still matches a medicine-restricted scholarship.
+        profile = _make_profile(disciplines=["Geology"])
+        scholarship = _make_scholarship(eligible_disciplines=["medicine"])
+        assert is_discipline_eligible(profile, scholarship) is True
 
-    def test_award_amount_defaults_to_zero(self):
-        """Scholarships with None award_amount should default to 0 in results."""
+    def test_award_amount_unknown_stays_none(self):
+        """Unknown/variable award amounts must remain None — never coerced to $0."""
         profile = _make_profile()
         scholarship = _make_scholarship(award_amount=None)
         results = match_scholarships(profile, [scholarship])
         assert len(results) == 1
-        assert results[0].award_amount == 0
+        assert results[0].award_amount is None
 
     def test_deadline_iso_format(self):
         """Deadline should be returned as an ISO format string."""

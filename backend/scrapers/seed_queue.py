@@ -26,8 +26,24 @@ logger = logging.getLogger(__name__)
 # Configuration
 # ---------------------------------------------------------------------------
 
-# Re-crawl seeds whose last_crawled_at is older than this threshold.
+# Re-crawl successful seeds whose last_crawled_at is older than this threshold.
 RE_CRAWL_AFTER = timedelta(days=7)
+
+# Failed sources are retried with bounded backoff. After the final failed
+# attempt they are quarantined for manual review rather than retried forever.
+MAX_FAILURES_BEFORE_QUARANTINE = 5
+RETRY_BACKOFF = (
+    timedelta(hours=1),
+    timedelta(hours=6),
+    timedelta(hours=24),
+    timedelta(hours=72),
+)
+
+
+def _retry_delay(error_count: int) -> timedelta:
+    """Return the delay before the next retry for a failed attempt."""
+    index = max(0, min(error_count - 1, len(RETRY_BACKOFF) - 1))
+    return RETRY_BACKOFF[index]
 
 # Domains that should never be enqueued as seeds (social media, generic
 # aggregators, dead directories).  Mirrors crawler.BLOCKED_DOMAINS plus
@@ -128,10 +144,9 @@ HUB_PATH_PATTERNS = [
 def get_next_seed_batch(db: Session, limit: int = 20) -> List[dict]:
     """Return the next batch of seeds to crawl.
 
-    Selects seeds with ``status IN ('queued', 'crawled')`` ordered by
-    ``priority DESC, last_crawled_at ASC NULLS FIRST``.  Seeds with
-    ``status='crawled'`` are only included if ``last_crawled_at`` is older
-    than :data:`RE_CRAWL_AFTER` (7 days), so stale seeds get re-crawled.
+    Selects queued seeds, stale successfully crawled seeds, and failed seeds
+    whose retry backoff has elapsed. Quarantined and ignored seeds are never
+    selected automatically.
 
     Args:
         db: SQLAlchemy session.
@@ -145,11 +160,14 @@ def get_next_seed_batch(db: Session, limit: int = 20) -> List[dict]:
     sql = text(
         """
         SELECT id, url, source_name, category, priority, status,
-               last_crawled_at, discovered_from_url
+               last_crawled_at, discovered_from_url, error_count,
+               next_retry_at, last_error
         FROM crawler_seeds
         WHERE status = 'queued'
            OR (status = 'crawled' AND last_crawled_at IS NOT NULL
                AND last_crawled_at < :cutoff)
+           OR (status = 'failed' AND next_retry_at IS NOT NULL
+               AND next_retry_at <= NOW())
         ORDER BY priority DESC, last_crawled_at ASC NULLS FIRST
         LIMIT :limit
         """
@@ -165,6 +183,9 @@ def get_next_seed_batch(db: Session, limit: int = 20) -> List[dict]:
             "status": r.status,
             "last_crawled_at": r.last_crawled_at.isoformat() if r.last_crawled_at else None,
             "discovered_from_url": r.discovered_from_url,
+            "error_count": r.error_count,
+            "next_retry_at": r.next_retry_at.isoformat() if r.next_retry_at else None,
+            "last_error": r.last_error,
         }
         for r in rows
     ]
@@ -253,17 +274,11 @@ def mark_seed_crawled(
     success: bool,
     error: Optional[str] = None,
 ) -> None:
-    """Update a seed's crawl status after processing.
+    """Update a seed after processing with retry/backoff semantics.
 
-    Sets ``last_crawled_at = NOW()``, increments ``error_count`` on
-    failure, and marks ``status`` as ``'crawled'`` (success) or
-    ``'failed'`` (failure).
-
-    Args:
-        db: SQLAlchemy session.
-        seed_id: UUID of the crawler_seeds row.
-        success: Whether the crawl succeeded.
-        error: Optional error message (logged but not stored in the row).
+    Success resets the failure state. A transient failure is retried after a
+    bounded backoff. After ``MAX_FAILURES_BEFORE_QUARANTINE`` consecutive
+    failures the seed is quarantined for manual review.
     """
     if success:
         sql = text(
@@ -271,24 +286,99 @@ def mark_seed_crawled(
             UPDATE crawler_seeds
             SET status = 'crawled',
                 last_crawled_at = NOW(),
-                error_count = 0
+                error_count = 0,
+                next_retry_at = NULL,
+                last_error = NULL
             WHERE id = :seed_id
             """
         )
+        params = {"seed_id": seed_id}
     else:
-        sql = text(
-            """
-            UPDATE crawler_seeds
-            SET status = 'failed',
-                last_crawled_at = NOW(),
-                error_count = error_count + 1
-            WHERE id = :seed_id
-            """
-        )
-        if error:
-            logger.warning("Seed %s crawl failed: %s", seed_id, error)
-    db.execute(sql, {"seed_id": seed_id})
+        row = db.execute(
+            text("SELECT error_count FROM crawler_seeds WHERE id = :seed_id"),
+            {"seed_id": seed_id},
+        ).fetchone()
+        previous_count = int(row.error_count or 0) if row else 0
+        new_count = previous_count + 1
+        safe_error = (error or "crawl failed")[:2000]
+
+        if new_count >= MAX_FAILURES_BEFORE_QUARANTINE:
+            sql = text(
+                """
+                UPDATE crawler_seeds
+                SET status = 'quarantined',
+                    last_crawled_at = NOW(),
+                    error_count = :error_count,
+                    next_retry_at = NULL,
+                    last_error = :last_error
+                WHERE id = :seed_id
+                """
+            )
+            params = {
+                "seed_id": seed_id,
+                "error_count": new_count,
+                "last_error": safe_error,
+            }
+            logger.error(
+                "Seed %s quarantined after %d consecutive failures: %s",
+                seed_id, new_count, safe_error,
+            )
+        else:
+            retry_at = datetime.utcnow() + _retry_delay(new_count)
+            sql = text(
+                """
+                UPDATE crawler_seeds
+                SET status = 'failed',
+                    last_crawled_at = NOW(),
+                    error_count = :error_count,
+                    next_retry_at = :next_retry_at,
+                    last_error = :last_error
+                WHERE id = :seed_id
+                """
+            )
+            params = {
+                "seed_id": seed_id,
+                "error_count": new_count,
+                "next_retry_at": retry_at,
+                "last_error": safe_error,
+            }
+            logger.warning(
+                "Seed %s crawl failed (attempt %d/%d); retry after %s: %s",
+                seed_id, new_count, MAX_FAILURES_BEFORE_QUARANTINE,
+                retry_at.isoformat(), safe_error,
+            )
+
+    db.execute(sql, params)
     db.commit()
+
+
+def mark_seed_robots_denied(
+    db: Session,
+    seed_id: str,
+    detail: str = "robots_denied",
+) -> None:
+    """Record that a seed could not be crawled because robots.txt said no.
+
+    Within the current schema this looks like a completed cycle — the seed
+    re-enters the normal 7-day re-crawl rotation (robots policies do change),
+    but ``error_count`` is reset and no retry backoff is scheduled, so a
+    denied seed can never accrue the transient-failure streak that ends in
+    quarantine (C6). ``last_error`` keeps the bounded outcome for review.
+    """
+    sql = text(
+        """
+        UPDATE crawler_seeds
+        SET status = 'crawled',
+            last_crawled_at = NOW(),
+            error_count = 0,
+            next_retry_at = NULL,
+            last_error = :last_error
+        WHERE id = :seed_id
+        """
+    )
+    db.execute(sql, {"seed_id": seed_id, "last_error": detail[:2000]})
+    db.commit()
+    logger.warning("Seed %s not crawled: %s", seed_id, detail[:200])
 
 
 # ---------------------------------------------------------------------------
