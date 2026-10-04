@@ -7,7 +7,7 @@ amount, days remaining, and application link.
 
 Usage:
     python -m app.workers.deadline_digest --dry-run   # print to stdout
-    python -m app.workers.deadline_digest              # send via Resend / SendGrid / SMTP
+    python -m app.workers.deadline_digest              # send via Resend / SMTP
 """
 
 from __future__ import annotations

@@ -58,6 +58,16 @@ def main() -> int:
               "grantrx" not in residual and "grant rx" not in residual
               and "fundria" not in residual)
 
+        print("\n== Privacy policy processor disclosures ==")
+        page.goto(BASE + "/privacy", wait_until="domcontentloaded")
+        priv = page_text(page).lower()
+        # Regression guard: the policy must name every processor that
+        # actually receives user data, and must not list unused vendors.
+        for proc in ["supabase", "stripe", "resend", "emailoctopus",
+                     "openai", "google analytics"]:
+            check(f"privacy names {proc}", proc in priv)
+        check("privacy does not list unused SendGrid", "sendgrid" not in priv)
+
         print("\n== Early-access form (anonymous) ==")
         page.goto(BASE + "/early-access", wait_until="domcontentloaded")
         page.wait_for_timeout(800)

@@ -19,7 +19,7 @@ export default function PrivacyPage() {
           >
             ← Back to EdFintia
           </Link>
-          <span className="text-xs text-textMuted">Last updated: September 2026</span>
+          <span className="text-xs text-textMuted">Last updated: October 2026</span>
         </div>
       </header>
 
@@ -116,10 +116,10 @@ export default function PrivacyPage() {
             </p>
             <ul className="mt-3 space-y-2 text-sm leading-relaxed text-textMuted">
               <li>
-                <strong className="text-text">Supabase:</strong> Handles
-                user authentication, including OAuth sign-in via Google and
-                LinkedIn. Supabase stores your email and hashed password; it
-                does not access your academic profile data.
+                <strong className="text-text">Supabase:</strong> Provides
+                user authentication (including OAuth sign-in via Google and
+                LinkedIn) and hosts the application database that stores your
+                account, profile, and application-tracker data.
               </li>
               <li>
                 <strong className="text-text">Stripe:</strong> Processes
@@ -128,14 +128,35 @@ export default function PrivacyPage() {
                 demographic data.
               </li>
               <li>
-                <strong className="text-text">Resend / SendGrid:</strong>{" "}
-                Sends transactional and marketing emails (deadline digests,
-                account notifications) on our behalf.
+                <strong className="text-text">Resend:</strong>{" "}
+                Sends transactional and marketing emails (welcome messages,
+                payment receipts, deadline digests, and account notifications)
+                on our behalf, using your email address, name, and the
+                content of each email. Deadline digests may alternatively be
+                delivered through a configured SMTP relay.
               </li>
               <li>
                 <strong className="text-text">EmailOctopus:</strong>{" "}
                 Hosts our early-access/waitlist contact list and sends launch
                 announcements and product updates to subscribers who opted in.
+                It receives your email address, first name, and the audience
+                type you select.
+              </li>
+              <li>
+                <strong className="text-text">OpenAI:</strong>{" "}
+                Powers our AI features — the Statement Coach essay outliner
+                and the in-app Support Assistant. When you use them, OpenAI
+                processes the scholarship details and notes you provide for
+                an outline, or the messages you send the Support Assistant.
+              </li>
+              <li>
+                <strong className="text-text">Google Analytics:</strong>{" "}
+                When enabled, measures site usage (page views and anonymous
+                early-access funnel events) with IP anonymization turned on.
+              </li>
+              <li>
+                <strong className="text-text">Vercel &amp; Render:</strong>{" "}
+                Host the EdFintia website and API.
               </li>
             </ul>
           </section>
