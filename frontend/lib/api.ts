@@ -39,23 +39,67 @@ const API_BASE =
 
 let authToken: string | null = process.env.NEXT_PUBLIC_DEMO_JWT ?? null;
 
+// Explicit local token channel for local dev / e2e (e.g. the dev-mode
+// "grantrx-dev-demo" token). Read lazily so init scripts and tests can set it
+// before first render; cleared on logout via setAuthToken(null).
+const TOKEN_STORAGE_KEY = "grantrx_auth_token";
+
 export function setAuthToken(token: string | null) {
   // Sanitize at storage time so all downstream consumers get a clean token.
   authToken = token ? token.trim().replace(/[\r\n]/g, "") : null;
+  if (!authToken) {
+    try {
+      localStorage.removeItem(TOKEN_STORAGE_KEY);
+    } catch {
+      // localStorage may be unavailable — ignore
+    }
+  }
 }
 
 export function getAuthToken(): string | null {
-  return authToken;
+  if (authToken) return authToken;
+  if (typeof window === "undefined") return null;
+  try {
+    return localStorage.getItem(TOKEN_STORAGE_KEY);
+  } catch {
+    // localStorage may be unavailable — ignore
+    return null;
+  }
+}
+
+// Endpoints the backend serves without a session (mirrors PUBLIC_PATHS in
+// backend/app/middleware/auth.py). Everything else requires a Bearer token:
+// anonymous callers are rejected client-side before any request is sent.
+const PUBLIC_PATHS = new Set([
+  "/api/scholarships/match-preview",
+  "/api/v1/early-access",
+  "/api/v1/marketing/unsubscribe",
+]);
+
+function isPublicPath(path: string): boolean {
+  const pathname = path.split("?", 1)[0];
+  return (
+    PUBLIC_PATHS.has(pathname) ||
+    pathname.startsWith("/api/calendar/feed.ics") ||
+    pathname.startsWith("/api/billing/webhook")
+  );
+}
+
+function unauthenticatedError<T>(): Promise<T> {
+  const e = new Error("Not authenticated") as Error & { status?: number };
+  e.status = 401;
+  return Promise.reject(e);
 }
 
 function authHeaders(): HeadersInit {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
   };
-  if (authToken) {
+  const token = getAuthToken();
+  if (token) {
     // Sanitize token to prevent Headers.append invalid header value errors
     // from stray whitespace, newlines, or malformed JWT strings.
-    const cleanToken = authToken.trim().replace(/[\r\n]/g, "");
+    const cleanToken = token.trim().replace(/[\r\n]/g, "");
     if (cleanToken) {
       headers["Authorization"] = `Bearer ${cleanToken}`;
     }
@@ -73,6 +117,13 @@ async function request<T>(
   if (!url || typeof url !== "string" || !url.startsWith("http")) {
     console.warn("Blocked fetch call with invalid URL:", url);
     return null as T;
+  }
+
+  // Confirmed-anonymous callers never reach protected endpoints: reject
+  // locally with a 401-shaped error instead of dispatching a request the
+  // backend will refuse anyway. Public paths still fire unauthenticated.
+  if (!getAuthToken() && !isPublicPath(path)) {
+    return unauthenticatedError<T>();
   }
 
   let resp: Response;
@@ -272,6 +323,7 @@ export const api = {
       console.warn("Blocked fetch call with invalid URL:", url);
       return;
     }
+    if (!getAuthToken()) throw new Error("Not authenticated");
     const resp = await fetch(
       url,
       { headers: authHeaders(), signal: AbortSignal.timeout(15000) },
@@ -291,6 +343,7 @@ export const api = {
       console.warn("Blocked fetch call with invalid URL:", url);
       return;
     }
+    if (!getAuthToken()) throw new Error("Not authenticated");
     const resp = await fetch(
       url,
       { headers: authHeaders(), signal: AbortSignal.timeout(15000) },

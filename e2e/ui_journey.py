@@ -80,9 +80,37 @@ def main() -> int:
         page = ctx.new_page()
         # Prevent the interactive product tour from hijacking input; its
         # driver.js overlay intercepts all pointer events once started.
+        # grantrx_auth_token authenticates the page as the backend's demo
+        # user (dev-mode backend accepts the literal grantrx-dev-demo token);
+        # without it the frontend is anonymous and sends no protected calls.
         page.add_init_script(
-            "try{localStorage.setItem('grantrx_tour_completed','true')}catch(e){}")
+            "try{localStorage.setItem('grantrx_tour_completed','true');"
+            "localStorage.setItem('grantrx_auth_token','grantrx-dev-demo')}catch(e){}")
         page.set_default_timeout(15000)
+
+        # ---------- Anonymous initial load ----------
+        # A visitor with no session/token must get the signed-out Discover
+        # experience WITHOUT any protected API request leaving the browser.
+        print("\n== Anonymous load (no protected requests) ==")
+        anon_ctx = browser.new_context(viewport={"width": 1280, "height": 900})
+        anon_page = anon_ctx.new_page()
+        protected_calls = []
+        anon_page.on(
+            "request",
+            lambda r: protected_calls.append(r.url)
+            if "localhost:8000" in r.url
+            and "match-preview" not in r.url
+            and "early-access" not in r.url
+            else None,
+        )
+        anon_page.goto(BASE + "/", wait_until="domcontentloaded")
+        anon_page.wait_for_timeout(4000)
+        t = body_text(anon_page)
+        check("anonymous load shows sign-in prompt",
+              "sign in" in t.lower(), t[:120].replace("\n", " "))
+        check("no protected API requests while anonymous",
+              len(protected_calls) == 0, str(protected_calls[:5]))
+        anon_ctx.close()
 
         # ---------- Onboarding ----------
         print("\n== Onboarding (all-optional) ==")
@@ -90,8 +118,12 @@ def main() -> int:
         page.wait_for_timeout(2000)
         has_profile = demo_state() is not None
         if not has_profile:
-            check("onboarding CTA visible",
-                  click_if_visible(page, "button:has-text('Set up'), button:has-text('Start Onboarding')"))
+            # A signed-in user with no profile is routed into onboarding either
+            # by the Set up CTA or automatically once the backend profile 404s.
+            clicked = click_if_visible(
+                page, "button:has-text('Set up'), button:has-text('Start Onboarding')")
+            check("onboarding CTA visible or auto-opened",
+                  clicked or "Fields of Study" in body_text(page))
             page.wait_for_timeout(600)
             check("wizard opens on step 1 (Fields of Study)",
                   "Fields of Study" in body_text(page))
@@ -309,6 +341,24 @@ def main() -> int:
                   page.locator("[role='dialog']").count() == 0)
         else:
             check("support launcher found", False)
+
+        print("\n== Sign out / session restore ==")
+        sign_out = page.locator("button:has-text('Sign Out'):visible").first
+        check("sign out button present", sign_out.count() > 0)
+        if sign_out.count():
+            sign_out.click()
+            page.wait_for_timeout(1500)
+            t = body_text(page)
+            check("post-sign-out shows sign-in prompt",
+                  "sign in" in t.lower(), t[:160].replace("\n", " "))
+            # Reload re-injects the dev token (init script) — simulates a
+            # restored credential → authenticated load must resume.
+            page.reload(wait_until="domcontentloaded")
+            page.wait_for_timeout(2500)
+            t = body_text(page)
+            check("restored session reloads feed",
+                  "matched" in t.lower() or "opportunities" in t.lower(),
+                  t[:160].replace("\n", " "))
 
         print("\n== Account settings + deletion ==")
         acc = page.locator("button:has-text('Account Settings'):visible, [aria-label='Account']:visible").first

@@ -41,6 +41,11 @@ export default function Home() {
 
   const [profile, setProfile] = useState<Profile | null>(null);
   const [usage, setUsage] = useState<Usage | null>(null);
+  // Auth resolution gate: protected API calls must not leave the browser
+  // before the Supabase session (or a configured dev token) is known.
+  const [authState, setAuthState] = useState<
+    "pending" | "anonymous" | "signed-in"
+  >("pending");
   const [feed, setFeed] = useState<MatchedFeed | null>(null);
   const [kanbanItems, setKanbanItems] = useState<UserScholarship[]>([]);
   const [search, setSearch] = useState("");
@@ -52,8 +57,8 @@ export default function Home() {
   // Auth comes from the Supabase session. A demo JWT is used only when
   // NEXT_PUBLIC_DEMO_JWT is explicitly configured for local testing.
 
-  // Session check and auth state listener are defined after loadFeed below
-  // because they depend on loadFeed for immediate feed hydration after OAuth.
+  // Session check and auth state listener are defined after loadFeed below:
+  // auth resolution gates whether the protected initial loads ever run.
 
   // Restore the cached profile after mount. localStorage is client-only, so
   // the first render must agree with SSR (null); the cache is applied
@@ -124,15 +129,24 @@ export default function Home() {
     }
   }, []);
 
-  // Load profile + usage on mount
+  // Load profile + usage (only runs once a session/token is confirmed — see
+  // the auth-gated effect below).
   const loadProfileAndUsage = useCallback(async () => {
     try {
       const p = await api.getProfile();
       setProfile(p);
+      try {
+        localStorage.setItem("grantrx_profile", JSON.stringify(p));
+      } catch {
+        // localStorage may be unavailable — non-fatal
+      }
       // If profile exists, close onboarding wizard
       setShowOnboarding(false);
-    } catch {
+    } catch (err) {
+      const status = (err as Error & { status?: number }).status;
       setProfile(null);
+      // Signed-in user with no profile yet → onboarding wizard.
+      if (status === 404) setShowOnboarding(true);
     }
     try {
       const u = await api.getUsage();
@@ -141,15 +155,6 @@ export default function Home() {
       /* ignore */
     }
   }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- async data load on mount
-    loadProfileAndUsage().catch(() => {
-      if (!cancelled) setProfile(null);
-    });
-    return () => { cancelled = true; };
-  }, [loadProfileAndUsage]);
 
   // Components outside the page tree (e.g. the layout-mounted support
   // assistant) can request the auth modal via this event.
@@ -162,6 +167,13 @@ export default function Home() {
   // Load matched feed (initial load / refresh / filter change — does NOT
   // consume a search quota because no keyword query is sent)
   const loadFeed = useCallback(async () => {
+    if (!getAuthToken()) {
+      // Confirmed anonymous — never dispatch the protected request.
+      setFeed(null);
+      setError("Please sign in to see matched opportunities.");
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
@@ -198,68 +210,96 @@ export default function Home() {
     }
   }, []);
 
-  // Load the feed on mount. Failures remain visible instead of being replaced
-  // with fabricated scholarship data. Deferred to a microtask so loadFeed's
-  // synchronous setLoading does not run inside the effect body.
+  // Resolve auth state BEFORE any protected API call. Session resolution
+  // comes first; confirmed-anonymous users get the signed-out Discover
+  // experience without a single authenticated request leaving the browser.
   useEffect(() => {
-    queueMicrotask(() => {
-      void loadFeed();
-    });
-  }, [loadFeed]);
+    const applyAnonymous = () => {
+      setAuthState("anonymous");
+      // A stale cached profile must not linger for a signed-out visitor.
+      setProfile(null);
+      setUsage(null);
+      setFeed(null);
+      try {
+        localStorage.removeItem("grantrx_profile");
+      } catch {
+        // localStorage may be unavailable — ignore
+      }
+      setError("Please sign in to see matched opportunities.");
+    };
 
-  // Check for existing Supabase session on mount and listen for auth state
-  // changes (covers Google/LinkedIn OAuth redirects that arrive after mount).
-  // Hydrates the profile from localStorage, Supabase, or OAuth user_metadata
-  // so the LeftPanel and feed recognize the user immediately.
-  useEffect(() => {
-    if (!supabase) return;
-
-    // Helper: hydrate profile from session
-    const hydrateProfile = async (session: { user?: { id?: string; email?: string; user_metadata?: Record<string, unknown> } | null; access_token?: string } | null) => {
-      if (!session?.user) return;
-      if (session.access_token) setAuthToken(session.access_token);
-
-      // 1. Check localStorage for a cached profile
+    const applySession = (session: { access_token?: string } | null) => {
+      if (session?.access_token) setAuthToken(session.access_token);
+      setAuthState("signed-in");
+      // Show the locally cached profile immediately as a UX hint; the
+      // authoritative backend fetch in loadProfileAndUsage overwrites it.
       try {
         const cached = localStorage.getItem("grantrx_profile");
-        if (cached) {
-          setProfile(JSON.parse(cached));
-        }
+        if (cached) setProfile(JSON.parse(cached) as Profile);
       } catch {
         // localStorage may be unavailable or contain invalid JSON — ignore
       }
+    };
 
-      // 2. Hydrate from the authoritative backend profile.
-      try {
-        const serverProfile = await api.getProfile();
-        setProfile(serverProfile);
-        try { localStorage.setItem("grantrx_profile", JSON.stringify(serverProfile)); } catch {}
-        loadFeed();
-      } catch (profileError) {
-        const status = (profileError as Error & { status?: number }).status;
-        if (status === 404) {
-          setProfile(null);
-          setShowOnboarding(true);
-        }
+    const resolve = (session: { user?: unknown; access_token?: string } | null) => {
+      if (session?.user) {
+        applySession(session);
+      } else if (getAuthToken()) {
+        // Pre-signed token configured via NEXT_PUBLIC_DEMO_JWT, or an
+        // injected dev token — signed-in path without a Supabase session.
+        setAuthState("signed-in");
+      } else {
+        applyAnonymous();
       }
     };
 
+    if (!supabase) {
+      // No Supabase client — the only possible credential is a configured
+      // dev token; otherwise the visitor is confirmed anonymous.
+      queueMicrotask(() => resolve(null));
+      return;
+    }
+
     // Initial session check
-    supabase.auth.getSession().then(({ data }) => {
-      hydrateProfile(data.session as Parameters<typeof hydrateProfile>[0]);
-    });
+    supabase.auth.getSession()
+      .then(({ data }) => resolve(data.session))
+      .catch(() => resolve(null));
 
     // Listen for auth state changes (OAuth redirects, token refreshes, etc.)
     const { data: authListener } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
-        hydrateProfile(session as Parameters<typeof hydrateProfile>[0]);
+      (event, session) => {
+        if (event === "SIGNED_OUT") {
+          setAuthToken(null);
+          applyAnonymous();
+          return;
+        }
+        if (session?.user) applySession(session);
       },
     );
 
     return () => {
       authListener?.subscription?.unsubscribe();
     };
-  }, [loadFeed]);
+  }, []);
+
+  // Authenticated initial load — fires only once auth resolves to signed-in.
+  // Profile/usage/feed are protected endpoints; anonymous users never reach
+  // this branch. Failures remain visible instead of being replaced with
+  // fabricated scholarship data.
+  useEffect(() => {
+    if (authState !== "signed-in") return;
+    let cancelled = false;
+    // Deferred to a microtask so the loaders' synchronous setState does not
+    // run inside the effect body.
+    queueMicrotask(() => {
+      if (cancelled) return;
+      loadProfileAndUsage().catch(() => {
+        if (!cancelled) setProfile(null);
+      });
+      void loadFeed();
+    });
+    return () => { cancelled = true; };
+  }, [authState, loadProfileAndUsage, loadFeed]);
 
   // Explicit keyword search (consumes a search quota for free users).
   // Only called when the user presses Enter or clicks the search icon with
@@ -292,6 +332,8 @@ export default function Home() {
       if (e.status === 402) {
         setUpgradeReason(`You've reached your free keyword search limit (${usage?.search_limit ?? 10}/week). Upgrade for unlimited searches.`);
         setShowUpgrade(true);
+      } else if (e.status === 401) {
+        setError("Please sign in to see matched opportunities.");
       } else if (e.message?.includes("Invalid token") || e.message === "Invalid token") {
         console.warn("Suppressed unauthenticated token error on public feed:", err);
         setError(null);
@@ -306,6 +348,10 @@ export default function Home() {
 
   // Load kanban items
   const loadKanban = useCallback(async () => {
+    if (!getAuthToken()) {
+      setKanbanItems([]);
+      return;
+    }
     try {
       const items = await api.listUserScholarships();
       setKanbanItems(items);
@@ -378,6 +424,7 @@ export default function Home() {
 
   const handleAuthSuccess = (p: Profile | null) => {
     setShowAuth(false);
+    setAuthState("signed-in");
     // Clean up OAuth consent data from localStorage now that auth is complete
     try {
       localStorage.removeItem("grantrx_oauth_consent");
@@ -421,6 +468,8 @@ export default function Home() {
     setUsage(null);
     setFeed(null);
     setAuthToken(null);
+    setAuthState("anonymous");
+    setError("Please sign in to see matched opportunities.");
   };
 
   const leftPanelProps = {
@@ -661,6 +710,8 @@ export default function Home() {
             setUsage(null);
             setKanbanItems([]);
             setFeed(null);
+            setAuthToken(null);
+            setAuthState("anonymous");
             setShowProfileEdit(false);
             setShowOnboarding(false);
             setError("Your account has been permanently deleted.");
@@ -694,6 +745,7 @@ export default function Home() {
           setShowAccountSettings(false);
           setShowOnboarding(false);
           setAuthToken(null);
+          setAuthState("anonymous");
           setError("Your account has been permanently deleted.");
         }}
       />
