@@ -423,6 +423,17 @@ export default function Home() {
   };
 
   const handleAuthSuccess = (p: Profile | null) => {
+    // Defense-in-depth: "auth succeeded" callers must never promote the app
+    // to signed-in without a credential the API layer can actually send.
+    if (!getAuthToken()) {
+      console.warn(
+        "handleAuthSuccess called without an auth token — remaining signed out",
+      );
+      setShowAuth(false);
+      setAuthState("anonymous");
+      setError("Please sign in to see matched opportunities.");
+      return;
+    }
     setShowAuth(false);
     setAuthState("signed-in");
     // Clean up OAuth consent data from localStorage now that auth is complete

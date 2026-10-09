@@ -204,27 +204,40 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
           signUpError = signUpErr as Error;
         }
 
-        // If signUp succeeded but no session was returned, Supabase requires
-        // email confirmation — transition to the OTP verification screen.
-        if (!signUpError && signUpData?.user && !signUpData.session && !signUpData.user.email_confirmed_at) {
-          setPendingEmail(email.trim());
-          setVerifyScreen(true);
-          setSubmitting(false);
+        // Signup itself failed — surface the error and keep the form so the
+        // user can retry. Never advance without a session.
+        if (signUpError) {
+          setError(
+            signUpError.message ||
+              "Sign up failed. Please check your details and try again.",
+          );
           return;
         }
 
-        // Set the auth token for API calls if a session was returned
-        if (signUpData?.session?.access_token) {
-          setAuthToken(signUpData.session.access_token);
+        // If signUp succeeded but no session was returned, Supabase requires
+        // email confirmation — transition to the OTP verification screen.
+        if (signUpData?.user && !signUpData.session && !signUpData.user.email_confirmed_at) {
+          setPendingEmail(email.trim());
+          setVerifyScreen(true);
+          return;
         }
 
         if (signUpData?.session?.access_token) {
+          setAuthToken(signUpData.session.access_token);
           try {
             const created = await api.createProfile({ full_name: fullName.trim() || undefined, email: email.trim(), terms_accepted: true, privacy_accepted: true, marketing_opt_in: marketingOptIn });
             try { localStorage.setItem("grantrx_profile", JSON.stringify(created)); } catch {}
             onAuthSuccess(created);
           } catch { onAuthSuccess(null); }
-        } else { onAuthSuccess(null); }
+        } else {
+          // Ambiguous result: a user object without a usable session (e.g. an
+          // already-registered email, for which Supabase returns a confirmed
+          // user and sends no new verification email). Fail closed — stay
+          // signed out and let the user try signing in instead.
+          setError(
+            "We couldn't start a session for that email. If you already have an account, please sign in — otherwise check your inbox for a verification email.",
+          );
+        }
       } else {
         const { data, error: authError } =
           await supabase.auth.signInWithPassword({ email, password });
@@ -234,9 +247,13 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
           return;
         }
 
-        if (data.session?.access_token) {
-          setAuthToken(data.session.access_token);
+        // Fail closed: a successful sign-in must yield an access token.
+        if (!data.session?.access_token) {
+          setError("Sign in didn't return a session. Please try again.");
+          setSubmitting(false);
+          return;
         }
+        setAuthToken(data.session.access_token);
 
         // Advance user — profile will be loaded from Supabase or localStorage
         onAuthSuccess(null);
@@ -270,10 +287,13 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
         return;
       }
 
-      // Set the auth token if a session was created
-      if (data.session?.access_token) {
-        setAuthToken(data.session.access_token);
+      // Verification only counts if it established a session — fail closed.
+      if (!data.session?.access_token) {
+        setError("Verification didn't establish a session. Please try signing in.");
+        setSubmitting(false);
+        return;
       }
+      setAuthToken(data.session.access_token);
 
       let createdProfile: Profile | null = null;
       try {
@@ -359,10 +379,13 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
       });
       if (updateErr) throw updateErr;
 
-      // Set auth token if a session was established
-      if (data.session?.access_token) {
-        setAuthToken(data.session.access_token);
+      // A recovery session is required to continue — fail closed.
+      if (!data.session?.access_token) {
+        setError("Recovery didn't establish a session. Please request a new code and try again.");
+        setSubmitting(false);
+        return;
       }
+      setAuthToken(data.session.access_token);
 
       // 3. Complete and log in
       setSuccess("Password updated successfully! Signing you in...");
