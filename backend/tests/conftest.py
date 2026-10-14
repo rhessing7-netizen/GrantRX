@@ -25,6 +25,9 @@ TEST_JWT_SECRET = "test-jwt-secret-for-unit-tests"
 TEST_EMAIL = "testuser@grantrx.local"
 
 
+TEST_SUPABASE_URL = "https://test.supabase.co"
+
+
 def make_test_jwt(sub: str | UUID = DEMO_USER_ID, secret: str = TEST_JWT_SECRET) -> str:
     """Create a signed HS256 JWT that JWTMiddleware will accept."""
     now = datetime.now(timezone.utc)
@@ -33,6 +36,7 @@ def make_test_jwt(sub: str | UUID = DEMO_USER_ID, secret: str = TEST_JWT_SECRET)
         "email": TEST_EMAIL,
         "role": "authenticated",
         "aud": "authenticated",
+        "iss": f"{TEST_SUPABASE_URL}/auth/v1",
         "exp": now + timedelta(hours=1),
         "iat": now,
     }
@@ -41,8 +45,11 @@ def make_test_jwt(sub: str | UUID = DEMO_USER_ID, secret: str = TEST_JWT_SECRET)
 
 @pytest.fixture
 def jwt_secret():
-    """Provide SUPABASE_JWT_SECRET so the middleware can verify test JWTs."""
-    with patch.dict(os.environ, {"SUPABASE_JWT_SECRET": TEST_JWT_SECRET}):
+    """Provide SUPABASE_JWT_SECRET + SUPABASE_URL so the middleware can verify test JWTs."""
+    with patch.dict(os.environ, {
+        "SUPABASE_JWT_SECRET": TEST_JWT_SECRET,
+        "SUPABASE_URL": TEST_SUPABASE_URL,
+    }):
         yield TEST_JWT_SECRET
 
 

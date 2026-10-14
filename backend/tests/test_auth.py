@@ -29,6 +29,7 @@ from app.middleware.auth import DEMO_TOKEN, DEMO_USER_ID, JWTMiddleware, User
 # ---------------------------------------------------------------------------
 
 TEST_SECRET = "test-jwt-secret-for-unit-tests"
+TEST_SUPABASE_URL = "https://test.supabase.co"
 TEST_USER_ID = "12345678-1234-1234-1234-123456789012"
 TEST_EMAIL = "testuser@grantrx.local"
 
@@ -41,6 +42,7 @@ def _make_jwt(expired: bool = False, secret: str = TEST_SECRET) -> str:
         "email": TEST_EMAIL,
         "role": "authenticated",
         "aud": "authenticated",
+        "iss": f"{TEST_SUPABASE_URL}/auth/v1",
         "exp": now - timedelta(hours=1) if expired else now + timedelta(hours=1),
         "iat": now,
     }
@@ -64,7 +66,7 @@ def app_dev():
     def health():
         return {"status": "ok"}
 
-    with patch.dict(os.environ, {"ENVIRONMENT": "development", "ALLOW_DEMO_AUTH": "true", "SUPABASE_JWT_SECRET": TEST_SECRET}):
+    with patch.dict(os.environ, {"ENVIRONMENT": "development", "ALLOW_DEMO_AUTH": "true", "SUPABASE_JWT_SECRET": TEST_SECRET, "SUPABASE_URL": TEST_SUPABASE_URL}):
         yield app
 
 
@@ -81,7 +83,7 @@ def app_prod():
             return {"user_id": str(user.id), "role": user.role}
         return JSONResponse({"detail": "no user"}, status_code=401)
 
-    with patch.dict(os.environ, {"ENVIRONMENT": "production", "SUPABASE_JWT_SECRET": TEST_SECRET}):
+    with patch.dict(os.environ, {"ENVIRONMENT": "production", "SUPABASE_JWT_SECRET": TEST_SECRET, "SUPABASE_URL": TEST_SUPABASE_URL}):
         yield app
 
 
@@ -142,6 +144,7 @@ class TestDevModeAuth:
         monkeypatch.setenv("ENVIRONMENT", "development")
         monkeypatch.setenv("ALLOW_DEMO_AUTH", "true")
         monkeypatch.setenv("SUPABASE_JWT_SECRET", TEST_SECRET)
+        monkeypatch.setenv("SUPABASE_URL", TEST_SUPABASE_URL)
 
         app = FastAPI()
         app.add_middleware(JWTMiddleware)

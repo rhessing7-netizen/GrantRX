@@ -9,6 +9,11 @@ Usage:
     DATABASE_URL=postgresql://grantrx:grantrx@127.0.0.1:5433/grantrx \
     E2E_JWT_SECRET=e2e-local-test-secret-not-for-prod E2E_API=http://127.0.0.1:8001 \
         python e2e/api_boundaries.py
+
+The backend under test must run in production mode with:
+    SUPABASE_JWT_SECRET = E2E_JWT_SECRET
+    SUPABASE_URL = E2E_SUPABASE_URL  (default https://e2e-test.supabase.co)
+since issued tokens carry iss = {SUPABASE_URL}/auth/v1.
 """
 
 from __future__ import annotations
@@ -25,6 +30,9 @@ import jwt
 
 API = os.getenv("E2E_API", "http://127.0.0.1:8001")
 SECRET = os.getenv("E2E_JWT_SECRET", "e2e-local-test-secret-not-for-prod")
+# Must match the test backend's SUPABASE_URL — tokens must carry a valid issuer.
+E2E_SUPABASE_URL = os.getenv("E2E_SUPABASE_URL", "https://e2e-test.supabase.co")
+ISSUER = f"{E2E_SUPABASE_URL}/auth/v1"
 
 USER_A = "aaaaaaaa-1111-2222-3333-444444444444"
 USER_B = "bbbbbbbb-1111-2222-3333-444444444444"
@@ -44,6 +52,7 @@ def mint(uid: str, **extra) -> str:
     claims = {
         "sub": uid,
         "aud": "authenticated",
+        "iss": ISSUER,
         "role": "authenticated",
         "email": f"{uid[:8]}@e2e.test",
         "exp": int(time.time()) + 3600,
@@ -117,6 +126,8 @@ def main() -> int:
     check("expired JWT rejected", req("GET", "/me", exp)[0] == 401)
     bad_aud = mint(USER_A, aud="service_role")
     check("wrong audience rejected", req("GET", "/me", bad_aud)[0] == 401)
+    bad_iss = mint(USER_A, iss="https://evil.example.com/auth/v1")
+    check("wrong issuer rejected", req("GET", "/me", bad_iss)[0] == 401)
     forged = jwt.encode(
         {"sub": USER_A, "aud": "authenticated", "exp": int(time.time()) + 3600},
         "forged-secret", algorithm="HS256")
