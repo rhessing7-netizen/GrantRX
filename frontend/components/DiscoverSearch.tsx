@@ -28,7 +28,7 @@ export function DiscoverSearch({
   const quotaExhausted =
     !!usage && !usage.is_premium && usage.remaining !== null && usage.remaining <= 0;
   const searchDisabled = hasText && quotaExhausted;
-  const searchLimit = usage?.search_limit ?? 10;
+  const searchLimit = usage?.search_limit ?? 3;
   const inputId = `${idPrefix}-search`;
   const msgId = `${inputId}-msg`;
 
@@ -107,7 +107,8 @@ export function DiscoverSearch({
 
       {searchDisabled && (
         <p id={msgId} className="text-xs text-textMuted">
-          You&apos;ve used all {searchLimit} free keyword searches this week.{" "}
+          You&apos;ve used all {searchLimit} free keyword searches this week — every
+          match you already have stays fully visible.{" "}
           {onUpgrade && (
             <button onClick={onUpgrade} className="text-primary hover:underline">
               Upgrade to Premium

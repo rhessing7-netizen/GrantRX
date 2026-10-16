@@ -65,17 +65,16 @@ of human-readable strings is returned (e.g. `["Requires GPA >= 3.8",
 
 ### Free-Tier Access Control (`app/middleware/tier_guard.py`)
 
-- Free users: **10 explicit keyword searches per rolling 7-day window**. Filter changes, sorting, pagination, and profile/match refreshes do not consume keyword-search quota.
-- An 11th explicit keyword-search attempt returns **HTTP 402** with
+- Free users: **3 explicit keyword searches per rolling 7-day window**. Filter changes, sorting, pagination, and profile/match refreshes do not consume keyword-search quota.
+- A 4th explicit keyword-search attempt returns **HTTP 402** with
   `{"upgrade_required": true, "reason": "search_limit_reached", "reset_at": "..."}`.
-- For free users, only the **top 3** highest-scoring results are fully
-  visible. Results 4+ return masked titles/providers, `is_locked: true`,
-  and no `portal_url`.
-- Premium users: unlimited searches, no masking.
+- Every legitimately matched result is fully visible to every tier —
+  there is no subscription-based result masking, blurring, or locking.
+- Premium users: unlimited searches.
 
 ### Endpoints
 
-- `GET /api/scholarships/matched` — runs the matching engine and returns the tier-gated feed with `missing_criteria`. Only a non-empty explicit keyword query consumes search quota; ordinary match refreshes and facet changes are free.
+- `GET /api/scholarships/matched` — runs the matching engine and returns the full matched feed with `missing_criteria` (all results visible to every tier). Only a non-empty explicit keyword query consumes search quota; ordinary match refreshes and facet changes are free.
 - `GET /api/user/usage` — returns current search count, limit, and
   `reset_at` timestamp.
 

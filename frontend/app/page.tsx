@@ -635,16 +635,11 @@ export default function Home() {
                 {feed && (
                   <>
                     <p className="text-sm text-textMuted">
-                      {feed.total} opportunities matched · {feed.visible} visible
-                      {!isPremium && ` (free tier shows top ${feed.visible})`}
+                      {feed.total} opportunities matched · all fully visible
                     </p>
                     <ScholarshipFeed
                       results={filteredResults}
-                      isPremium={isPremium}
                       profile={profile}
-                      onUnlock={() =>
-                        openUpgrade("Unlock all matched opportunities with Premium.")
-                      }
                       onTrack={() => {
                         // Refresh kanban count silently
                         loadKanban();

@@ -163,7 +163,7 @@ class TestTurnCounterAndEscalation:
         with patch.object(
             support_service,
             "_llm_reply",
-            AsyncMock(return_value="Free tier gives 10 searches per week."),
+            AsyncMock(return_value="Free tier gives 3 searches per week."),
         ):
             resp = client.post(
                 "/api/v1/support/chat",

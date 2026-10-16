@@ -11,8 +11,8 @@ export type UpgradeModalProps = {
 };
 
 const FEATURES = [
-  { label: "Keyword Searches", free: "10 / week", premium: "Unlimited" },
-  { label: "Unmasked Direct Links", free: "Top 3 only", premium: "All results" },
+  { label: "Keyword Searches", free: "3 / week", premium: "Unlimited" },
+  { label: "All Matched Opportunities", free: "Included", premium: "Included" },
   { label: "Application Tracking", free: "3 active apps", premium: "Unlimited" },
   { label: "Calendar Sync (.ics)", free: "Included", premium: "Included" },
   { label: "Deadline Reminders", free: "Included", premium: "Included" },

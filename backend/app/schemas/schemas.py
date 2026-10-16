@@ -252,9 +252,9 @@ class MatchedScholarshipOut(BaseModel):
     deadline: Optional[str] = None
     score: int = Field(..., ge=0, le=100)
     missing_criteria: List[str] = []
-    is_locked: bool = False
-    masked_title: Optional[str] = None
-    masked_provider: Optional[str] = None
+    is_locked: bool = False  # kept for API compatibility — never True (no tier masking)
+    masked_title: Optional[str] = None  # legacy field — never populated
+    masked_provider: Optional[str] = None  # legacy field — never populated
     metro_restrictions: List[str] = []
     eligible_disciplines: List[str] = []
     # Employer / service-obligation informational fields (defaults keep

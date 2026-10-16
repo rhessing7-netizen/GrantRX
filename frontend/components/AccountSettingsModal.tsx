@@ -409,7 +409,7 @@ export function AccountSettingsModal({
                 <span className="text-xs text-textMuted">
                   {isPremium
                     ? "$10/mo or $79/yr"
-                    : "10 keyword searches per 7 days · 3 active applications"}
+                    : "3 keyword searches per 7 days · 3 active applications"}
                 </span>
               </div>
               {isPremium && stripeStatus && (
@@ -443,12 +443,6 @@ export function AccountSettingsModal({
                       <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.854 3.853 7.146-9.427a.75.75 0 011.05-.143z" clipRule="evenodd" />
                     </svg>
                     Unlimited active applications
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <svg className="mt-0.5 h-4 w-4 shrink-0 text-accentSoft" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.854 3.853 7.146-9.427a.75.75 0 011.05-.143z" clipRule="evenodd" />
-                    </svg>
-                    All matched results unmasked
                   </li>
                 </ul>
                 <button

@@ -1,27 +1,24 @@
-"""Free-tier access control: search quota, paywall, and result masking.
+"""Free-tier access control: search quota and paywall.
 
 Rules:
-  - Free tier: max 10 searches per 7-day rolling cycle.
-    * 11th attempt -> HTTP 402 with upgrade_required payload.
-    * Top 3 results are fully visible; results 4+ are masked
-      (title/provider hidden, `is_locked: true`, no portal_url).
-  - Premium tier: unlimited searches, no masking.
+  - Free tier: max 3 explicit non-empty keyword searches per 7-day rolling
+    cycle. The 4th attempt -> HTTP 402 with the paywall payload.
+    Every legitimately matched result is fully visible to every tier —
+    there is no subscription-based result masking, blurring, or locking.
+  - Premium tier: unlimited searches.
 """
 
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
-from typing import List
 
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from ..models.models import Profile
-from ..services.matcher import MatchResult
 
-FREE_SEARCH_LIMIT = 10
+FREE_SEARCH_LIMIT = 3
 SEARCH_CYCLE_DAYS = 7
-FREE_VISIBLE_RESULTS = 3
 FREE_ACTIVE_TRACKING_LIMIT = 3  # max active Kanban apps for free tier
 ACTIVE_TRACKING_STATUSES = ("in_progress", "submitted")
 
@@ -113,57 +110,3 @@ def consume_search(profile: Profile, db: Session, now: datetime | None = None) -
 
     profile.searches_used_this_week = used + 1
     db.commit()
-
-
-# ---------------------------------------------------------------------------
-# Result masking
-# ---------------------------------------------------------------------------
-
-
-def _mask_title(title: str) -> str:
-    """Obfuscate a scholarship title for locked free-tier results."""
-    if not title:
-        return "██████████"
-    # Keep first word, mask the rest
-    parts = title.split()
-    if len(parts) <= 1:
-        return title[0] + " " + "█" * max(6, len(title) - 2)
-    return parts[0] + " " + " ".join("█" * max(4, len(p)) for p in parts[1:])
-
-
-def _mask_provider(provider: str) -> str:
-    if not provider:
-        return "██████████"
-    return provider[0] + " " + "█" * max(4, len(provider) - 1)
-
-
-def apply_tier_gating(
-    profile: Profile,
-    results: List[MatchResult],
-) -> List[MatchResult]:
-    """Mask free-tier results beyond the top N. Premium users see everything."""
-    if profile.subscription_tier == "premium":
-        return results
-
-    masked: List[MatchResult] = []
-    for idx, r in enumerate(results):
-        if idx < FREE_VISIBLE_RESULTS:
-            masked.append(r)
-        else:
-            masked.append(
-                MatchResult(
-                    scholarship_id=r.scholarship_id,
-                    title=r.title,
-                    provider=r.provider,
-                    portal_url="",  # hide application link
-                    award_amount=r.award_amount,
-                    deadline=r.deadline,
-                    score=r.score,
-                    missing_criteria=r.missing_criteria,
-                    is_locked=True,
-                    masked_title=_mask_title(r.title),
-                    masked_provider=_mask_provider(r.provider),
-                    verification_status=r.verification_status,
-                )
-            )
-    return masked

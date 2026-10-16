@@ -17,7 +17,6 @@ from .middleware.auth import JWTMiddleware, User, get_current_user
 from .middleware.tier_guard import (
     ACTIVE_TRACKING_STATUSES,
     FREE_ACTIVE_TRACKING_LIMIT,
-    apply_tier_gating,
     consume_search,
     get_usage,
 )
@@ -701,14 +700,16 @@ def get_matched_scholarships(
             or any(q_lower in c.lower() for c in r.missing_criteria)
         ]
 
-    gated = apply_tier_gating(profile, raw_results)
+    # Every legitimately matched result is fully visible to every tier —
+    # no subscription-based masking, locking, or truncation.
+    gated = raw_results
 
     usage = get_usage(profile)
 
     return MatchedFeedOut(
         results=[MatchedScholarshipOut(**r.__dict__) for r in gated],
         total=len(raw_results),
-        visible=sum(1 for r in gated if not r.is_locked),
+        visible=len(gated),
         tier=profile.subscription_tier,
         searches_used_this_week=usage["searches_used_this_week"],
         search_limit=usage["search_limit"],

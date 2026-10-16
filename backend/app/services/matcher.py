@@ -94,9 +94,9 @@ class MatchResult:
     deadline: Optional[str]
     score: int  # 0-100
     missing_criteria: List[str] = field(default_factory=list)
-    is_locked: bool = False  # set by the tier guard, not the matcher
-    masked_title: Optional[str] = None
-    masked_provider: Optional[str] = None
+    is_locked: bool = False  # contract compatibility — always False (no tier masking)
+    masked_title: Optional[str] = None  # legacy field — always None
+    masked_provider: Optional[str] = None  # legacy field — always None
     metro_restrictions: List[str] = field(default_factory=list)
     eligible_disciplines: List[str] = field(default_factory=list)
     # Employer / service-obligation informational fields (defaults keep

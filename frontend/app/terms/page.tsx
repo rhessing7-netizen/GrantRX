@@ -97,15 +97,14 @@ export default function TermsPage() {
             <ul className="mt-3 space-y-2 text-sm leading-relaxed text-textMuted">
               <li>
                 <strong className="text-text">Free Tier:</strong> Includes
-                up to 10 keyword searches per rolling 7-day cycle, visibility of
-                the top 3 matched results per search, tracking of up to 3 active
-                applications, and basic missing-criteria feedback.
+                up to 3 keyword searches per rolling 7-day cycle, full
+                visibility of all legitimately matched results, tracking of up
+                to 3 active applications, and basic missing-criteria feedback.
               </li>
               <li>
                 <strong className="text-text">Premium Subscription:</strong>{" "}
                 Billed at $10/month or $79/year via Stripe. Includes unlimited
-                keyword searches, full unmasked result visibility, and
-                unlimited application tracking.
+                keyword searches and unlimited application tracking.
               </li>
             </ul>
             <p className="mt-3 text-sm leading-relaxed text-textMuted">

@@ -99,6 +99,8 @@ export interface MatchedScholarship {
   deadline: string | null;
   score: number;
   missing_criteria: string[];
+  // Legacy contract fields — always false/null. There is no tier-based
+  // result masking; kept only so older payloads still deserialize.
   is_locked: boolean;
   masked_title: string | null;
   masked_provider: string | null;

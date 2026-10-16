@@ -185,7 +185,7 @@ def _canned_reply(message: str) -> str:
     lowered = (message or "").lower()
     if any(k in lowered for k in ("quota", "search limit", "how many search")):
         return (
-            "Free-tier users get 10 keyword searches per week. Premium unlocks "
+            "Free-tier users get 3 keyword searches per week. Premium unlocks "
             "unlimited searches. Your quota resets automatically each week."
         )
     if any(k in lowered for k in ("match score", "scoring", "how is my score")):

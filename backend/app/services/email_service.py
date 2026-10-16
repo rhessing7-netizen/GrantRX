@@ -118,8 +118,7 @@ Plan: {plan_display}
 
 {"View your invoice: " + invoice_url if invoice_url else ""}
 
-You now have unlimited keyword searches, unlimited active applications,
-and full unmasked opportunity details.
+You now have unlimited keyword searches and unlimited active applications.
 
 Manage your subscription: {APP_URL}
 
@@ -131,7 +130,7 @@ Manage your subscription: {APP_URL}
 <p>Your EdFintia {plan_display} subscription has been charged successfully.</p>
 <p><strong>Amount:</strong> {amount_display}<br><strong>Plan:</strong> {plan_display}</p>
 {f'<p><a href="{invoice_url}">View your invoice</a></p>' if invoice_url else ''}
-<p>You now have unlimited keyword searches, unlimited active applications, and full unmasked opportunity details.</p>
+<p>You now have unlimited keyword searches and unlimited active applications.</p>
 <p><a href="{APP_URL}" style="background: #5C7AFF; color: #fff; padding: 12px 24px; border-radius: 999px; text-decoration: none; display: inline-block;">Manage Subscription</a></p>
 <p style="color: #64748b; font-size: 14px;">— The EdFintia Team</p>
 </body></html>"""

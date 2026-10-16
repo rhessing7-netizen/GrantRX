@@ -154,14 +154,16 @@ def main() -> int:
         check("feed loaded without crashing on empty profile",
               "opportunities matched" in t.lower() or "matched" in t.lower(),
               t[:150].replace("\n", " "))
-        check("locked/masked free-tier results present or all-visible note",
-              "free tier" in t.lower() or "visible" in t.lower())
+        check("all results fully visible (no tier masking)",
+              "visible" in t.lower() or "matched" in t.lower())
         n_cards = page.locator("[aria-label^='View details for']").count()
         check("opportunity cards rendered", n_cards >= 1, f"{n_cards}")
+        check("no locked/masked cards in feed",
+              page.locator("text=/unlock this opportunity/i").count() == 0)
 
-        # ---------- Keyword quota UX ----------
+        # ---------- Keyword quota UX (3 free searches / rolling 7d) ----------
         print("\n== Search quota UX ==")
-        set_demo_searches(8)
+        set_demo_searches(1)
         search_in = page.locator("input[placeholder*='Keyword']").first
         check("search input present", search_in.count() > 0)
         if search_in.count():
@@ -169,13 +171,13 @@ def main() -> int:
             page.locator("button[aria-label='Search']").first.click()
             page.wait_for_timeout(2500)
             st = demo_state()
-            check("UI search consumed quota (8->9)", st and st[0] == 9, str(st))
+            check("UI search consumed quota (1->2)", st and st[0] == 2, str(st))
             search_in.fill("grant")
             page.locator("button[aria-label='Search']").first.click()
             page.wait_for_timeout(2500)
             st = demo_state()
-            check("second search consumed (9->10)", st and st[0] == 10, str(st))
-            # 11th search at cap: search button disables, Enter is inert,
+            check("second search consumed (2->3)", st and st[0] == 3, str(st))
+            # 4th search at cap: search button disables, Enter is inert,
             # limit message + Upgrade link appear; clicking it opens the modal.
             search_in.fill("fellowship")
             page.wait_for_timeout(600)
@@ -184,10 +186,10 @@ def main() -> int:
             search_in.press("Enter")
             page.wait_for_timeout(1200)
             st = demo_state()
-            check("Enter at cap did not consume quota", st and st[0] == 10, str(st))
+            check("Enter at cap did not consume quota", st and st[0] == 3, str(st))
             t = body_text(page)
             check("limit message shown at cap",
-                  "limit reached" in t.lower() or "used all 10" in t.lower(),
+                  "limit reached" in t.lower() or "used all" in t.lower(),
                   t[:160].replace("\n", " "))
             up = page.locator("button:has-text('Upgrade to Premium')").first
             if up.count() and up.is_visible():
@@ -198,7 +200,7 @@ def main() -> int:
                   "premium" in t.lower() or "upgrade" in t.lower(),
                   t[:120].replace("\n", " "))
             st = demo_state()
-            check("blocked search did not consume", st and st[0] == 10, str(st))
+            check("blocked search did not consume", st and st[0] == 3, str(st))
             # close modal
             click_if_visible(page, "button[aria-label='Close'], button:has-text('✕'), button:has-text('Not now')")
             page.keyboard.press("Escape")
@@ -215,7 +217,7 @@ def main() -> int:
             page.wait_for_timeout(2500)
             t = body_text(page)
             check("quota state persists across reload",
-                  "10" in t or "0 of" in t or "limit" in t.lower())
+                  "3" in t or "0 of" in t or "limit" in t.lower())
         # reset for later sections
         set_demo_searches(0)
 

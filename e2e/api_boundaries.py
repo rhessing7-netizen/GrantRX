@@ -37,7 +37,7 @@ ISSUER = f"{E2E_SUPABASE_URL}/auth/v1"
 USER_A = "aaaaaaaa-1111-2222-3333-444444444444"
 USER_B = "bbbbbbbb-1111-2222-3333-444444444444"
 USER_FREE = "99999999-8888-7777-6666-555555555555"   # fixture: free, 1 search used
-USER_FULL = "11111111-2222-3333-4444-555555555555"   # fixture: free, 10 used (at cap)
+USER_FULL = "11111111-2222-3333-4444-555555555555"   # fixture: free, at search cap (>= FREE_SEARCH_LIMIT)
 USER_PREM = "22222222-3333-4444-5555-666666666666"   # fixture: premium
 
 RESULTS: list[tuple[str, bool, str]] = []
@@ -237,11 +237,11 @@ def main() -> int:
     code, _ = req("PATCH", f"/user-scholarships/{tr5.get('id')}", ta, {"status": "in_progress"})
     check("saved->in_progress allowed after archive", code == 200, f"{code}")
 
-    print("\n== 6. Search quota (10 per rolling 7d, server enforced) ==")
+    print("\n== 6. Search quota (3 per rolling 7d, server enforced) ==")
     tf, tp = mint(USER_FREE), mint(USER_PREM)
-    # fixture USER_FULL is already at 10 -> next search must 402
+    # fixture USER_FULL is already at the free cap (3) -> next search must 402
     code, body = req("GET", "/api/scholarships/matched?query=nursing", mint(USER_FULL))
-    check("user at 10 gets 402 on 11th search", code == 402, f"{code}")
+    check("user at cap gets 402 on next search", code == 402, f"{code}")
     if code == 402:
         d = body.get("detail", {})
         check("402 is paywall payload", isinstance(d, dict) and d.get("detail") == "PAYWALL_SEARCH_LIMIT_REACHED")
@@ -262,17 +262,19 @@ def main() -> int:
     check("keyword consumes exactly 1",
           after2.get("searches_used_this_week") == before.get("searches_used_this_week") + 1,
           f"{before.get('searches_used_this_week')} -> {after2.get('searches_used_this_week')}")
-    # free masking: results beyond top 3 locked
+    # all-results-visible: free tier has NO locking/masking of any kind
     code, feed = req("GET", "/api/scholarships/matched", tf)
     if code == 200 and feed.get("results"):
         locked = [r for r in feed["results"] if r.get("is_locked")]
-        vis = [r for r in feed["results"] if not r.get("is_locked")]
-        check("free tier: top 3 visible, rest masked",
-              len(vis) == 3 and all(r.get("portal_url") == "" for r in locked),
-              f"vis={len(vis)} locked={len(locked)}")
-        check("masked title obfuscated",
-              all(r.get("masked_title") for r in locked))
-    # premium: no quota, no masking
+        check("free tier: no results locked",
+              len(locked) == 0, f"locked={len(locked)}")
+        check("free tier: every result has apply link",
+              all(r.get("portal_url") for r in feed["results"]),
+              f"results={len(feed['results'])}")
+        check("free tier: visible == result count (no truncation)",
+              feed.get("visible") == len(feed["results"]),
+              f"visible={feed.get('visible')} results={len(feed['results'])}")
+    # premium: no quota
     code, before_p = req("GET", "/api/user/usage", tp)
     for _ in range(12):
         code, _ = req("GET", "/api/scholarships/matched?query=scholarship", tp)

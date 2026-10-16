@@ -412,7 +412,7 @@ export function LeftPanel({
                 <span className="font-semibold">
                   {usage.searches_used_this_week}
                 </span>{" "}
-                / {usage.search_limit ?? 10}
+                / {usage.search_limit ?? 3}
               </p>
               <div className="mt-2 h-2.5 overflow-hidden rounded-full bg-textMuted/15">
                 <div
@@ -445,7 +445,7 @@ export function LeftPanel({
         <section className="rounded-2xl bg-gradient-to-r from-accentSoft to-accent p-5 text-text">
           <h3 className="font-serif text-text font-bold text-base tracking-tight">Upgrade to Premium</h3>
           <p className="mt-1 text-sm">
-            Unlimited searches, unlimited active applications, and full unmasked results.
+            Unlimited keyword searches and unlimited active applications.
           </p>
           <button
             onClick={onUpgrade}

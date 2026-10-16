@@ -312,16 +312,20 @@ class TestSearchQuotaPaywall:
         consume_search(profile, db)  # should not raise
         assert profile.searches_used_this_week == 999  # unchanged
 
+    def test_free_search_limit_is_three_per_rolling_week(self):
+        """V1 policy: free tier gets exactly 3 keyword searches / 7-day cycle."""
+        assert FREE_SEARCH_LIMIT == 3
+
     def test_free_user_debited_below_limit(self):
         """Free users under the limit get their counter incremented."""
-        profile = _make_profile(searches_used_this_week=4)
+        profile = _make_profile(searches_used_this_week=1)
         db = MagicMock()
         consume_search(profile, db)
-        assert profile.searches_used_this_week == 5
+        assert profile.searches_used_this_week == 2
         db.commit.assert_called_once()
 
     def test_free_user_blocked_at_limit_with_402(self):
-        """The 11th search must raise HTTP 402 with PAYWALL_SEARCH_LIMIT_REACHED payload."""
+        """The 4th search must raise HTTP 402 with PAYWALL_SEARCH_LIMIT_REACHED payload."""
         profile = _make_profile(searches_used_this_week=FREE_SEARCH_LIMIT)
         db = MagicMock()
         with pytest.raises(HTTPException) as exc_info:

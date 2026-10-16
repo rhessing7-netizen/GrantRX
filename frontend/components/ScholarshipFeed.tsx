@@ -21,11 +21,9 @@ function isTypingTarget(target: EventTarget | null): boolean {
 
 export type ScholarshipFeedProps = {
   results: MatchedScholarship[];
-  isPremium: boolean;
   /** Student profile — used for the preview drawer's qualification breakdown. */
   profile?: Profile | null;
   onTrack?: (scholarshipId: string) => void;
-  onUnlock?: () => void;
 };
 
 // ---------------------------------------------------------------------------
@@ -75,7 +73,7 @@ function VerificationBadge({ status }: { status?: string }) {
   );
 }
 
-export const ScholarshipFeed = ({ results, isPremium, profile, onTrack, onUnlock }: ScholarshipFeedProps) => {
+export const ScholarshipFeed = ({ results, profile, onTrack }: ScholarshipFeedProps) => {
   const [tracking, setTracking] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"cards" | "list">("cards");
   // Read-only preview drawer opened by clicking a card / list row
@@ -205,7 +203,7 @@ export const ScholarshipFeed = ({ results, isPremium, profile, onTrack, onUnlock
           move(-1);
           break;
         case "s":
-          if (!hasSelection || !current || (current.is_locked && !isPremium)) return;
+          if (!hasSelection || !current) return;
           e.preventDefault();
           if (tracking !== current.scholarship_id) void handleTrack(current.scholarship_id);
           break;
@@ -220,7 +218,7 @@ export const ScholarshipFeed = ({ results, isPremium, profile, onTrack, onUnlock
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [visibleResults, clampedIndex, previewScholarship, isPremium, tracking, hasSelection, handleTrack, handleDismiss]);
+  }, [visibleResults, clampedIndex, previewScholarship, tracking, hasSelection, handleTrack, handleDismiss]);
 
   const registerCard = useCallback((id: string, el: HTMLElement | null) => {
     if (el) cardRefs.current.set(id, el);
@@ -313,9 +311,7 @@ export const ScholarshipFeed = ({ results, isPremium, profile, onTrack, onUnlock
             <ScholarshipCard
               key={s.scholarship_id}
               scholarship={s}
-              isPremium={isPremium}
               onTrack={handleTrack}
-              onUnlock={onUnlock}
               onDismiss={handleDismiss}
               onOpen={setPreviewScholarship}
               tracking={tracking === s.scholarship_id}
@@ -330,9 +326,7 @@ export const ScholarshipFeed = ({ results, isPremium, profile, onTrack, onUnlock
             <ScholarshipListItem
               key={s.scholarship_id}
               scholarship={s}
-              isPremium={isPremium}
               onTrack={handleTrack}
-              onUnlock={onUnlock}
               onDismiss={handleDismiss}
               onOpen={setPreviewScholarship}
               tracking={tracking === s.scholarship_id}
@@ -391,9 +385,7 @@ export const ScholarshipFeed = ({ results, isPremium, profile, onTrack, onUnlock
 
 function ScholarshipCard({
   scholarship,
-  isPremium,
   onTrack,
-  onUnlock,
   onDismiss,
   onOpen,
   tracking,
@@ -404,9 +396,7 @@ function ScholarshipCard({
   index = 0,
 }: {
   scholarship: MatchedScholarship;
-  isPremium: boolean;
   onTrack: (id: string) => void;
-  onUnlock?: () => void;
   onDismiss: (id: string, title: string) => void;
   onOpen: (scholarship: MatchedScholarship) => void;
   tracking: boolean;
@@ -420,7 +410,6 @@ function ScholarshipCard({
   const [reportOpen, setReportOpen] = useState(false);
   const [reportReason, setReportReason] = useState<"broken_link" | "inaccurate_deadline" | "expired">("broken_link");
   const [reportSubmitted, setReportSubmitted] = useState(false);
-  const locked = scholarship.is_locked && !isPremium;
   const bannerUrl = getBannerUrl(scholarship.eligible_disciplines);
   const providerInitial = (
     scholarship.provider?.trim()?.charAt(0) ||
@@ -439,7 +428,7 @@ function ScholarshipCard({
   };
 
   const openPreview = () => {
-    if (!locked) onOpen(scholarship);
+    onOpen(scholarship);
   };
 
   return (
@@ -450,9 +439,9 @@ function ScholarshipCard({
       onMouseEnter={onFocusCard}
       onFocus={onFocusCard}
       aria-label={`View details for ${scholarship.title}`}
-      className={`bg-white/95 rounded-2xl border border-border/90 shadow-[0_4px_20px_-4px_rgba(15,23,42,0.06)] hover:shadow-[0_12px_32px_-6px_rgba(87,74,226,0.16)] hover:-translate-y-1 hover:border-border transition-all duration-200 flex flex-col relative group ${
-        locked ? "ring-1 ring-textMuted/10" : "cursor-pointer"
-      } ${focused && !locked ? "ring-2 ring-secondary/60" : ""} ${
+      className={`bg-white/95 rounded-2xl border border-border/90 shadow-[0_4px_20px_-4px_rgba(15,23,42,0.06)] hover:shadow-[0_12px_32px_-6px_rgba(87,74,226,0.16)] hover:-translate-y-1 hover:border-border transition-all duration-200 flex flex-col relative group cursor-pointer ${
+        focused ? "ring-2 ring-secondary/60" : ""
+      } ${
         fading ? "opacity-0 scale-95 max-h-0 pointer-events-none overflow-hidden" : "opacity-100"
       }`}
     >
@@ -496,69 +485,56 @@ function ScholarshipCard({
         {/* Score badge + title row */}
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0 flex-1">
-            {locked ? (
-              <>
-                <h3 className="font-serif text-lg font-semibold text-text/40 blur-[3px] select-none">
-                  {scholarship.masked_title ?? scholarship.title}
-                </h3>
-                <p className="mt-0.5 text-sm text-textMuted/50 blur-[3px] select-none">
-                  {scholarship.masked_provider ?? scholarship.provider}
-                </p>
-              </>
-            ) : (
-              <>
-                <h3 className="font-serif text-text break-words font-bold text-lg leading-snug tracking-tight hover:text-secondary transition-colors">
-                  {scholarship.title}
-                </h3>
-                <p className="mt-0.5 text-textMuted max-w-full break-words font-semibold text-xs tracking-wider uppercase">
-                  {scholarship.provider}
-                </p>
-                {/* Metro restriction badges — soft glowing pills */}
-                {scholarship.metro_restrictions?.length > 0 && (
-                  <div className="mt-2 flex flex-wrap gap-1.5">
-                    {scholarship.metro_restrictions.map((m) => (
-                      <span
-                        key={m}
-                        className="inline-flex items-center gap-1 rounded-full bg-primary px-2.5 py-1 text-xs font-semibold text-surface"
-                      >
-                        <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 20 20">
-                          <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
-                        </svg>
-                        {getMetroShortName(m)} Area
-                      </span>
-                    ))}
-                  </div>
+            <h3 className="font-serif text-text break-words font-bold text-lg leading-snug tracking-tight hover:text-secondary transition-colors">
+              {scholarship.title}
+            </h3>
+            <p className="mt-0.5 text-textMuted max-w-full break-words font-semibold text-xs tracking-wider uppercase">
+              {scholarship.provider}
+            </p>
+            {/* Metro restriction badges — soft glowing pills */}
+            {scholarship.metro_restrictions?.length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {scholarship.metro_restrictions.map((m) => (
+                  <span
+                    key={m}
+                    className="inline-flex items-center gap-1 rounded-full bg-primary px-2.5 py-1 text-xs font-semibold text-surface"
+                  >
+                    <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
+                    </svg>
+                    {getMetroShortName(m)} Area
+                  </span>
+                ))}
+              </div>
+            )}
+            {/* Employer benefit & service-obligation chips */}
+            {(scholarship.has_service_commitment ||
+              scholarship.funding_type === "tuition_reimbursement" ||
+              scholarship.funding_type === "employer_sponsorship" ||
+              scholarship.employment_required) && (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {scholarship.has_service_commitment && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-accentSoft px-2.5 py-1 text-xs font-semibold text-secondary">
+                    <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 20 20">
+                      <path d="M9 12l2 2 4-4" />
+                      <path fillRule="evenodd" d="M3 10a7 7 0 1114 0 7 7 0 01-14 0zm7-5a5 5 0 100 10 5 5 0 000-10z" clipRule="evenodd" />
+                    </svg>
+                    Service Obligation
+                  </span>
                 )}
-                {/* Employer benefit & service-obligation chips */}
-                {(scholarship.has_service_commitment ||
-                  scholarship.funding_type === "tuition_reimbursement" ||
+                {(scholarship.funding_type === "tuition_reimbursement" ||
                   scholarship.funding_type === "employer_sponsorship" ||
                   scholarship.employment_required) && (
-                  <div className="mt-2 flex flex-wrap gap-1.5">
-                    {scholarship.has_service_commitment && (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-accentSoft px-2.5 py-1 text-xs font-semibold text-secondary">
-                        <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 20 20">
-                          <path d="M9 12l2 2 4-4" />
-                          <path fillRule="evenodd" d="M3 10a7 7 0 1114 0 7 7 0 01-14 0zm7-5a5 5 0 100 10 5 5 0 000-10z" clipRule="evenodd" />
-                        </svg>
-                        Service Obligation
-                      </span>
-                    )}
-                    {(scholarship.funding_type === "tuition_reimbursement" ||
-                      scholarship.funding_type === "employer_sponsorship" ||
-                      scholarship.employment_required) && (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-successSoft px-2.5 py-1 text-xs font-semibold text-success">
-                        <img
-                          src="/brand/icons/employer-programs.svg"
-                          alt=""
-                          className="h-3 w-3"
-                        />
-                        Employer Benefit
-                      </span>
-                    )}
-                  </div>
+                  <span className="inline-flex items-center gap-1 rounded-full bg-successSoft px-2.5 py-1 text-xs font-semibold text-success">
+                    <img
+                      src="/brand/icons/employer-programs.svg"
+                      alt=""
+                      className="h-3 w-3"
+                    />
+                    Employer Benefit
+                  </span>
                 )}
-              </>
+              </div>
             )}
           </div>
           <div className="flex shrink-0 items-start gap-2">
@@ -591,29 +567,7 @@ function ScholarshipCard({
           </div>
         </div>
 
-        {locked ? (
-          /* Paywall overlay */
-          <div className="mt-4 rounded-xl bg-surface/90 p-4 text-center backdrop-blur-md">
-            <span className="inline-block rounded-full bg-secondary px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
-              Premium
-            </span>
-            <p className="mt-2 text-sm font-medium text-text">
-              Unlock this opportunity
-            </p>
-            <p className="mt-1 text-xs text-textMuted">
-              Upgrade to Premium for full details, provider info, and application links.
-            </p>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onUnlock?.();
-              }}
-              className="mt-3 rounded-full bg-gradient-to-r from-accentSoft to-accent px-5 py-2 text-sm font-semibold text-text transition hover:opacity-90"
-            >
-              Unlock with Premium
-            </button>
-          </div>
-        ) : (
+        {
           <>
             {/* Details */}
             <div className="mt-4 flex flex-wrap gap-x-6 gap-y-1 text-sm">
@@ -720,7 +674,7 @@ function ScholarshipCard({
               )}
             </div>
           </>
-        )}
+        }
       </div>
     </article>
   );
@@ -732,9 +686,7 @@ function ScholarshipCard({
 
 function ScholarshipListItem({
   scholarship,
-  isPremium,
   onTrack,
-  onUnlock,
   onDismiss,
   onOpen,
   tracking,
@@ -744,9 +696,7 @@ function ScholarshipListItem({
   registerRef,
 }: {
   scholarship: MatchedScholarship;
-  isPremium: boolean;
   onTrack: (id: string) => void;
-  onUnlock?: () => void;
   onDismiss: (id: string, title: string) => void;
   onOpen: (scholarship: MatchedScholarship) => void;
   tracking: boolean;
@@ -755,9 +705,8 @@ function ScholarshipListItem({
   onFocusCard: () => void;
   registerRef: (id: string, el: HTMLElement | null) => void;
 }) {
-  const locked = scholarship.is_locked && !isPremium;
   const openPreview = () => {
-    if (!locked) onOpen(scholarship);
+    onOpen(scholarship);
   };
   const providerInitial = (
     scholarship.provider?.trim()?.charAt(0) ||
@@ -784,38 +733,13 @@ function ScholarshipListItem({
       onMouseEnter={onFocusCard}
       onFocus={onFocusCard}
       aria-label={`View details for ${scholarship.title}`}
-      className={`bg-white rounded-xl border border-border/90 shadow-xs hover:border-border hover:shadow-sm transition-all duration-150 p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 group ${
-        locked ? "" : "cursor-pointer"
-      } ${focused && !locked ? "ring-2 ring-secondary/60" : ""} ${
+      className={`bg-white rounded-xl border border-border/90 shadow-xs hover:border-border hover:shadow-sm transition-all duration-150 p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 group cursor-pointer ${
+        focused ? "ring-2 ring-secondary/60" : ""
+      } ${
         fading ? "opacity-0 scale-95 max-h-0 pointer-events-none" : "opacity-100"
       }`}
     >
-      {locked ? (
-        /* Paywalled list row — blurred with centered lock badge */
-        <div className="flex flex-1 items-center justify-center py-2">
-          <div className="flex items-center gap-3 text-textMuted">
-            <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-              <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-              <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-            </svg>
-            <span className="text-sm font-medium blur-[2px] select-none">
-              {scholarship.masked_title ?? scholarship.title}
-            </span>
-            <span className="inline-block rounded-full bg-secondary px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
-              Premium
-            </span>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onUnlock?.();
-              }}
-              className="rounded-full bg-gradient-to-r from-accentSoft to-accent px-4 py-1.5 text-xs font-semibold text-text transition hover:opacity-90"
-            >
-              Unlock with Premium
-            </button>
-          </div>
-        </div>
-      ) : (
+      {(
         <>
           {/* Left column — identity & details */}
           <div className="min-w-0 flex-1">
