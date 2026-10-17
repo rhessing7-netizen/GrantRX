@@ -351,7 +351,7 @@ def _to_db_dict(extract: ScholarshipExtract) -> dict:
         parse_date(extract.estimated_next_cycle) if extract.estimated_next_cycle else None
     )
 
-    return {
+    data = {
         "title": extract.title,
         "provider": extract.provider,
         "portal_url": extract.portal_url,
@@ -400,6 +400,9 @@ def _to_db_dict(extract: ScholarshipExtract) -> dict:
         "enrollment_statuses": getattr(extract, "enrollment_statuses", []) or [],
         "institution_restrictions": getattr(extract, "institution_restrictions", []) or [],
         "military_affiliation_requirement": getattr(extract, "military_affiliation_requirement", None),
+        # Grounded consumer narrative (migration 029) — NULL when the source
+        # couldn't support it or verification dropped it.
+        "public_description": getattr(extract, "public_description", None),
         "source_url": getattr(extract, "source_url", None),
         "extraction_method": getattr(extract, "source", None),
         "verification_status": getattr(extract, "verification_status", "legacy_unverified"),
@@ -407,6 +410,12 @@ def _to_db_dict(extract: ScholarshipExtract) -> dict:
         "verified_at": getattr(extract, "verified_at", None),
         "updated_at": datetime.utcnow(),
     }
+    if data["public_description"] is None:
+        # NULL means "this extraction produced no narrative" — not "the
+        # opportunity has none". Omit it so a refresh can never destroy a
+        # previously grounded description stored on the row.
+        del data["public_description"]
+    return data
 
 
 # Backwards-compatible aliases — the canonical implementation of opportunity

@@ -366,6 +366,20 @@ class LLMScholarship(BaseModel):
             "opportunities and do NOT invent track names."
         ),
     )
+    public_description: Optional[str] = Field(
+        None,
+        description=(
+            "A plain-language 1-3 paragraph summary answering 'What is this "
+            "opportunity?' — what it funds, who it supports, and what the "
+            "program's purpose is. STRICT GROUNDING: every fact, number, "
+            "name, requirement, and restriction in the description MUST be "
+            "stated on this page for THIS opportunity. Never invent or "
+            "restate facts not on the page, never copy a sibling "
+            "opportunity's facts, never include URLs or marketing slogans. "
+            "Return null when the page lacks enough material for a faithful "
+            "summary — a missing description is always acceptable."
+        ),
+    )
 
 
 class LLMOpportunityList(BaseModel):
@@ -553,6 +567,13 @@ SYSTEM_PROMPT = (
     "- Do NOT merge distinct named programs into one object.\n"
     "- Do NOT split one program into several objects merely because it has "
     "  multiple award amounts, tiers, or eligibility groups.\n"
+    "- Public description: a plain-language 1-3 paragraph summary answering "
+    "  'What is this opportunity?' — what it funds, who it supports, and the "
+    "  program's purpose. STRICT GROUNDING: every fact, number, name, and "
+    "  requirement in the description MUST appear on this page for THAT "
+    "  opportunity. Never include URLs, marketing slogans, or facts not on "
+    "  the page. Return null when the page lacks enough material — a missing "
+    "  description is always acceptable.\n"
     "- If ONE program offers named tracks or variants for different "
     "  professions/groups (e.g. one loan-forgiveness program with separate "
     "  nurse, physician, and pharmacist tracks), return it as ONE opportunity "
@@ -885,5 +906,28 @@ def llm_item_to_extract(result: LLMScholarship, url: str) -> ScholarshipExtract:
         enrollment_statuses=normalize_enrollment_statuses(result.enrollment_statuses),
         institution_restrictions=[s.strip() for s in (result.institution_restrictions or []) if s and s.strip()],
         military_affiliation_requirement=normalize_military_affiliation(result.military_affiliation_requirement),
+        # Raw narrative candidate — attach_verification independently checks
+        # its factual claims against the source text and drops ungrounded
+        # prose to NULL before persistence. URLs are stripped here so a
+        # description can never smuggle an application link into a public
+        # payload.
+        public_description=_sanitize_description(result.public_description),
         tracks=tracks,
     )
+
+
+_URL_LIKE = re.compile(r"(?:https?://|www\.)\S+", re.I)
+
+
+def _sanitize_description(value: Optional[str]) -> Optional[str]:
+    """First-pass hygiene for an LLM-produced public description.
+
+    Strips whitespace, rejects URL-bearing or trivially short text, and caps
+    length. Grounding against the source text happens separately in
+    ``verification._description_grounded`` — this only removes candidates
+    that are obviously unsuitable before that check runs.
+    """
+    text = (value or "").strip()
+    if len(text) < 40 or _URL_LIKE.search(text):
+        return None
+    return text[:4000]

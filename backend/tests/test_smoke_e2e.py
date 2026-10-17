@@ -143,6 +143,7 @@ def _make_scholarship(**kwargs):
         "enrollment_statuses": [],
         "institution_restrictions": [],
         "military_affiliation_requirement": None,
+        "public_description": None,
         "tracks": [],
         "source_url": None,
         "extraction_method": None,

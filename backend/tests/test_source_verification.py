@@ -11,7 +11,9 @@ def test_concrete_core_facts_are_verified_from_source_text():
     )
     result = verify_extract_against_source(extract, html)
     assert result["status"] == "verified"
-    assert set(result["fields"].values()) == {"verified"}
+    assert set(result["fields"].values()) == {"verified", "not_asserted"}
+    # The narrative field honestly reports no assertion on plain fact pages.
+    assert result["fields"]["public_description"] == "not_asserted"
 
 
 def test_hallucinated_amount_forces_review():

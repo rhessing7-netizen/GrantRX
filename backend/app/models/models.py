@@ -142,6 +142,11 @@ class Scholarship(Base):
     service_commitment_duration_months = Column(Integer, nullable=True)
     vendor_platform = Column(String, nullable=True)
 
+    # Consumer-facing narrative written during grounded extraction
+    # (migration 029). NULL is the normal state for records whose source
+    # material couldn't support a faithful summary — never fabricated.
+    public_description = Column(Text, nullable=True)
+
     # C8 eligibility dimensions — record-only (profiles don't collect these
     # attributes yet): persisted for display/notices, never hard gates.
     citizenship_requirement = Column(String, nullable=True)

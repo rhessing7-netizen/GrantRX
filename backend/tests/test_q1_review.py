@@ -456,7 +456,8 @@ class TestTrustRulesPreserved:
         out = await reevaluate_record(row, fetch=_fetch(pages))
         assert out.cleared
         assert set(row.verified_fields) == {
-            "title", "award_amount", "deadline", "min_gpa"}
+            "title", "award_amount", "deadline", "min_gpa",
+            "public_description"}
         assert all(isinstance(v, str) for v in row.verified_fields.values())
 
 

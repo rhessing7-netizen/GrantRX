@@ -109,6 +109,7 @@ class MatchResult:
     # Optional detail fields populated for the preview drawer. Defaults
     # keep existing feed payloads backward-compatible.
     provider_mission: Optional[str] = None
+    public_description: Optional[str] = None
     provider_core_values: List[str] = field(default_factory=list)
     eligible_credentials: List[str] = field(default_factory=list)
     min_gpa: Optional[float] = None
@@ -643,6 +644,7 @@ def match_scholarships(
                 annual_benefit_cap=getattr(s, "annual_benefit_cap", None),
                 vendor_platform=getattr(s, "vendor_platform", None),
                 provider_mission=_opt_str(getattr(s, "provider_mission", None)),
+                public_description=_opt_str(getattr(s, "public_description", None)),
                 provider_core_values=_str_list(getattr(s, "provider_core_values", None)),
                 eligible_credentials=_str_list(s.eligible_credentials),
                 min_gpa=_opt_float(s.min_gpa),

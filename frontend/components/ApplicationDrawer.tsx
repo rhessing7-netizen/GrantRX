@@ -417,6 +417,26 @@ function PreviewDrawer({
           </div>
         </section>
 
+        {/* Scholarship description — the same persisted grounded narrative
+            shown on the public detail page; omitted when none exists. */}
+        {s.public_description && (
+          <section>
+            <h3 className="mb-2 font-serif text-sm font-semibold text-text">
+              About This Opportunity
+            </h3>
+            <div className="space-y-2 rounded-xl border border-textMuted/10 bg-surfaceSubtle px-4 py-3">
+              {s.public_description
+                .split(/\n{2,}/)
+                .filter((p) => p.trim())
+                .map((p, i) => (
+                  <p key={i} className="text-sm leading-relaxed text-textMuted">
+                    {p}
+                  </p>
+                ))}
+            </div>
+          </section>
+        )}
+
         {/* Provider alignment & mission */}
         {(s.provider_mission || (s.provider_core_values?.length ?? 0) > 0) && (
           <section>

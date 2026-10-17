@@ -402,6 +402,10 @@ def attach_verification(extract: ScholarshipExtract, *, text: str, source_url: s
             object.__setattr__(extract, "eligible_disciplines", [scoped])
     result = verify_extract_against_text(extract, text)
     extract.source_url = source_url
+    # A narrative whose factual claims can't be located in the source text is
+    # dropped to NULL — persisted descriptions must only state source facts.
+    if result["fields"].get("public_description") == "unverified":
+        object.__setattr__(extract, "public_description", None)
     status = result["status"]
     if status == "verified" and _structural_review_flags(extract, text):
         status = "needs_review"

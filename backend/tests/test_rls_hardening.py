@@ -85,10 +85,13 @@ def _policy_blocks(sql: str) -> list[str]:
 def test_028_exists_and_is_latest_in_ordering():
     files = sorted(p.name for p in MIGRATIONS_DIR.glob("*.sql"))
     assert files, "no migration files found"
-    assert files[-1].startswith("028_"), (
-        f"expected 028 to sort last, found {files[-1]!r}"
-    )
     assert "028_rls_hardening.sql" in files
+    # 029 (public_description) superseded 028 as the latest migration — the
+    # assertion is pinned to that known successor rather than "028 last" so
+    # a future 030+ fails loudly until deliberately re-baselined.
+    assert files[-1].startswith("029_"), (
+        f"expected 029 to sort last, found {files[-1]!r}"
+    )
 
 
 def test_migrations_001_through_027_still_present():

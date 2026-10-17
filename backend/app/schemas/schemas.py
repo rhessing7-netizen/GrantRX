@@ -150,6 +150,9 @@ class ScholarshipBase(BaseModel):
     enrollment_statuses: List[str] = []
     institution_restrictions: List[str] = []
     military_affiliation_requirement: Optional[str] = None
+    # EdFintia's grounded consumer narrative (migration 029). NULL means no
+    # source-faithful summary exists — never a fabricated default.
+    public_description: Optional[str] = None
 
     @field_validator("enrollment_statuses", "institution_restrictions", mode="before")
     @classmethod
@@ -275,6 +278,10 @@ class PublicOpportunityOut(BaseModel):
     is_local: bool = False
     competition_level: str = "medium"
     matching_tags: List[str] = []
+    # Grounded consumer narrative — the same persisted field the
+    # authenticated contracts surface; NULL when no source-faithful
+    # summary exists.
+    public_description: Optional[str] = None
     required_affiliations: List[str] = []
     # Record-only eligibility dimensions
     citizenship_requirement: Optional[str] = None
@@ -390,6 +397,7 @@ class MatchedScholarshipOut(BaseModel):
     # Optional detail fields populated for the preview drawer. Defaults
     # keep existing feed payloads backward-compatible.
     provider_mission: Optional[str] = None
+    public_description: Optional[str] = None
     provider_core_values: List[str] = []
     eligible_credentials: List[str] = []
     min_gpa: Optional[float] = None

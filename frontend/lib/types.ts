@@ -116,6 +116,7 @@ export interface MatchedScholarship {
   // Optional detail fields populated for the preview drawer (backward
   // compatible — older feed payloads simply omit them).
   provider_mission?: string | null;
+  public_description?: string | null;
   provider_core_values?: string[];
   eligible_credentials?: string[];
   min_gpa?: number | null;
@@ -221,6 +222,10 @@ export interface PublicOpportunity {
   is_local: boolean;
   competition_level: string;
   matching_tags: string[];
+  /** EdFintia's grounded consumer narrative — NULL when the source couldn't
+   *  support a faithful summary. Persisted catalog data; never generated at
+   *  request time and never fabricated. */
+  public_description: string | null;
   required_affiliations: string[];
   citizenship_requirement: string | null;
   enrollment_statuses: string[];
@@ -292,6 +297,7 @@ export interface ScholarshipOut {
   estimated_next_cycle: string | null;
   provider_type: string | null;
   provider_mission: string | null;
+  public_description?: string | null;
   provider_core_values: string[];
   is_local: boolean;
   target_community: string | null;

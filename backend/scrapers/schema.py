@@ -191,6 +191,13 @@ class ScholarshipExtract(BaseModel):
         description="Canonical military-affiliation code or null when unstated.",
     )
 
+    # Consumer-facing narrative (migration 029): EdFintia's readable summary
+    # of the opportunity, produced only by grounded LLM extraction. The
+    # verification layer independently checks the narrative's factual claims
+    # against the source text and drops ungrounded text to NULL — persisted
+    # descriptions must never contain facts the source didn't state.
+    public_description: Optional[str] = None
+
     # Parent-program tracks (C8). Named variants of this one program — never
     # independently persisted opportunities.
     tracks: List[TrackExtract] = Field(default_factory=list)

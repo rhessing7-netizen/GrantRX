@@ -134,6 +134,7 @@ def _scholarship(**kw) -> SimpleNamespace:
         "enrollment_statuses": ["full_time"],
         "institution_restrictions": [],
         "military_affiliation_requirement": None,
+        "public_description": "A grant supporting rural nursing students.",
         "tracks": [{"title": "T", "detail_url": "https://x.example/leak"}],
     }
     defaults.update(kw)
@@ -413,6 +414,41 @@ class TestPublicDetail:
         compiled = [_compiled(c) for c in clauses]
         assert any("lifecycle_status" in c and lifecycle.PUBLISHED in c for c in compiled)
         assert any("verification_status" in c and "needs_review" in c for c in compiled)
+
+    def test_stored_public_description_is_returned(self, client):
+        """The persisted narrative reaches the public contract — real
+        catalog data, not generated on request."""
+        s = _scholarship(
+            public_description=(
+                "The Rural Health Scholarship funds nursing students who "
+                "commit to two years of clinical service in underserved "
+                "communities."
+            )
+        )
+        resp, _, _ = self._get(client, s)
+        assert resp.status_code == 200
+        assert resp.json()["public_description"] == s.public_description
+
+    def test_null_public_description_serializes_null(self, client):
+        """NULL descriptions are a valid state — the field serializes as
+        null, never as fabricated placeholder text."""
+        resp, _, _ = self._get(client, _scholarship(public_description=None))
+        assert resp.status_code == 200
+        assert resp.json()["public_description"] is None
+
+    def test_detail_get_never_invokes_llm(self, client):
+        """Descriptions are persisted data: a public detail GET must never
+        call the extraction LLM at request time."""
+        from scrapers import llm_parser
+
+        with patch.object(
+            llm_parser,
+            "extract_opportunities_with_llm",
+            side_effect=AssertionError("runtime LLM call on public detail"),
+        ) as llm:
+            resp, _, _ = self._get(client, _scholarship())
+        assert resp.status_code == 200
+        llm.assert_not_called()
 
     def test_only_scholarship_table_queried(self, client):
         resp, _, db = self._get(client, _scholarship())

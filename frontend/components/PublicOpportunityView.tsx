@@ -272,60 +272,29 @@ export function PublicOpportunityView({ id }: { id: string }) {
               </div>
             </div>
 
-            {/* Apply CTA — anonymous: opens auth; authenticated: official link */}
-            <section
-              aria-labelledby="apply-heading"
-              className="rounded-2xl border border-primary/20 bg-primary/5 p-6"
-            >
-              <h2 id="apply-heading" className="font-serif text-lg font-semibold text-text">
-                Ready to apply?
-              </h2>
-              {appUrl ? (
-                <>
-                  <p className="mt-1 text-sm text-textMuted">
-                    You&apos;ll complete this application on the provider&apos;s
-                    official website.
-                  </p>
-                  <a
-                    href={appUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="mt-4 inline-block rounded-full bg-primary px-6 py-2.5 text-sm font-medium text-surface transition hover:opacity-90"
-                  >
-                    Apply on the official site ↗
-                  </a>
-                </>
-              ) : appLinkLoading ? (
-                <p className="mt-3 text-sm text-textMuted">Checking your account…</p>
-              ) : appLinkFailed && getAuthToken() ? (
-                <>
-                  <p className="mt-1 text-sm text-textMuted">
-                    We couldn&apos;t load the application link.
-                  </p>
-                  <button
-                    type="button"
-                    onClick={loadAppLink}
-                    className="mt-4 rounded-full border border-primary px-5 py-2 text-sm font-medium text-primary transition hover:bg-primary/5"
-                  >
-                    Try again
-                  </button>
-                </>
-              ) : (
-                <>
-                  <p className="mt-1 text-sm text-textMuted">
-                    The official application link is available with any free
-                    EdFintia account.
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => setAuthOpen(true)}
-                    className="mt-4 rounded-full bg-primary px-6 py-2.5 text-sm font-medium text-surface transition hover:opacity-90"
-                  >
-                    Sign In / Create Free Account to Apply
-                  </button>
-                </>
-              )}
-            </section>
+            {/* Scholarship Description — the persisted grounded narrative.
+                Omitted entirely when the catalog has no description; never
+                substituted with placeholder text. */}
+            {opp.public_description && (
+              <section aria-labelledby="description-heading">
+                <h2
+                  id="description-heading"
+                  className="font-serif text-xl font-semibold text-text"
+                >
+                  Scholarship Description
+                </h2>
+                <div className="mt-3 space-y-3">
+                  {opp.public_description
+                    .split(/\n{2,}/)
+                    .filter((p) => p.trim())
+                    .map((p, i) => (
+                      <p key={i} className="text-sm leading-relaxed text-textMuted">
+                        {p}
+                      </p>
+                    ))}
+                </div>
+              </section>
+            )}
 
             {/* Opportunity overview — composed only from stored fields */}
             <section aria-labelledby="overview-heading">
@@ -514,6 +483,63 @@ export function PublicOpportunityView({ id }: { id: string }) {
                 </div>
               </section>
             )}
+
+            {/* Apply CTA — anonymous: opens auth; authenticated: official link.
+                Rendered AFTER the informational sections so visitors read the
+                opportunity before seeing the application action. */}
+            <section
+              aria-labelledby="apply-heading"
+              className="rounded-2xl border border-primary/20 bg-primary/5 p-6"
+            >
+              <h2 id="apply-heading" className="font-serif text-lg font-semibold text-text">
+                Ready to apply?
+              </h2>
+              {appUrl ? (
+                <>
+                  <p className="mt-1 text-sm text-textMuted">
+                    You&apos;ll complete this application on the provider&apos;s
+                    official website.
+                  </p>
+                  <a
+                    href={appUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-4 inline-block rounded-full bg-primary px-6 py-2.5 text-sm font-medium text-surface transition hover:opacity-90"
+                  >
+                    Apply on the official site ↗
+                  </a>
+                </>
+              ) : appLinkLoading ? (
+                <p className="mt-3 text-sm text-textMuted">Checking your account…</p>
+              ) : appLinkFailed && getAuthToken() ? (
+                <>
+                  <p className="mt-1 text-sm text-textMuted">
+                    We couldn&apos;t load the application link.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={loadAppLink}
+                    className="mt-4 rounded-full border border-primary px-5 py-2 text-sm font-medium text-primary transition hover:bg-primary/5"
+                  >
+                    Try again
+                  </button>
+                </>
+              ) : (
+                <>
+                  <p className="mt-1 text-sm text-textMuted">
+                    The official application link is available with any free
+                    EdFintia account.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setAuthOpen(true)}
+                    className="mt-4 rounded-full bg-primary px-6 py-2.5 text-sm font-medium text-surface transition hover:opacity-90"
+                  >
+                    Sign In / Create Free Account to Apply
+                  </button>
+                </>
+              )}
+            </section>
 
             {opp.matching_tags.length > 0 && (
               <section aria-labelledby="tags-heading">
