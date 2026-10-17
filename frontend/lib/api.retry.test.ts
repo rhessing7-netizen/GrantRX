@@ -140,6 +140,57 @@ test("showcase: anonymous callers reach the public endpoint (no token)", async (
   assert.equal(items[0].scholarship_id, "s1");
 });
 
+test("public detail: anonymous callers reach showcase/{id} (no token)", async () => {
+  setAuthToken(null);
+  let calls = 0;
+  let requestedUrl = "";
+  __setFetchImpl(((input: RequestInfo | URL) => {
+    calls++;
+    requestedUrl = String(input);
+    return Promise.resolve(jsonResponse({ scholarship_id: "s1", title: "T" }));
+  }) as typeof fetch);
+
+  const opp = await api.getShowcaseItem("abc-123");
+  assert.equal(calls, 1);
+  assert.match(requestedUrl, /\/api\/scholarships\/showcase\/abc-123$/);
+  assert.equal(opp.scholarship_id, "s1");
+});
+
+test("application link: anonymous callers rejected locally, no fetch", async () => {
+  setAuthToken(null);
+  let calls = 0;
+  __setFetchImpl((() => {
+    calls++;
+    return Promise.resolve(jsonResponse({ url: "https://provider.example" }));
+  }) as typeof fetch);
+
+  // The protected application-link path must never dispatch anonymously —
+  // this is the client-side half of the URL-secrecy boundary.
+  await assert.rejects(api.getApplicationLink("abc-123"), (err: unknown) => {
+    assert.equal((err as { status: number }).status, 401);
+    return true;
+  });
+  assert.equal(calls, 0);
+});
+
+test("application link: authenticated callers reach the protected endpoint", async () => {
+  let calls = 0;
+  let requestedUrl = "";
+  let authHeader: string | null = null;
+  __setFetchImpl(((input: RequestInfo | URL, init?: RequestInit) => {
+    calls++;
+    requestedUrl = String(input);
+    authHeader = new Headers(init?.headers).get("authorization");
+    return Promise.resolve(jsonResponse({ url: "https://provider.example/apply" }));
+  }) as typeof fetch);
+
+  const link = await api.getApplicationLink("abc-123");
+  assert.equal(calls, 1);
+  assert.match(requestedUrl, /\/api\/v1\/scholarships\/abc-123\/application-link$/);
+  assert.equal(authHeader, "Bearer test.jwt.token");
+  assert.equal(link.url, "https://provider.example/apply");
+});
+
 test("protected path: anonymous callers are rejected locally, no fetch", async () => {
   setAuthToken(null);
   let calls = 0;

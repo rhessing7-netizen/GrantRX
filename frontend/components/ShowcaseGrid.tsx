@@ -1,14 +1,16 @@
 'use client';
 
+import Link from "next/link";
 import type { ShowcaseItem } from "@/lib/types";
 
 /** Public Discovery Showcase — the signed-out Discover experience.
  *
  * Renders the real catalog sample served by GET /api/scholarships/showcase.
  * These are NOT personalized matches: no score, criteria, tracking, or any
- * user state is shown. Account-gated actions (Save, personalized details)
- * open the sign-in modal via onRequireAuth; Apply remains a plain public
- * external link to the provider portal.
+ * user state is shown. "View Details" opens the EdFintia-hosted public
+ * opportunity page; account-gated actions (Save) open the sign-in modal via
+ * onRequireAuth. The external application URL is never sent to anonymous
+ * clients — it is revealed only after authentication.
  */
 
 interface ShowcaseGridProps {
@@ -131,14 +133,12 @@ function ShowcaseCard({
         </div>
 
         <div className="mt-auto flex items-center gap-2 pt-4">
-          <a
-            href={item.portal_url}
-            target="_blank"
-            rel="noopener noreferrer"
+          <Link
+            href={`/scholarships/${item.scholarship_id}`}
             className="rounded-full bg-primary px-4 py-2 text-sm font-medium text-surface transition hover:opacity-90"
           >
-            Apply
-          </a>
+            View Details
+          </Link>
           <button
             type="button"
             onClick={onRequireAuth}

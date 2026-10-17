@@ -167,12 +167,12 @@ export interface MatchedFeed {
 
 /** Public showcase item — the slim whitelisted catalog card served to
  *  anonymous visitors. Intentionally carries no score, eligibility
- *  reasoning, or any per-user state. */
+ *  reasoning, any per-user state, or the external application URL — the
+ *  official apply link is an authenticated-only value. */
 export interface ShowcaseItem {
   scholarship_id: string;
   title: string;
   provider: string;
-  portal_url: string;
   award_amount: number | null;
   deadline: string | null;
   eligible_disciplines: string[];
@@ -182,6 +182,57 @@ export interface ShowcaseItem {
   has_service_commitment: boolean;
   employment_required: boolean;
   verification_status: string;
+}
+
+/** Public opportunity detail — the whitelisted EdFintia-hosted summary of
+ *  one discoverable catalog record. Same no-URL discipline: no portal_url,
+ *  provider links, tracks, or internals. */
+export interface PublicOpportunity {
+  scholarship_id: string;
+  title: string;
+  provider: string;
+  award_amount: number | null;
+  deadline: string | null;
+  estimated_next_cycle: string | null;
+  eligible_disciplines: string[];
+  eligible_credentials: string[];
+  academic_levels: string[];
+  is_general_major: boolean;
+  min_gpa: number;
+  max_sai: number | null;
+  scope: string | null;
+  state_restrictions: string[];
+  county_restrictions: string[];
+  city_restrictions: string[];
+  metro_restrictions: string[];
+  funding_type: string | null;
+  employment_required: boolean;
+  min_employment_tenure_months: number | null;
+  annual_benefit_cap: number | null;
+  benefit_coverage_model: string | null;
+  partner_network: string | null;
+  has_service_commitment: boolean;
+  service_commitment_duration_months: number | null;
+  vendor_platform: string | null;
+  provider_type: string | null;
+  provider_mission: string | null;
+  provider_core_values: string[];
+  target_community: string | null;
+  is_local: boolean;
+  competition_level: string;
+  matching_tags: string[];
+  required_affiliations: string[];
+  citizenship_requirement: string | null;
+  enrollment_statuses: string[];
+  institution_restrictions: string[];
+  military_affiliation_requirement: string | null;
+  verification_status: string;
+}
+
+/** Official provider application URL — returned only by the authenticated
+ *  application-link endpoint (free and premium alike). */
+export interface ApplicationLink {
+  url: string;
 }
 
 export interface Usage {

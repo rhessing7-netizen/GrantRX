@@ -170,7 +170,23 @@ export async function GET(request: Request) {
   // Clear the consent cookie now that it's been consumed
   cookieStore.set("grantrx_consent", "", { maxAge: 0, path: "/" });
 
-  // Route returning users to "/" and new users to "/?onboarding=open"
+  // Return-context cookie (set by AuthModal before OAuth on a public
+  // opportunity detail page). Validated against an allowlist-shaped regex —
+  // never an open redirect. Cleared once consumed.
+  let returnPath: string | null = null;
+  const returnCookie = cookieStore.get("grantrx_auth_return");
+  if (returnCookie?.value && /^\/scholarships\/[\w-]+$/.test(returnCookie.value)) {
+    returnPath = returnCookie.value;
+  }
+  cookieStore.set("grantrx_auth_return", "", { maxAge: 0, path: "/" });
+
+  // Route returning users to "/" and new users to "/?onboarding=open";
+  // a valid return path takes precedence so OAuth sign-ins from a public
+  // opportunity detail land back on the same opportunity.
+  if (returnPath) {
+    const suffix = profileExists ? "" : "?onboarding=open";
+    return NextResponse.redirect(`${requestUrl.origin}${returnPath}${suffix}`);
+  }
   if (profileExists) {
     return NextResponse.redirect(`${requestUrl.origin}/`);
   }

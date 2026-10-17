@@ -13,6 +13,8 @@ import type {
   Profile,
   ProfileCreate,
   ProfileUpdate,
+  PublicOpportunity,
+  ApplicationLink,
   ShowcaseItem,
   StudentCollegeBudgetUpdate,
   SupportChatResponse,
@@ -84,7 +86,9 @@ function isPublicPath(path: string): boolean {
   return (
     PUBLIC_PATHS.has(pathname) ||
     pathname.startsWith("/api/calendar/feed.ics") ||
-    pathname.startsWith("/api/billing/webhook")
+    pathname.startsWith("/api/billing/webhook") ||
+    // Public opportunity detail: /api/scholarships/showcase/{id}
+    pathname.startsWith("/api/scholarships/showcase/")
   );
 }
 
@@ -274,6 +278,22 @@ export const api = {
   // no token, profile, quota, or tracking is involved.
   getShowcase: (hooks?: { onRetry?: () => void }) =>
     request<ShowcaseItem[]>("/api/scholarships/showcase", {}, hooks),
+
+  // Public opportunity detail — same public, whitelisted contract; never
+  // includes the external application URL.
+  getShowcaseItem: (id: string, hooks?: { onRetry?: () => void }) =>
+    request<PublicOpportunity>(
+      `/api/scholarships/showcase/${id}`,
+      {},
+      hooks,
+    ),
+
+  // Official provider application link — authenticated endpoint (free and
+  // premium alike). Anonymous callers are rejected locally before dispatch.
+  getApplicationLink: (id: string) =>
+    request<ApplicationLink>(
+      `/api/v1/scholarships/${id}/application-link`,
+    ),
 
   // Onboarding live-matching projection (public — runs before a profile exists)
   previewMatchCount: (data: MatchPreviewRequest, signal?: AbortSignal) =>

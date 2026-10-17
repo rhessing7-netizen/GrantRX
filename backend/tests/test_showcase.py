@@ -37,7 +37,6 @@ EXPECTED_KEYS = {
     "scholarship_id",
     "title",
     "provider",
-    "portal_url",
     "award_amount",
     "deadline",
     "eligible_disciplines",
@@ -49,9 +48,14 @@ EXPECTED_KEYS = {
     "verification_status",
 }
 
-# Fields that must never appear in the public payload.
+# Fields that must never appear in ANY public payload. portal_url is the
+# gated value: it is revealed only via the authenticated application-link
+# endpoint, never in showcase or public detail responses.
 FORBIDDEN_KEYS = {
     "id",
+    "portal_url",
+    "application_url",
+    "url",
     "identity_key",
     "identity_fallback_key",
     "source_url",
@@ -69,6 +73,7 @@ FORBIDDEN_KEYS = {
     "is_dismissed",
     "tracking_id",
     "user_id",
+    "tracks",
 }
 
 
@@ -101,6 +106,35 @@ def _scholarship(**kw) -> SimpleNamespace:
         "lifecycle_status": lifecycle.PUBLISHED,
         "archive_reason": None,
         "is_archived": False,
+        # Detail-surface fields
+        "estimated_next_cycle": None,
+        "eligible_credentials": ["BSN"],
+        "academic_levels": ["undergraduate"],
+        "is_general_major": False,
+        "min_gpa": 3.0,
+        "max_sai": 12000,
+        "scope": "state",
+        "state_restrictions": ["TX"],
+        "county_restrictions": [],
+        "city_restrictions": [],
+        "min_employment_tenure_months": None,
+        "annual_benefit_cap": None,
+        "benefit_coverage_model": None,
+        "partner_network": None,
+        "service_commitment_duration_months": None,
+        "vendor_platform": None,
+        "provider_type": "nonprofit",
+        "provider_mission": "Supporting rural nurses.",
+        "provider_core_values": ["service"],
+        "target_community": None,
+        "is_local": False,
+        "competition_level": "medium",
+        "required_affiliations": [],
+        "citizenship_requirement": None,
+        "enrollment_statuses": ["full_time"],
+        "institution_restrictions": [],
+        "military_affiliation_requirement": None,
+        "tracks": [{"title": "T", "detail_url": "https://x.example/leak"}],
     }
     defaults.update(kw)
     return SimpleNamespace(**defaults)
@@ -302,3 +336,154 @@ class TestSelectionRotationCache:
         ):
             resp = client.get(SHOWCASE_PATH)
         assert resp.status_code == 429
+
+
+# ---------------------------------------------------------------------------
+# Public opportunity detail — GET /api/scholarships/showcase/{id}
+# ---------------------------------------------------------------------------
+
+DETAIL_PATH_TEMPLATE = SHOWCASE_PATH + "/{sid}"
+
+
+def _detail_db(scholarship):
+    """Mock DB for the single-record detail query chain (filter…first())."""
+    db = MagicMock()
+    q = MagicMock()
+    q.filter.return_value = q
+    q.first.return_value = scholarship
+    db.query.return_value = q
+    return db, q
+
+
+class TestPublicDetail:
+    def _get(self, client, scholarship):
+        sid = scholarship.id if scholarship else uuid4()
+        db, q = _detail_db(scholarship)
+        _override_db(db)
+        return client.get(DETAIL_PATH_TEMPLATE.format(sid=sid)), q, db
+
+    def test_anonymous_200_whitelisted_fields(self, client):
+        s = _scholarship()
+        resp, _, _ = self._get(client, s)
+        assert resp.status_code == 200
+        item = resp.json()
+        assert item["scholarship_id"] == str(s.id)
+        assert item["title"] == "Sample Opportunity"
+        assert item["provider_mission"] == "Supporting rural nurses."
+        # Real structured eligibility data present.
+        assert item["state_restrictions"] == ["TX"]
+        assert item["eligible_credentials"] == ["BSN"]
+        assert item["min_gpa"] == 3.0
+
+    def test_no_application_url_or_internals_anywhere(self, client):
+        resp, _, _ = self._get(client, _scholarship())
+        item = resp.json()
+        assert FORBIDDEN_KEYS.isdisjoint(item.keys())
+        # Belt-and-suspenders: scan the raw body for URL-looking strings
+        # that could smuggle a provider link.
+        body = resp.text
+        for url in ("example.org/apply", "x.example/leak", "internal.source"):
+            assert url not in body
+
+    def test_unknown_fields_serialize_cleanly(self, client):
+        s = _scholarship(
+            award_amount=None, deadline=None, provider_mission=None,
+            funding_type=None, scope=None, min_gpa=0.0,
+        )
+        resp, _, _ = self._get(client, s)
+        assert resp.status_code == 200
+        item = resp.json()
+        assert item["award_amount"] is None
+        assert item["deadline"] is None
+        assert item["funding_type"] is None
+
+    def test_missing_record_404(self, client):
+        resp, _, _ = self._get(client, None)
+        assert resp.status_code == 404
+
+    def test_discoverable_filter_applied_to_id_lookup(self, client):
+        """The id query must ALSO carry both discoverable clauses."""
+        resp, q, _ = self._get(client, _scholarship())
+        assert resp.status_code == 200
+        clauses = [
+            c
+            for call in q.filter.call_args_list
+            for c in call.args
+        ]
+        compiled = [_compiled(c) for c in clauses]
+        assert any("lifecycle_status" in c and lifecycle.PUBLISHED in c for c in compiled)
+        assert any("verification_status" in c and "needs_review" in c for c in compiled)
+
+    def test_only_scholarship_table_queried(self, client):
+        resp, _, db = self._get(client, _scholarship())
+        assert resp.status_code == 200
+        assert [c.args[0] for c in db.query.call_args_list] == [Scholarship]
+
+    def test_cache_control_public(self, client):
+        resp, _, _ = self._get(client, _scholarship())
+        assert resp.headers["Cache-Control"] == "public, max-age=300"
+
+    def test_rate_limited_429(self, client):
+        with patch.object(showcase_rate_limiter, "allow", return_value=False):
+            resp = client.get(DETAIL_PATH_TEMPLATE.format(sid=uuid4()))
+        assert resp.status_code == 429
+
+
+# ---------------------------------------------------------------------------
+# Authenticated application link — GET /api/v1/scholarships/{id}/application-link
+# ---------------------------------------------------------------------------
+
+APP_LINK_TEMPLATE = "/api/v1/scholarships/{sid}/application-link"
+
+
+class TestApplicationLink:
+    def test_anonymous_401_no_token(self, client):
+        """Anonymous requests are rejected by the middleware before the
+        endpoint runs — the URL never reaches an unauthenticated client.
+        Production middleware path forced so a dev-mode ambient env can't
+        turn an unauthenticated request into a demo-user request."""
+        import os
+
+        with patch.dict(os.environ, {"ENVIRONMENT": "production"}):
+            resp = client.get(APP_LINK_TEMPLATE.format(sid=uuid4()))
+        assert resp.status_code == 401
+
+    def test_application_link_not_publicly_allowlisted(self):
+        """The route must never appear in the public allowlists — its
+        protection is middleware-level, and allowing it would leak the URL
+        to anonymous callers without any code noticing."""
+        from app.middleware.auth import PUBLIC_PREFIXES
+
+        assert not any(
+            APP_LINK_TEMPLATE.format(sid="x").startswith(p)
+            for p in PUBLIC_PREFIXES
+        )
+        assert APP_LINK_TEMPLATE.format(sid="x") not in PUBLIC_PATHS
+
+    def test_authenticated_gets_official_url(self, authenticated_client_factory):
+        s = _scholarship()
+        db, _ = _detail_db(s)
+        _override_db(db)
+        authed = authenticated_client_factory(app)
+        resp = authed.get(APP_LINK_TEMPLATE.format(sid=s.id))
+        assert resp.status_code == 200
+        assert resp.json() == {"url": "https://example.org/apply"}
+
+    def test_free_and_premium_treated_identically(self, authenticated_client_factory):
+        """No tier gate: the endpoint never queries profiles/subscriptions,
+        so free and premium users get the same response."""
+        s = _scholarship()
+        db, _ = _detail_db(s)
+        _override_db(db)
+        authed = authenticated_client_factory(app)
+        resp = authed.get(APP_LINK_TEMPLATE.format(sid=s.id))
+        assert resp.status_code == 200
+        queried = [c.args[0] for c in db.query.call_args_list]
+        assert queried == [Scholarship]  # no Profile/subscription lookup
+
+    def test_non_discoverable_404(self, authenticated_client_factory):
+        db, _ = _detail_db(None)
+        _override_db(db)
+        authed = authenticated_client_factory(app)
+        resp = authed.get(APP_LINK_TEMPLATE.format(sid=uuid4()))
+        assert resp.status_code == 404

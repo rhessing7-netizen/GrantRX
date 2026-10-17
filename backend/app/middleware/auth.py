@@ -32,6 +32,10 @@ PUBLIC_PATHS = {
 PUBLIC_PREFIXES = (
     "/api/calendar/feed.ics",
     "/api/billing/webhook",
+    # Public opportunity detail — read-only, discoverable records only.
+    # Trailing slash scopes the prefix to the detail route; the sibling
+    # /api/scholarships/* authenticated endpoints stay protected.
+    "/api/scholarships/showcase/",
 )
 
 # ---------------------------------------------------------------------------

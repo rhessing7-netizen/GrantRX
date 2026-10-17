@@ -31,6 +31,7 @@ from .models.models import (
     WaitlistLead,
 )
 from .schemas.schemas import (
+    ApplicationLinkOut,
     CalendarEventOut,
     CalendarFeedOut,
     CancellationFeedbackCreate,
@@ -48,6 +49,7 @@ from .schemas.schemas import (
     ProfileCreate,
     ProfileOut,
     ProfileUpdate,
+    PublicOpportunityOut,
     ScholarshipCreate,
     ScholarshipOut,
     ScholarshipReportCreate,
@@ -406,6 +408,77 @@ def get_showcase(
     _showcase_cache.clear()
     _showcase_cache[seed] = items
     return items
+
+
+@app.get(
+    "/api/scholarships/showcase/{scholarship_id}",
+    response_model=PublicOpportunityOut,
+)
+def get_public_opportunity(
+    scholarship_id: UUID,
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db),
+):
+    """Public EdFintia-hosted detail for ONE discoverable opportunity.
+
+    Same eligibility contract as the showcase — discoverable-only at the
+    SQL layer; draft/stale/archived/needs_review records return 404 rather
+    than leaking. The response schema whitelists consumer-facing catalog
+    fields and never includes the external application URL.
+    """
+    client_host = request.client.host if request.client else "unknown"
+    if not showcase_rate_limiter.allow(client_host):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many requests. Please try again in a few minutes.",
+        )
+    response.headers["Cache-Control"] = f"public, max-age={SHOWCASE_CACHE_SECONDS}"
+    scholarship = (
+        db.query(Scholarship)
+        .filter(Scholarship.id == scholarship_id)
+        .filter(*lifecycle.discoverable_filters(Scholarship))
+        .first()
+    )
+    if scholarship is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Opportunity not found",
+        )
+    return scholarship
+
+
+@app.get(
+    "/api/v1/scholarships/{scholarship_id}/application-link",
+    response_model=ApplicationLinkOut,
+)
+def get_application_link(
+    scholarship_id: UUID,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Reveal the official provider application URL — authenticated only.
+
+    Free and premium users are equally entitled; this is an auth gate, not
+    a tier gate, so no profile/subscription is consulted and no quota is
+    consumed. Non-discoverable records return 404 — the public/detail
+    contract hides them entirely, so this endpoint does the same rather
+    than confirming existence. Tracked records that later leave discovery
+    keep their URL through the authenticated UserScholarshipOut payload,
+    which is the established channel for tracked historical items.
+    """
+    scholarship = (
+        db.query(Scholarship)
+        .filter(Scholarship.id == scholarship_id)
+        .filter(*lifecycle.discoverable_filters(Scholarship))
+        .first()
+    )
+    if scholarship is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Opportunity not found",
+        )
+    return ApplicationLinkOut(url=scholarship.portal_url)
 
 
 @app.post("/scholarships", response_model=ScholarshipOut, status_code=status.HTTP_201_CREATED)

@@ -195,8 +195,10 @@ class ShowcaseItemOut(BaseModel):
     """Slim public catalog card for the anonymous Discovery showcase.
 
     Deliberately whitelisted — catalog display fields only. Identity keys,
-    source/crawler internals, match scores, eligibility reasoning, and any
-    per-user state (tracking, dismissal) must never appear in this payload.
+    source/crawler internals, match scores, eligibility reasoning, any
+    per-user state (tracking, dismissal), and — critically — the external
+    application URL (portal_url) must never appear in this payload. The
+    official apply link is revealed only through an authenticated endpoint.
     Unknown award/deadline serialize as null; values are never invented.
     """
 
@@ -205,7 +207,6 @@ class ShowcaseItemOut(BaseModel):
     scholarship_id: UUID = Field(validation_alias="id")
     title: str
     provider: str
-    portal_url: str
     award_amount: Optional[int] = None
     deadline: Optional[date] = None
     eligible_disciplines: List[str] = []
@@ -223,6 +224,93 @@ class ShowcaseItemOut(BaseModel):
     def _none_to_list(cls, v):
         # ORM array columns can read None on un-flushed objects.
         return v or []
+
+
+class PublicOpportunityOut(BaseModel):
+    """Full public detail view for one discoverable opportunity.
+
+    Same whitelist discipline as ShowcaseItemOut, expanded with the
+    consumer-facing catalog fields that make a useful EdFintia-hosted
+    summary. portal_url, tracks (which carry provider detail links),
+    identity keys, and source internals are deliberately absent — the
+    application URL is an authenticated-only value.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    scholarship_id: UUID = Field(validation_alias="id")
+    title: str
+    provider: str
+    award_amount: Optional[int] = None
+    deadline: Optional[date] = None
+    estimated_next_cycle: Optional[date] = None
+    # Eligibility / academic
+    eligible_disciplines: List[str] = []
+    eligible_credentials: List[str] = []
+    academic_levels: List[str] = []
+    is_general_major: bool = False
+    min_gpa: float = 0.0
+    max_sai: Optional[int] = None
+    # Geography — null scope = never established, not "national"
+    scope: Optional[str] = None
+    state_restrictions: List[str] = []
+    county_restrictions: List[str] = []
+    city_restrictions: List[str] = []
+    metro_restrictions: List[str] = []
+    # Funding & commitments
+    funding_type: Optional[str] = None
+    employment_required: bool = False
+    min_employment_tenure_months: Optional[int] = None
+    annual_benefit_cap: Optional[int] = None
+    benefit_coverage_model: Optional[str] = None
+    partner_network: Optional[str] = None
+    has_service_commitment: bool = False
+    service_commitment_duration_months: Optional[int] = None
+    vendor_platform: Optional[str] = None
+    # Provider context & discovery
+    provider_type: Optional[str] = None
+    provider_mission: Optional[str] = None
+    provider_core_values: List[str] = []
+    target_community: Optional[str] = None
+    is_local: bool = False
+    competition_level: str = "medium"
+    matching_tags: List[str] = []
+    required_affiliations: List[str] = []
+    # Record-only eligibility dimensions
+    citizenship_requirement: Optional[str] = None
+    enrollment_statuses: List[str] = []
+    institution_restrictions: List[str] = []
+    military_affiliation_requirement: Optional[str] = None
+    verification_status: str = "legacy_unverified"
+
+    @field_validator(
+        "eligible_disciplines",
+        "eligible_credentials",
+        "academic_levels",
+        "state_restrictions",
+        "county_restrictions",
+        "city_restrictions",
+        "metro_restrictions",
+        "provider_core_values",
+        "matching_tags",
+        "required_affiliations",
+        "enrollment_statuses",
+        "institution_restrictions",
+        mode="before",
+    )
+    @classmethod
+    def _none_to_list(cls, v):
+        return v or []
+
+
+class ApplicationLinkOut(BaseModel):
+    """Official provider application URL — authenticated users only.
+
+    Never included in any public payload; this is the single contract by
+    which a signed-in client (free or premium) obtains the apply link.
+    """
+
+    url: str
 
 
 class VaultDocument(BaseModel):

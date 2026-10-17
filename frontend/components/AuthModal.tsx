@@ -124,6 +124,19 @@ export function AuthModal({ open, onClose, onAuthSuccess }: AuthModalProps) {
       }
     }
 
+    // Return-context cookie: OAuth leaves the page, so a visitor on a public
+    // opportunity detail gets bounced back to it after the callback instead
+    // of landing on the feed. Narrowly scoped to /scholarships/{id} paths.
+    try {
+      const path = window.location.pathname;
+      if (/^\/scholarships\/[\w-]+$/.test(path)) {
+        const expiry = new Date(Date.now() + 10 * 60 * 1000).toUTCString();
+        document.cookie = `grantrx_auth_return=${path}; expires=${expiry}; path=/; SameSite=Lax`;
+      }
+    } catch {
+      // Cookie write may fail — losing return context degrades to "/" only.
+    }
+
     if (!supabase) { setError("Authentication is not configured."); return; }
 
     try {
