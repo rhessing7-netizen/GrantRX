@@ -384,7 +384,8 @@ export interface CalendarEvent {
   scholarship_id: string;
   title: string;
   provider: string;
-  deadline: string;
+  // May be null when the provider lists no deadline.
+  deadline: string | null;
   status: AppStatus;
   award_amount: number;
   custom_deadline_reminder: string | null;

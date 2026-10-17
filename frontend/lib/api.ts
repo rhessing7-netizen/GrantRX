@@ -107,9 +107,43 @@ function authHeaders(): HeadersInit {
   return headers;
 }
 
+// ---------------------------------------------------------------------------
+// Transport seams (test injection + retry policy)
+// ---------------------------------------------------------------------------
+
+// Injectable so node:test can exercise the transport without a network.
+let fetchImpl: typeof fetch = (...args) => fetch(...args);
+// Pre-retry backoff (ms). Overridable in tests to keep them fast.
+let retryDelayMs = 2000;
+
+export function __setFetchImpl(impl: typeof fetch | null) {
+  fetchImpl = impl ?? ((...args) => fetch(...args));
+}
+export function __setRetryDelayMs(ms: number) {
+  retryDelayMs = ms;
+}
+
+function _networkError(err: unknown): Error & { status: number } {
+  // Network error, timeout, or DNS failure
+  const e = new Error(
+    err instanceof Error && err.name === "TimeoutError"
+      ? "Request timed out. Please check your connection and try again."
+      : "Network error. Please check your connection and try again.",
+  ) as Error & { status: number; body?: unknown };
+  e.status = 0;
+  return e;
+}
+
+type RequestHooks = {
+  /** Fired once when the first transport attempt fails and the single
+   *  automatic retry is about to run (cold-start wake-up UX). */
+  onRetry?: () => void;
+};
+
 async function request<T>(
   path: string,
   options: RequestInit = {},
+  hooks: RequestHooks = {},
 ): Promise<T> {
   const url = `${API_BASE}${path}`;
 
@@ -126,30 +160,44 @@ async function request<T>(
     return unauthenticatedError<T>();
   }
 
-  let resp: Response;
-  try {
+  // Automatic retry is limited to safe/idempotent reads (GET/HEAD —
+  // RequestInit without an explicit method is a GET). Mutations are never
+  // auto-retried: a retried POST/PUT/DELETE could apply a write twice.
+  const method = (options.method ?? "GET").toUpperCase();
+  const safeToRetry = method === "GET" || method === "HEAD";
+
+  const attempt = (): Promise<Response> => {
     const timeoutSignal = AbortSignal.timeout(15000);
-    resp = await fetch(url, {
+    return fetchImpl(url, {
       ...options,
       headers: { ...authHeaders(), ...(options.headers ?? {}) },
       // Honor a caller-supplied signal (e.g. debounced previews) alongside
-      // the global 15s timeout.
+      // the global 15s timeout. A caller abort surfaces as AbortError and
+      // is never retried.
       signal: options.signal
         ? AbortSignal.any([options.signal, timeoutSignal])
         : timeoutSignal,
     });
+  };
+
+  let resp: Response;
+  try {
+    resp = await attempt();
   } catch (err) {
     // Caller-initiated cancellation is not an error condition — rethrow as-is
     // so callers can distinguish it from network failures.
     if (err instanceof Error && err.name === "AbortError") throw err;
-    // Network error, timeout, or DNS failure
-    const e = new Error(
-      err instanceof Error && err.name === "TimeoutError"
-        ? "Request timed out. Please check your connection and try again."
-        : "Network error. Please check your connection and try again.",
-    ) as Error & { status?: number; body?: unknown };
-    e.status = 0;
-    throw e;
+    if (!safeToRetry) throw _networkError(err);
+    // Genuine transport failure on a safe read: wait, then retry exactly once
+    // (Render cold-start wake-up). A second failure becomes the final error.
+    hooks.onRetry?.();
+    await new Promise((r) => setTimeout(r, retryDelayMs));
+    try {
+      resp = await attempt();
+    } catch (retryErr) {
+      if (retryErr instanceof Error && retryErr.name === "AbortError") throw retryErr;
+      throw _networkError(retryErr);
+    }
   }
 
   if (!resp.ok) {
@@ -209,10 +257,13 @@ export const api = {
   // If the backend is unreachable or returns 401 ("Invalid token"), falls
   // back to directly querying the Supabase scholarships table so the feed
   // still renders without a blocking error banner.
-  getMatchedScholarships: async (query?: string): Promise<MatchedFeed> => {
+  getMatchedScholarships: async (
+    query?: string,
+    hooks?: { onRetry?: () => void },
+  ): Promise<MatchedFeed> => {
     const qs = query && query.trim() ? `?query=${encodeURIComponent(query.trim())}` : "";
     // Backend matching is authoritative; never fabricate or bypass match results.
-    return request<MatchedFeed>(`/api/scholarships/matched${qs}`);
+    return request<MatchedFeed>(`/api/scholarships/matched${qs}`, {}, hooks);
   },
   getUsage: () => request<Usage>("/api/user/usage"),
 

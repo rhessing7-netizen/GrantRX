@@ -51,6 +51,9 @@ export default function Home() {
   const [search, setSearch] = useState("");
   const [metroFilter, setMetroFilter] = useState("");
   const [loading, setLoading] = useState(false);
+  // True while the API client is running its single automatic retry —
+  // used to show cold-start wake-up copy instead of plain skeletons.
+  const [retrying, setRetrying] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [authNotice, setAuthNotice] = useState<string | null>(null);
 
@@ -175,9 +178,12 @@ export default function Home() {
       return;
     }
     setLoading(true);
+    setRetrying(false);
     setError(null);
     try {
-      const f = await api.getMatchedScholarships();
+      const f = await api.getMatchedScholarships(undefined, {
+        onRetry: () => setRetrying(true),
+      });
       setFeed(f);
       setError(null);
       // Refresh usage display — wrapped separately so a usage fetch failure
@@ -207,6 +213,7 @@ export default function Home() {
       }
     } finally {
       setLoading(false);
+      setRetrying(false);
     }
   }, []);
 
@@ -320,9 +327,12 @@ export default function Home() {
     }
 
     setLoading(true);
+    setRetrying(false);
     setError(null);
     try {
-      const f = await api.getMatchedScholarships(keyword);
+      const f = await api.getMatchedScholarships(keyword, {
+        onRetry: () => setRetrying(true),
+      });
       setFeed(f);
       // Refresh usage after consuming a search
       const u = await api.getUsage();
@@ -343,6 +353,7 @@ export default function Home() {
       }
     } finally {
       setLoading(false);
+      setRetrying(false);
     }
   }, [usage, search, loadFeed]);
 
@@ -627,8 +638,35 @@ export default function Home() {
                 )}
 
                 {loading && (
-                  <div className="rounded-2xl bg-surfaceSubtle p-6 text-center text-textMuted">
-                    Loading matches…
+                  <div className="space-y-4">
+                    {retrying && (
+                      <p className="text-center text-sm text-textMuted">
+                        Still waking up the server…
+                      </p>
+                    )}
+                    <div
+                      className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3"
+                      aria-busy="true"
+                      aria-label="Loading matched opportunities"
+                    >
+                      {[0, 1, 2].map((i) => (
+                        <div
+                          key={i}
+                          className="animate-pulse rounded-2xl border border-border/90 bg-white/95 p-5 shadow-[0_4px_20px_-4px_rgba(15,23,42,0.06)]"
+                        >
+                          <div className="h-24 rounded-xl bg-textMuted/10" />
+                          <div className="mt-4 space-y-2">
+                            <div className="h-4 w-3/4 rounded bg-textMuted/10" />
+                            <div className="h-3 w-1/2 rounded bg-textMuted/10" />
+                            <div className="h-3 w-2/3 rounded bg-textMuted/10" />
+                            <div className="mt-3 flex gap-2">
+                              <div className="h-7 w-20 rounded-full bg-textMuted/10" />
+                              <div className="h-7 w-20 rounded-full bg-textMuted/10" />
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
 

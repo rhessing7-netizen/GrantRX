@@ -342,7 +342,9 @@ class CalendarEventOut(BaseModel):
     scholarship_id: UUID
     title: str
     provider: str
-    deadline: str
+    # Tracked scholarships may legitimately have no listed deadline —
+    # preserve null rather than fabricating a date or failing validation.
+    deadline: Optional[str] = None
     status: str
     award_amount: Optional[int] = None
     custom_deadline_reminder: Optional[datetime] = None

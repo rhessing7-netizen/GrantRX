@@ -257,6 +257,9 @@ export function DeadlineCalendar() {
 
       {/* Upcoming list */}
       <UpcomingList events={events} />
+
+      {/* Tracked items with no provider-listed deadline */}
+      <NoDeadlineList events={events} />
     </div>
   );
 }
@@ -406,8 +409,8 @@ function WeekGrid({
 function UpcomingList({ events }: { events: CalendarEvent[] }) {
   const sorted = useMemo(
     () =>
-      [...events]
-        .filter((e) => e.deadline)
+      events
+        .filter((e): e is CalendarEvent & { deadline: string } => e.deadline != null)
         .sort((a, b) => a.deadline.localeCompare(b.deadline))
         .slice(0, 10),
     [events],
@@ -446,6 +449,55 @@ function UpcomingList({ events }: { events: CalendarEvent[] }) {
                 {ev.deadline.slice(5)}
               </span>
             </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Tracked items with no provider-listed deadline
+// ---------------------------------------------------------------------------
+
+function NoDeadlineList({ events }: { events: CalendarEvent[] }) {
+  const noDeadline = useMemo(
+    () => events.filter((e) => e.deadline == null),
+    [events],
+  );
+
+  if (noDeadline.length === 0) return null;
+
+  return (
+    <div className="rounded-2xl bg-surfaceSubtle p-5">
+      <h3 className="font-serif text-lg font-semibold text-text">
+        No Deadline Listed
+      </h3>
+      <p className="mt-1 text-xs text-textMuted">
+        These providers have not published a deadline — EdFintia does not
+        estimate one.
+      </p>
+      <div className="mt-3 space-y-2">
+        {noDeadline.map((ev) => (
+          <div
+            key={ev.tracking_id}
+            className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-surface px-4 py-2.5"
+          >
+            <div className="min-w-0 flex-1">
+              <p className="break-words text-sm font-medium text-text">
+                {ev.title}
+              </p>
+              <p className="break-words text-xs text-textMuted">
+                {ev.provider}
+                {ev.award_amount != null &&
+                  ` · $${ev.award_amount.toLocaleString()}`}
+              </p>
+            </div>
+            <span
+              className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${STATUS_COLORS[ev.status]}`}
+            >
+              {ev.status.replace("_", " ")}
+            </span>
           </div>
         ))}
       </div>
