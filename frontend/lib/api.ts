@@ -13,6 +13,7 @@ import type {
   Profile,
   ProfileCreate,
   ProfileUpdate,
+  ShowcaseItem,
   StudentCollegeBudgetUpdate,
   SupportChatResponse,
   SupportEscalateResponse,
@@ -72,6 +73,8 @@ export function getAuthToken(): string | null {
 // anonymous callers are rejected client-side before any request is sent.
 const PUBLIC_PATHS = new Set([
   "/api/scholarships/match-preview",
+  // Public discovery showcase — real catalog sample for signed-out visitors
+  "/api/scholarships/showcase",
   "/api/v1/early-access",
   "/api/v1/marketing/unsubscribe",
 ]);
@@ -266,6 +269,11 @@ export const api = {
     return request<MatchedFeed>(`/api/scholarships/matched${qs}`, {}, hooks);
   },
   getUsage: () => request<Usage>("/api/user/usage"),
+
+  // Public discovery showcase — the anonymous signed-out sample. Read-only;
+  // no token, profile, quota, or tracking is involved.
+  getShowcase: (hooks?: { onRetry?: () => void }) =>
+    request<ShowcaseItem[]>("/api/scholarships/showcase", {}, hooks),
 
   // Onboarding live-matching projection (public — runs before a profile exists)
   previewMatchCount: (data: MatchPreviewRequest, signal?: AbortSignal) =>

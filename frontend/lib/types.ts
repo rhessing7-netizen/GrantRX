@@ -165,6 +165,25 @@ export interface MatchedFeed {
   reset_at: string;
 }
 
+/** Public showcase item — the slim whitelisted catalog card served to
+ *  anonymous visitors. Intentionally carries no score, eligibility
+ *  reasoning, or any per-user state. */
+export interface ShowcaseItem {
+  scholarship_id: string;
+  title: string;
+  provider: string;
+  portal_url: string;
+  award_amount: number | null;
+  deadline: string | null;
+  eligible_disciplines: string[];
+  matching_tags: string[];
+  metro_restrictions: string[];
+  funding_type: string | null;
+  has_service_commitment: boolean;
+  employment_required: boolean;
+  verification_status: string;
+}
+
 export interface Usage {
   tier: SubscriptionTier;
   searches_used_this_week: number;

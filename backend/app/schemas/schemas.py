@@ -191,6 +191,40 @@ class ScholarshipOut(ScholarshipBase):
     tracks: List[TrackOut] = []
 
 
+class ShowcaseItemOut(BaseModel):
+    """Slim public catalog card for the anonymous Discovery showcase.
+
+    Deliberately whitelisted — catalog display fields only. Identity keys,
+    source/crawler internals, match scores, eligibility reasoning, and any
+    per-user state (tracking, dismissal) must never appear in this payload.
+    Unknown award/deadline serialize as null; values are never invented.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    scholarship_id: UUID = Field(validation_alias="id")
+    title: str
+    provider: str
+    portal_url: str
+    award_amount: Optional[int] = None
+    deadline: Optional[date] = None
+    eligible_disciplines: List[str] = []
+    matching_tags: List[str] = []
+    metro_restrictions: List[str] = []
+    funding_type: Optional[str] = None
+    has_service_commitment: bool = False
+    employment_required: bool = False
+    verification_status: str = "legacy_unverified"
+
+    @field_validator(
+        "eligible_disciplines", "matching_tags", "metro_restrictions", mode="before"
+    )
+    @classmethod
+    def _none_to_list(cls, v):
+        # ORM array columns can read None on un-flushed objects.
+        return v or []
+
+
 class VaultDocument(BaseModel):
     name: str
     url: str

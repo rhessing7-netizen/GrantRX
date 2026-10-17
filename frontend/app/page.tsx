@@ -8,6 +8,7 @@ import { ProfileEditModal } from "@/components/ProfileEditModal";
 import { AuthModal } from "@/components/AuthModal";
 import { AccountSettingsModal } from "@/components/AccountSettingsModal";
 import { ScholarshipFeed } from "@/components/ScholarshipFeed";
+import { ShowcaseGrid } from "@/components/ShowcaseGrid";
 import { KanbanBoard } from "@/components/KanbanBoard";
 import { DeadlineCalendar } from "@/components/DeadlineCalendar";
 import { CollegeFinancialPlanner } from "@/components/CollegeFinancialPlanner";
@@ -23,6 +24,7 @@ import type {
   MatchedFeed,
   MatchedScholarship,
   Profile,
+  ShowcaseItem,
   Usage,
   UserScholarship,
 } from "@/lib/types";
@@ -47,6 +49,10 @@ export default function Home() {
     "pending" | "anonymous" | "signed-in"
   >("pending");
   const [feed, setFeed] = useState<MatchedFeed | null>(null);
+  // Public showcase sample for the anonymous Discover experience — a real
+  // catalog subset, never personalized and never fabricated.
+  const [showcase, setShowcase] = useState<ShowcaseItem[] | null>(null);
+  const [showcaseFailed, setShowcaseFailed] = useState(false);
   const [kanbanItems, setKanbanItems] = useState<UserScholarship[]>([]);
   const [search, setSearch] = useState("");
   const [metroFilter, setMetroFilter] = useState("");
@@ -171,9 +177,9 @@ export default function Home() {
   // consume a search quota because no keyword query is sent)
   const loadFeed = useCallback(async () => {
     if (!getAuthToken()) {
-      // Confirmed anonymous — never dispatch the protected request.
+      // Confirmed anonymous — never dispatch the protected request. The
+      // public showcase (not an error banner) is the signed-out state.
       setFeed(null);
-      setError("Please sign in to see matched opportunities.");
       setLoading(false);
       return;
     }
@@ -203,9 +209,8 @@ export default function Home() {
         // has expired or been invalidated; raw backend details must not surface.
         if (getAuthToken()) {
           setError("Your session has expired. Please sign in again.");
-        } else {
-          setError("Please sign in to see matched opportunities.");
         }
+        // No token — anonymous is not an error; the showcase stays in place.
       } else {
         // Unexpected errors keep their detail and are logged for diagnosis.
         console.error("Feed load failed:", err);
@@ -216,6 +221,36 @@ export default function Home() {
       setRetrying(false);
     }
   }, []);
+
+  // Load the public showcase — the anonymous Discover state. Never calls
+  // personalized endpoints, never consumes quota, never touches a profile.
+  const loadShowcase = useCallback(async () => {
+    setLoading(true);
+    setRetrying(false);
+    setShowcaseFailed(false);
+    try {
+      const items = await api.getShowcase({
+        onRetry: () => setRetrying(true),
+      });
+      setShowcase(items);
+    } catch (err) {
+      console.error("Showcase load failed:", err);
+      setShowcaseFailed(true);
+    } finally {
+      setLoading(false);
+      setRetrying(false);
+    }
+  }, []);
+
+  // Anonymous Discover loads the public showcase, not the matched feed.
+  useEffect(() => {
+    if (authState !== "anonymous") return;
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) void loadShowcase();
+    });
+    return () => { cancelled = true; };
+  }, [authState, loadShowcase]);
 
   // Resolve auth state BEFORE any protected API call. Session resolution
   // comes first; confirmed-anonymous users get the signed-out Discover
@@ -232,12 +267,17 @@ export default function Home() {
       } catch {
         // localStorage may be unavailable — ignore
       }
-      setError("Please sign in to see matched opportunities.");
+      // Anonymous is a normal state, not an error — the showcase renders.
+      setError(null);
     };
 
     const applySession = (session: { access_token?: string } | null) => {
       if (session?.access_token) setAuthToken(session.access_token);
       setAuthState("signed-in");
+      // Clear the anonymous sample so it can never be mistaken for
+      // personalized matches once the signed-in feed loads.
+      setShowcase(null);
+      setShowcaseFailed(false);
       // Show the locally cached profile immediately as a UX hint; the
       // authoritative backend fetch in loadProfileAndUsage overwrites it.
       try {
@@ -313,9 +353,21 @@ export default function Home() {
   // active text in the search input.
   const runKeywordSearch = useCallback(async () => {
     const keyword = search.trim();
-    // No text — treat as a free refresh, not a keyword search
+    // No text — treat as a free refresh, not a keyword search. Anonymous
+    // visitors refresh the showcase instead.
     if (!keyword) {
-      loadFeed();
+      if (authState === "anonymous") {
+        void loadShowcase();
+      } else {
+        loadFeed();
+      }
+      return;
+    }
+
+    if (!getAuthToken()) {
+      // Personalized search requires an account — open sign-in rather than
+      // dispatching a protected request that cannot succeed.
+      setShowAuth(true);
       return;
     }
 
@@ -343,7 +395,8 @@ export default function Home() {
         setUpgradeReason(`You've reached your free keyword search limit (${usage?.search_limit ?? 10}/week). Upgrade for unlimited searches.`);
         setShowUpgrade(true);
       } else if (e.status === 401) {
-        setError("Please sign in to see matched opportunities.");
+        // Session invalid/expired mid-interaction — ask for sign-in.
+        setShowAuth(true);
       } else if (e.message?.includes("Invalid token") || e.message === "Invalid token") {
         console.warn("Suppressed unauthenticated token error on public feed:", err);
         setError(null);
@@ -355,7 +408,7 @@ export default function Home() {
       setLoading(false);
       setRetrying(false);
     }
-  }, [usage, search, loadFeed]);
+  }, [usage, search, loadFeed, loadShowcase, authState]);
 
   // Load kanban items
   const loadKanban = useCallback(async () => {
@@ -442,7 +495,6 @@ export default function Home() {
       );
       setShowAuth(false);
       setAuthState("anonymous");
-      setError("Please sign in to see matched opportunities.");
       return;
     }
     setShowAuth(false);
@@ -491,7 +543,7 @@ export default function Home() {
     setFeed(null);
     setAuthToken(null);
     setAuthState("anonymous");
-    setError("Please sign in to see matched opportunities.");
+    setError(null);
   };
 
   const leftPanelProps = {
@@ -509,7 +561,7 @@ export default function Home() {
       }
     },
     onKeywordSearch: runKeywordSearch,
-    onRefreshFeed: loadFeed,
+    onRefreshFeed: authState === "anonymous" ? loadShowcase : loadFeed,
     onUpgrade: () => openUpgrade(),
     onOpenAuth: () => setShowAuth(true),
     onSignOut: handleSignOut,
@@ -603,7 +655,9 @@ export default function Home() {
                     search={search}
                     onSearchChange={setSearch}
                     onKeywordSearch={runKeywordSearch}
-                    onRefreshFeed={loadFeed}
+                    onRefreshFeed={
+                      authState === "anonymous" ? loadShowcase : loadFeed
+                    }
                     usage={usage}
                     onUpgrade={() =>
                       openUpgrade(
@@ -615,7 +669,18 @@ export default function Home() {
                   />
                 </div>
 
-                {!profile && !error && (
+                {authState === "anonymous" && (
+                  <ShowcaseGrid
+                    items={showcase}
+                    loading={loading}
+                    retrying={retrying}
+                    failed={showcaseFailed}
+                    onRetry={loadShowcase}
+                    onRequireAuth={() => setShowAuth(true)}
+                  />
+                )}
+
+                {authState === "signed-in" && !profile && !error && (
                   <div className="rounded-2xl bg-surfaceSubtle p-6 text-center">
                     <p className="text-textMuted">
                       Complete your profile to see matched opportunities.
@@ -637,7 +702,7 @@ export default function Home() {
                   </div>
                 )}
 
-                {loading && (
+                {authState !== "anonymous" && loading && (
                   <div className="space-y-4">
                     {retrying && (
                       <p className="text-center text-sm text-textMuted">

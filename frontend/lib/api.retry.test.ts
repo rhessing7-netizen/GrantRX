@@ -124,6 +124,37 @@ test("POST: transport failure is never retried (no duplicate writes)", async () 
   assert.equal(calls, 1);
 });
 
+test("showcase: anonymous callers reach the public endpoint (no token)", async () => {
+  setAuthToken(null);
+  let calls = 0;
+  let requestedUrl = "";
+  __setFetchImpl(((input: RequestInfo | URL) => {
+    calls++;
+    requestedUrl = String(input);
+    return Promise.resolve(jsonResponse([{ scholarship_id: "s1" }]));
+  }) as typeof fetch);
+
+  const items = await api.getShowcase();
+  assert.equal(calls, 1);
+  assert.match(requestedUrl, /\/api\/scholarships\/showcase$/);
+  assert.equal(items[0].scholarship_id, "s1");
+});
+
+test("protected path: anonymous callers are rejected locally, no fetch", async () => {
+  setAuthToken(null);
+  let calls = 0;
+  __setFetchImpl((() => {
+    calls++;
+    return Promise.resolve(jsonResponse({}));
+  }) as typeof fetch);
+
+  await assert.rejects(api.getProfile(), (err: unknown) => {
+    assert.equal((err as { status: number }).status, 401);
+    return true;
+  });
+  assert.equal(calls, 0);
+});
+
 test("GET: caller AbortError is rethrown and never retried", async () => {
   let calls = 0;
   __setFetchImpl((() => {

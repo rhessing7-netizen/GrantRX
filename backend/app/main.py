@@ -1,13 +1,14 @@
 import logging
 import os
 import secrets
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from typing import List, Optional
 from uuid import UUID
 
 from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Header, Request, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from sqlalchemy import String, func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
@@ -51,6 +52,7 @@ from .schemas.schemas import (
     ScholarshipOut,
     ScholarshipReportCreate,
     ScholarshipReportOut,
+    ShowcaseItemOut,
     StudentCollegeBudgetBase,
     StudentCollegeBudgetUpdate,
     SupportChatRequest,
@@ -325,13 +327,85 @@ def list_scholarships(
     # separately by /user-scholarships and is unaffected.
     scholarships = (
         db.query(Scholarship)
-        .filter(Scholarship.lifecycle_status == lifecycle.PUBLISHED)
-        .filter(Scholarship.verification_status != "needs_review")
+        .filter(*lifecycle.discoverable_filters(Scholarship))
         .all()
     )
     if dismissed_ids:
         scholarships = [s for s in scholarships if s.id not in dismissed_ids]
     return scholarships
+
+
+# ---------------------------------------------------------------------------
+# Public Discovery Showcase (anonymous pre-signup preview)
+# ---------------------------------------------------------------------------
+
+# Generous bound for load protection only — the payload is intentionally
+# public and identical for every anonymous caller on a given day. Keys are
+# the direct client host (matching the early-access limiter pattern); no
+# forwarding headers are trusted.
+showcase_rate_limiter = SlidingWindowRateLimiter(
+    limit=int(os.getenv("SHOWCASE_RATE_LIMIT", "60")),
+    window_seconds=int(os.getenv("SHOWCASE_RATE_WINDOW_SECONDS", "60")),
+)
+
+SHOWCASE_LIMIT = 10
+SHOWCASE_CACHE_SECONDS = 300
+
+# Per-day in-process sample cache. Every anonymous caller receives the same
+# daily selection, so caching the serialized result keyed on the UTC-day
+# seed is exact — the DB query runs at most once per day per worker.
+_showcase_cache: dict[str, List[ShowcaseItemOut]] = {}
+
+
+def _showcase_day_seed(now: Optional[datetime] = None) -> str:
+    """UTC-date seed for the deterministic daily showcase ordering."""
+    return (now or datetime.now(timezone.utc)).date().isoformat()
+
+
+@app.get("/api/scholarships/showcase", response_model=List[ShowcaseItemOut])
+def get_showcase(
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db),
+):
+    """Public sample of consumer-discoverable opportunities.
+
+    No authentication, profile, or quota is involved and no per-user rows are
+    created. Eligibility is enforced in SQL via
+    ``lifecycle.discoverable_filters`` — the same predicates
+    ``is_discoverable()`` evaluates — so draft, stale, archived, and
+    needs_review records cannot reach the payload. Ordering is a
+    deterministic md5(record id || UTC day) hash: stable within a day,
+    rotating between days, and never per-request random.
+    """
+    client_host = request.client.host if request.client else "unknown"
+    if not showcase_rate_limiter.allow(client_host):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many requests. Please try again in a few minutes.",
+        )
+
+    # The sample is public and identical for all anonymous callers.
+    response.headers["Cache-Control"] = f"public, max-age={SHOWCASE_CACHE_SECONDS}"
+
+    seed = _showcase_day_seed()
+    cached = _showcase_cache.get(seed)
+    if cached is not None:
+        return cached
+
+    rows = (
+        db.query(Scholarship)
+        .filter(*lifecycle.discoverable_filters(Scholarship))
+        .order_by(
+            func.md5(func.concat(Scholarship.id.cast(String), seed))
+        )
+        .limit(SHOWCASE_LIMIT)
+        .all()
+    )
+    items = [ShowcaseItemOut.model_validate(s) for s in rows]
+    _showcase_cache.clear()
+    _showcase_cache[seed] = items
+    return items
 
 
 @app.post("/scholarships", response_model=ScholarshipOut, status_code=status.HTTP_201_CREATED)
@@ -645,8 +719,7 @@ def preview_match_count(
     )
     scholarships = (
         db.query(Scholarship)
-        .filter(Scholarship.lifecycle_status == lifecycle.PUBLISHED)
-        .filter(Scholarship.verification_status != "needs_review")
+        .filter(*lifecycle.discoverable_filters(Scholarship))
         .all()
     )
     results = match_scholarships(transient, scholarships)

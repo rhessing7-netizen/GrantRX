@@ -124,6 +124,20 @@ def is_discoverable(s) -> bool:
     return getattr(s, "verification_status", None) != "needs_review"
 
 
+def discoverable_filters(model) -> tuple:
+    """SQL WHERE clauses mirroring ``is_discoverable()``.
+
+    Query-level discovery surfaces (the authenticated scholarships list and
+    the public showcase) must enforce eligibility in SQL so non-discoverable
+    records can never reach a serialized payload. Keeping those clauses in
+    one place ensures they cannot drift from the object-level predicate.
+    """
+    return (
+        model.lifecycle_status == PUBLISHED,
+        model.verification_status != "needs_review",
+    )
+
+
 def _set_status(s, status: str, reason: Optional[str]) -> None:
     s.lifecycle_status = status
     s.archive_reason = reason

@@ -19,6 +19,9 @@ PUBLIC_PATHS = {
     "/redoc",
     # Onboarding live-matching projection runs before a profile/session exists
     "/api/scholarships/match-preview",
+    # Public discovery showcase — a fixed daily sample of discoverable
+    # catalog records for signed-out visitors (read-only, no user data)
+    "/api/scholarships/showcase",
     # Public early-access / waitlist signup (pre-launch, no account required)
     "/api/v1/early-access",
     # Signed marketing unsubscribe — the email link IS the credential;
