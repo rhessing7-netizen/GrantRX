@@ -77,6 +77,19 @@ const TOUR_STYLES = `
 .driver-popover-close-btn {
   color: #9A95B5;
 }
+.tour-skip-btn {
+  background: none;
+  border: none;
+  color: #9A95B5;
+  font-size: 12px;
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 8px 4px;
+  font-family: var(--font-inter), 'Inter', sans-serif;
+}
+.tour-skip-btn:hover {
+  color: #5C577A;
+}
 .driver-popover-arrow-side-bottom.driver-popover-arrow {
   border-bottom-color: #ffffff;
 }
@@ -90,6 +103,17 @@ const TOUR_STYLES = `
   border-right-color: #ffffff;
 }
 `;
+
+/** Resolve a tour target only when it is actually rendered. A hidden or
+ *  absent element (e.g. the desktop-only kanban tab on a phone) degrades
+ *  to driver.js's centered modal popover instead of a mispositioned
+ *  tooltip anchored to a zero-size rect. */
+const visibleTourEl = (selector: string) => () => {
+  const el = document.querySelector<HTMLElement>(selector);
+  return el && el.getClientRects().length > 0
+    ? el
+    : (undefined as unknown as Element);
+};
 
 function persistCompletion() {
   try {
@@ -109,6 +133,8 @@ export function InteractiveTour({ shouldStart, tab, onSwitchTab, profile }: Inte
   const saveListenerRef = useRef<((e: Event) => void) | null>(null);
   const kanbanListenerRef = useRef<((e: Event) => void) | null>(null);
   const tabRef = useRef(tab);
+  // Element focused before the tour opened — focus is returned here on close.
+  const prevFocusRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     tabRef.current = tab;
@@ -125,17 +151,24 @@ export function InteractiveTour({ shouldStart, tab, onSwitchTab, profile }: Inte
     }
   };
 
-  const startTour = () => {
+  const startTour = (manual = false) => {
     if (driverRef.current?.isActive()) return;
-    if (typeof window !== "undefined" && localStorage.getItem(TOUR_KEY) === "true") return;
-    // The tour highlights desktop-only elements (e.g. the kanban tab is
-    // hidden below lg). Don't start on small screens.
-    if (typeof window !== "undefined" && window.innerWidth < 1024) return;
+    // Auto-start only gates: the completion flag prevents unsolicited
+    // replays, and the viewport guard keeps auto-start desktop-only. A
+    // deliberate manual launch bypasses both — the tour must work
+    // wherever the user asks for it (hidden targets degrade to centered
+    // modal popovers via visibleTourEl).
+    if (!manual && typeof window !== "undefined" && localStorage.getItem(TOUR_KEY) === "true") return;
+    if (!manual && typeof window !== "undefined" && window.innerWidth < 1024) return;
 
     const driverObj = driver({
       showProgress: true,
       progressText: "Step {{current}} of {{total}}",
       allowClose: true,
+      // Keyboard control is on by default — explicit for clarity. Escape
+      // closes (via allowClose); arrow keys navigate between steps.
+      allowKeyboardControl: true,
+      prevBtnText: "Back",
       smoothScroll: true,
       overlayColor: "#0F172A",
       overlayOpacity: 0.45,
@@ -143,13 +176,17 @@ export function InteractiveTour({ shouldStart, tab, onSwitchTab, profile }: Inte
         cleanupListeners();
         driverRef.current = null;
         setActive(false);
+        // Return focus to whatever launched the tour when possible.
+        prevFocusRef.current?.focus?.();
+        prevFocusRef.current = null;
       },
       onHighlighted: (_el, _step, opts) => {
         const idx = opts.index ?? 0;
         cleanupListeners();
 
         if (idx === 1) {
-          // Step 2 — interactive save. Hide Next, listen for save action.
+          // Step 2 — interactive save. A successful save auto-advances
+          // exactly one step; manual navigation remains fully available.
           const handler = () => {
             driverObj.moveNext();
           };
@@ -167,6 +204,29 @@ export function InteractiveTour({ shouldStart, tab, onSwitchTab, profile }: Inte
       onDeselected: () => {
         cleanupListeners();
       },
+      onPopoverRender: (popover) => {
+        // Dialog semantics + a "Skip tour" affordance on every step —
+        // driver.js only renders next/previous/close buttons natively.
+        popover.wrapper.setAttribute("role", "dialog");
+        popover.wrapper.setAttribute("aria-modal", "true");
+        if (!popover.footerButtons.querySelector(".tour-skip-btn")) {
+          const skip = document.createElement("button");
+          skip.type = "button";
+          skip.className = "tour-skip-btn";
+          skip.textContent = "Skip tour";
+          skip.setAttribute("aria-label", "Skip the product tour");
+          skip.addEventListener("click", () => {
+            persistCompletion();
+            driverObj.destroy();
+          });
+          popover.footerButtons.appendChild(skip);
+        }
+        // Move focus into the popover so keyboard users land in the tour.
+        const primary = popover.nextButton.offsetParent
+          ? popover.nextButton
+          : popover.closeButton;
+        primary?.focus();
+      },
       onNextClick: (_el, _step, opts) => {
         const idx = opts.index ?? 0;
         if (idx === 2) {
@@ -176,6 +236,17 @@ export function InteractiveTour({ shouldStart, tab, onSwitchTab, profile }: Inte
           return;
         }
         driverObj.moveNext();
+      },
+      onPrevClick: (_el, _step, opts) => {
+        const idx = opts.index ?? 0;
+        if (idx === 2) {
+          // Back from Step 3 → return to Discover so Step 2's save-button
+          // target exists again. Back never reverses product actions.
+          onSwitchTab("discover");
+          setTimeout(() => driverObj.movePrevious(), 600);
+          return;
+        }
+        driverObj.movePrevious();
       },
       onDoneClick: () => {
         persistCompletion();
@@ -187,62 +258,67 @@ export function InteractiveTour({ shouldStart, tab, onSwitchTab, profile }: Inte
         driverObj.destroy();
       },
       steps: [
-        // Step 1 — Discovery feed match card
+        // Step 1 — Discovery feed match card. Next / Skip Tour / X.
         {
-          element: '[data-tour="match-card"]',
+          element: visibleTourEl('[data-tour="match-card"]'),
           popover: {
             title: "Your Matched Opportunities",
             description:
               "Here are your scored funding matches based on your discipline, GPA, and residency.",
-            nextBtnText: "Next \u2192",
+            nextBtnText: "Next →",
           },
         },
-        // Step 2 — Interactive: Save to My Applications (no Next button)
+        // Step 2 — Save to My Applications. A successful save auto-advances
+        // one step; Back/Next/Skip/X always provide a way out.
         {
-          element: '[data-tour="save-btn"]',
+          element: visibleTourEl('[data-tour="save-btn"]'),
           disableActiveInteraction: false,
           popover: {
             title: "Save to Your Pipeline",
             description:
-              "Click 'Save to My Applications' to add this award to your personal application tracker.",
-            showButtons: ["close"],
+              "Click 'Save to My Applications' to add this award to your personal application tracker — or press Next to keep going.",
+            nextBtnText: "Next →",
+            showButtons: ["previous", "next", "close"],
           },
         },
-        // Step 3 — Navigate to Kanban tab
+        // Step 3 — Navigate to Kanban tab. Back / Next / Skip / X.
         {
-          element: '[data-tour="kanban-tab"]',
+          element: visibleTourEl('[data-tour="kanban-tab"]'),
           popover: {
             title: "Your Application Pipeline",
             description:
               "Nice! Your application is now in your pipeline. Let's look at your board.",
-            nextBtnText: "View My Applications \u2192",
+            nextBtnText: "View My Applications →",
+            showButtons: ["previous", "next", "close"],
           },
         },
-        // Step 4 — Interactive: Apply or Vault (no Next button)
+        // Step 4 — Apply / AI outline. Action auto-advances; manual nav too.
         {
-          element: '[data-tour="kanban-actions"]',
+          element: visibleTourEl('[data-tour="kanban-actions"]'),
           disableActiveInteraction: false,
           popover: {
             title: "Apply or Draft with AI",
             description:
-              "When you're ready, click 'Apply' to open the provider portal, or open 'Details' to draft a 4-part outline with the AI Statement Coach.",
-            showButtons: ["close"],
+              "When you're ready, click 'Apply' to open the provider portal, or open 'Details' to draft a 4-part outline with the AI Statement Coach — or press Next to keep going.",
+            nextBtnText: "Next →",
+            showButtons: ["previous", "next", "close"],
           },
         },
-        // Step 5 — Profile strength + finish
+        // Step 5 — Profile strength + finish. Back / Finish / X.
         {
-          element: '[data-tour="profile-strength"]',
+          element: visibleTourEl('[data-tour="profile-strength"]'),
           popover: {
             title: "You're All Set!",
             description:
-              "Track deadlines, monitor your weekly search quota, and unlock state grants here.",
+              "Track deadlines and manage your keyword searches here — free accounts get 3 searches every 7 days.",
             doneBtnText: "Finish Tour",
-            showButtons: ["close"],
+            showButtons: ["previous", "next", "close"],
           },
         },
       ],
     });
 
+    prevFocusRef.current = document.activeElement as HTMLElement | null;
     driverRef.current = driverObj;
     setActive(true);
     driverObj.drive();
@@ -278,9 +354,9 @@ export function InteractiveTour({ shouldStart, tab, onSwitchTab, profile }: Inte
       // If we're not on the discover tab, switch back so step 1's element exists.
       if (tabRef.current !== "discover") {
         onSwitchTab("discover");
-        setTimeout(() => startTour(), 600);
+        setTimeout(() => startTour(true), 600);
       } else {
-        startTour();
+        startTour(true);
       }
     };
     window.addEventListener(START_EVENT, handleStart);
