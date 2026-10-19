@@ -355,13 +355,117 @@ class TestBatchControls:
             self._run_main(monkeypatch, ["--apply"])
 
     def test_selection_is_deterministic_and_null_only(self):
-        assert "ORDER BY title" in bpd.CANDIDATE_SQL
+        sql = bpd._candidate_sql([])
+        assert "ORDER BY title" in sql
+        assert "LIMIT" in sql and sql.index("ORDER BY") < sql.index("LIMIT")
         assert "public_description IS NULL" in bpd.CANDIDATE_SQL
         assert "lifecycle_status = 'published'" in bpd.CANDIDATE_SQL
         assert "IS DISTINCT FROM 'needs_review'" in bpd.CANDIDATE_SQL
 
 
+# --------------------------------------------------------------------------
+# Resumability — artifact-aware exclusion (Batch-2 gap fix)
+# --------------------------------------------------------------------------
+
+def _artifact(tmp_path, name, rows):
+    p = tmp_path / name
+    p.write_text(json.dumps(rows), encoding="utf-8")
+    return str(p)
+
+
+_R1 = "11111111-0000-0000-0000-000000000001"
+_R2 = "22222222-0000-0000-0000-000000000002"
+_R3 = "33333333-0000-0000-0000-000000000003"
+
+
+class TestResumability:
+    def test_success_and_failure_ids_all_excluded(self, tmp_path):
+        """Every adjudicated record consumes its slot — not just failures."""
+        art = _artifact(tmp_path, "b1.json", [
+            {"id": _R1, "classification": bpd.OUTCOME_SUCCESS,
+             "public_description": "x"},
+            {"id": _R2, "classification": bpd.OUTCOME_LOW_INFORMATION},
+            {"id": _R3, "classification": bpd.OUTCOME_NOT_ISOLATED},
+        ])
+        assert bpd.load_exclusion_ids([art]) == {_R1, _R2, _R3}
+
+    def test_multiple_artifacts_combine_and_dedupe(self, tmp_path):
+        a = _artifact(tmp_path, "a.json", [{"id": _R1}, {"id": _R2}])
+        b = _artifact(tmp_path, "b.json", [{"id": _R2}, {"id": _R3}])
+        assert bpd.load_exclusion_ids([a, b]) == {_R1, _R2, _R3}
+
+    def test_exclusion_applies_before_limit(self):
+        """WHERE … id <> ALL(%) ORDER BY title LIMIT — not select-then-drop."""
+        sql = bpd._candidate_sql({_R1})
+        assert "id <> ALL" in sql
+        assert sql.index("id <> ALL") < sql.index("ORDER BY") < sql.index("LIMIT")
+        assert "id <> ALL" not in bpd._candidate_sql(set())
+
+    def test_exclusion_params_order(self):
+        cur = _FakeCursor()
+        bpd.select_candidates(cur, 25, {_R1, _R2})
+        _, params = cur.executed[0]
+        assert params[0] == sorted([_R1, _R2]) or set(params[0]) == {_R1, _R2}
+        assert params[1] == 25
+
+    def test_malformed_json_fails_closed(self, tmp_path):
+        bad = tmp_path / "bad.json"
+        bad.write_text("{not json", encoding="utf-8")
+        with pytest.raises(SystemExit):
+            bpd.load_exclusion_ids([str(bad)])
+
+    def test_missing_results_array_fails_closed(self, tmp_path):
+        bad = _artifact_dict(tmp_path, "bad.json", {"results": []})
+        with pytest.raises(SystemExit):
+            bpd.load_exclusion_ids([bad])
+
+    def test_missing_or_invalid_id_fails_closed(self, tmp_path):
+        no_id = _artifact(tmp_path, "a.json", [{"classification": "SUCCESS"}])
+        bad_id = _artifact(tmp_path, "b.json", [{"id": "not-a-uuid"}])
+        for path in (no_id, bad_id):
+            with pytest.raises(SystemExit):
+                bpd.load_exclusion_ids([path])
+
+    def test_exclusion_loads_make_no_llm_calls(self, tmp_path, monkeypatch):
+        async def boom(*a, **k):
+            raise AssertionError("no LLM during exclusion loading")
+
+        monkeypatch.setattr(bpd, "extract_opportunities_with_llm", boom)
+        art = _artifact(tmp_path, "a.json", [{"id": _R1}])
+        assert bpd.load_exclusion_ids([art]) == {_R1}
+
+    def test_apply_path_ignores_exclusion(self, monkeypatch, tmp_path):
+        """--exclude-results must not weaken or interfere with --apply."""
+        called = {"apply": False}
+        monkeypatch.setattr(bpd, "cmd_apply", lambda a: called.__setitem__("apply", True))
+        art = _artifact(tmp_path, "res.json", [{"id": _R1}])
+        monkeypatch.setattr(
+            "sys.argv",
+            ["backfill", "--apply", "--results", art, "--exclude-results", art],
+        )
+        bpd.main()
+        assert called["apply"]
+
+    def test_exclusion_excludes_prior_batch_ids_from_query(self, tmp_path):
+        """SQL-level proof: excluded IDs are filtered before ordering/limit."""
+        art = _artifact(tmp_path, "b1.json", [{"id": _R1}, {"id": _R2}])
+        excluded = bpd.load_exclusion_ids([art])
+        cur = _FakeCursor()
+        bpd.select_candidates(cur, 25, excluded)
+        sql, params = cur.executed[0]
+        assert "id <> ALL(%s::uuid[])" in sql
+        assert params[0] == [_R1, _R2] or sorted(params[0]) == sorted([_R1, _R2])
+
+
+def _artifact_dict(tmp_path, name, obj):
+    p = tmp_path / name
+    p.write_text(json.dumps(obj), encoding="utf-8")
+    return str(p)
+
+
 class _FakeCursor:
+    description = []
+
     def __init__(self, rowcount=1):
         self.executed = []
         self.rowcount = rowcount
@@ -369,6 +473,9 @@ class _FakeCursor:
     def execute(self, sql, params=None):
         self.executed.append((sql, params))
         self.rowcount = 1
+
+    def fetchall(self):
+        return []
 
     def __enter__(self):
         return self

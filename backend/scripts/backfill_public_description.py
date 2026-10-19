@@ -120,7 +120,6 @@ CANDIDATE_SQL = """
        AND source_url IS NOT NULL
        AND lifecycle_status = 'published'
        AND verification_status IS DISTINCT FROM 'needs_review'
-     ORDER BY title
 """
 
 ID_SQL = """
@@ -133,8 +132,49 @@ ID_SQL = """
 """
 
 
-def select_candidates(cur, limit: int):
-    cur.execute(CANDIDATE_SQL + " LIMIT %s", (limit,))
+def load_exclusion_ids(paths):
+    """Parse prior reviewed result artifacts → set of adjudicated IDs.
+
+    Every ID present in a prior artifact is excluded from future candidate
+    selection regardless of classification — that record already consumed
+    its batch slot and was adjudicated (SUCCESS written; failures resolved
+    as honest NULLs or review rejects). Fail closed on any malformed
+    artifact: a corrupt ledger must never silently widen the batch.
+    """
+    import uuid
+    excluded = set()
+    for path in paths or []:
+        try:
+            data = json.loads(Path(path).read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            sys.exit(f"exclusion artifact {path}: unreadable/malformed ({exc})")
+        if not isinstance(data, list):
+            sys.exit(f"exclusion artifact {path}: expected a JSON results array")
+        for entry in data:
+            rid = entry.get("id") if isinstance(entry, dict) else None
+            if not isinstance(rid, str):
+                sys.exit(f"exclusion artifact {path}: entry missing 'id'")
+            try:
+                rid = str(uuid.UUID(rid.strip()))
+            except (ValueError, AttributeError):
+                sys.exit(f"exclusion artifact {path}: invalid scholarship id {rid!r}")
+            excluded.add(rid)
+    return excluded
+
+
+def _candidate_sql(exclude_ids):
+    """Deterministic next-batch selection. Exclusion is applied as a filter
+    BEFORE ORDER BY/LIMIT so a batch returns N genuinely unprocessed
+    candidates — not N-minus-the-overlap."""
+    sql = CANDIDATE_SQL
+    if exclude_ids:
+        sql += "      AND id <> ALL(%s::uuid[])\n"
+    return sql + "     ORDER BY title\n     LIMIT %s\n"
+
+
+def select_candidates(cur, limit: int, exclude_ids=()):
+    params = [list(exclude_ids), limit] if exclude_ids else [limit]
+    cur.execute(_candidate_sql(exclude_ids), params)
     return [dict(zip([d.name for d in cur.description], r)) for r in cur.fetchall()]
 
 
@@ -271,12 +311,30 @@ def _quality_gate(rec):
     return "pass" if rec.get("public_description") else "none"
 
 
-async def cmd_dry_run(args):
-    rows = []
+def cmd_list_candidates(args):
+    """Read-only selection proof — resolves the same deterministic candidate
+    set a dry run would process, without any fetch or LLM call."""
+    exclude = load_exclusion_ids(getattr(args, "exclude_results", None))
     conn = psycopg.connect(staging_db_url())
     try:
         with conn.cursor() as cur:
-            rows = select_by_ids(cur, args.ids) if args.ids else select_candidates(cur, args.limit)
+            rows = (select_by_ids(cur, args.ids) if args.ids
+                    else select_candidates(cur, args.limit, exclude))
+    finally:
+        conn.close()
+    for r in rows:
+        print(f"{r['id']} | {r['title']} | {r['provider']}")
+    print(f"{len(rows)} candidates"
+          + (f" (excluded {len(exclude)} adjudicated IDs)" if exclude else ""))
+
+
+async def cmd_dry_run(args):
+    exclude = load_exclusion_ids(getattr(args, "exclude_results", None))
+    conn = psycopg.connect(staging_db_url())
+    try:
+        with conn.cursor() as cur:
+            rows = (select_by_ids(cur, args.ids) if args.ids
+                    else select_candidates(cur, args.limit, exclude))
     finally:
         conn.close()
     if not rows:
@@ -361,6 +419,12 @@ def main():
     p.add_argument("--allow-over-limit", action="store_true",
                    help="permit batches above the hard cap of 25 (exceptional use)")
     p.add_argument("--out", default="pilot_description_results.json")
+    p.add_argument("--exclude-results", action="append", default=[],
+                   metavar="PATH",
+                   help="prior reviewed results artifact; its IDs are excluded "
+                        "from candidate selection (repeatable)")
+    p.add_argument("--list-candidates", action="store_true",
+                   help="print the selected candidates and exit — no fetch/LLM")
     p.add_argument("--apply", action="store_true",
                    help="WRITE approved descriptions (requires --results)")
     p.add_argument("--results", help="dry-run results JSON to apply verbatim")
@@ -375,6 +439,8 @@ def main():
         if not args.results:
             sys.exit("--apply requires --results <dry-run-json>")
         cmd_apply(args)
+    elif args.list_candidates:
+        cmd_list_candidates(args)
     else:
         asyncio.run(cmd_dry_run(args))
 

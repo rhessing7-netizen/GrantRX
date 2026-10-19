@@ -36,7 +36,8 @@ pipeline:
 ```bash
 cd backend
 TARGET_DATABASE_URL=... python scripts/backfill_public_description.py \
-    [--limit 10] [--ids <uuid>...] --out results.json
+    [--limit 10] [--ids <uuid>...] --out results.json \
+    [--exclude-results batch1_results.json [--exclude-results ...]]
 ```
 
 - Emits `results.json`: per record — classification, attempts, candidate /
@@ -44,6 +45,32 @@ TARGET_DATABASE_URL=... python scripts/backfill_public_description.py \
 - Selection: `public_description IS NULL AND source_url IS NOT NULL AND
   lifecycle_status='published' AND verification_status <> 'needs_review'`,
   `ORDER BY title` (deterministic).
+- `--list-candidates` prints the resolved candidate set and exits — a
+  read-only selection proof with zero fetches/LLM calls.
+
+## Resumability — `--exclude-results`
+
+Prior reviewed result artifacts are the operational resume ledger (the DB
+stays the source of truth for descriptions; artifacts record which
+candidates were already adjudicated). Repeatable:
+
+```bash
+# Batch 2 dry run:
+--exclude-results batch1_results.json
+# Batch 3 dry run:
+--exclude-results batch1_results.json --exclude-results batch2_results.json
+```
+
+- EVERY id in a supplied artifact is excluded from candidate selection,
+  regardless of classification — a processed record never re-enters a
+  later batch (this was the Batch-2 gap: NULL failures re-selected).
+- Exclusion is a SQL filter applied BEFORE `ORDER BY/LIMIT` — a batch of
+  25 yields 25 new candidates, not 25-minus-overlap.
+- Artifacts are validated on load and malformed input fails closed:
+  parseable JSON, array of entries, each with a valid UUID `id`.
+- `--exclude-results` ≠ `--results`: exclusion only shapes candidate
+  selection and can never authorize or alter a write; `--results` remains
+  the sole apply source.
 
 ## Review workflow
 
