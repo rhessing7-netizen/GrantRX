@@ -773,12 +773,38 @@ def build_user_prompt(html: str, url: str, *, mode: str, max_items: int) -> str:
     )
 
 
+# Failure classes for controlled backfill reporting — operational state,
+# never persisted. ``auth`` and missing-backend configuration are
+# deliberately grouped: both are credential problems that must stop a run.
+LLM_ERR_AUTH = "auth"
+LLM_ERR_RATE_LIMIT = "rate_limit"
+LLM_ERR_CONTEXT = "context_limit"
+LLM_ERR_OTHER = "other"
+
+
+def classify_llm_error(exc: BaseException) -> str:
+    """Bucket an LLM/provider failure for backfill retry/reporting."""
+    name = type(exc).__name__.lower()
+    status = getattr(exc, "status_code", None) or getattr(
+        getattr(exc, "response", None), "status_code", None
+    )
+    msg = str(exc).lower()
+    if status in (401, 403) or "authentication" in name or "api key" in msg:
+        return LLM_ERR_AUTH
+    if status == 429 or "rate_limit" in name or "ratelimit" in name:
+        return LLM_ERR_RATE_LIMIT
+    if "max_tokens" in msg or "incomplete" in name or "length" in name:
+        return LLM_ERR_CONTEXT
+    return LLM_ERR_OTHER
+
+
 async def extract_opportunities_with_llm(
     html: str,
     url: str,
     *,
     mode: str = "listing",
     max_items: int = 25,
+    diagnostics: Optional[dict] = None,
 ) -> Optional[LLMExtraction]:
     """Extract zero, one, or many opportunities from one page.
 
@@ -786,10 +812,18 @@ async def extract_opportunities_with_llm(
     response) and an ``LLMExtraction`` — possibly with an empty list — when
     the model answered. URLs are returned raw; the caller resolves and
     accepts them against the page's real link inventory.
+
+    ``diagnostics`` (optional mutable dict) is filled for callers that need
+    failure classification and cost accounting: ``error_kind``/
+    ``error_msg`` on failure; ``usage`` token counts on success. Existing
+    callers are unaffected.
     """
     try:
         client, model = _build_client()
     except RuntimeError as exc:
+        if diagnostics is not None:
+            diagnostics["error_kind"] = LLM_ERR_AUTH
+            diagnostics["error_msg"] = "no LLM backend configured"
         logger.error("LLM fallback unavailable: %s", exc)
         return None
 
@@ -799,7 +833,7 @@ async def extract_opportunities_with_llm(
         return None
 
     try:
-        result = await client.chat.completions.create(
+        create_kwargs = dict(
             model=model,
             response_model=LLMOpportunityList,
             messages=[
@@ -809,7 +843,25 @@ async def extract_opportunities_with_llm(
             temperature=0.0,
             max_tokens=SINGLE_MAX_TOKENS if mode == "single_opportunity" else LISTING_MAX_TOKENS,
         )
+        if diagnostics is not None:
+            # create_with_completion additionally returns the raw response so
+            # real provider token usage can be reported (no invented costs).
+            result, completion = await client.chat.completions.create_with_completion(
+                **create_kwargs
+            )
+            usage = getattr(completion, "usage", None)
+            diagnostics["usage"] = {
+                "model": model,
+                "prompt_tokens": getattr(usage, "prompt_tokens", None),
+                "completion_tokens": getattr(usage, "completion_tokens", None),
+                "total_tokens": getattr(usage, "total_tokens", None),
+            }
+        else:
+            result = await client.chat.completions.create(**create_kwargs)
     except Exception as exc:  # noqa: BLE001
+        if diagnostics is not None:
+            diagnostics["error_kind"] = classify_llm_error(exc)
+            diagnostics["error_msg"] = str(exc)[:200]
         logger.error("LLM extraction failed for %s: %s", url, exc)
         return None
 
@@ -912,6 +964,10 @@ def llm_item_to_extract(result: LLMScholarship, url: str) -> ScholarshipExtract:
         # description can never smuggle an application link into a public
         # payload.
         public_description=_sanitize_description(result.public_description),
+        public_description_dropped=(
+            bool((result.public_description or "").strip())
+            and _sanitize_description(result.public_description) is None
+        ),
         tracks=tracks,
     )
 

@@ -99,6 +99,90 @@ def html_to_text(html: str) -> str:
     return _text(html)
 
 
+# ---------------------------------------------------------------------------
+# Low-information gate (backfill hardening — pilot finding)
+# ---------------------------------------------------------------------------
+#
+# A generated narrative can pass numeric grounding while adding nothing
+# beyond the record's own title/provider (pilot: the FSAG directory-index
+# description). These checks are deliberately deterministic and
+# source-aware — not keyword censorship: a short description is fine when
+# its substantive content is locatable in the evidence.
+
+_ENGLISH_STOPS = frozenset(
+    "a an the and or of to in for on at by with is are was were be been "
+    "this that these those it its their his her our your my we you they "
+    "who whom which what when where how all any both each more other some "
+    "such no not only own same than then so too very can will just about "
+    "into over after between through during before under again".split()
+)
+
+# Aid-domain vocabulary that describes ANY opportunity — membership here
+# means a token carries no distinguishing information about THIS record.
+_AID_FILLER = frozenset(
+    "scholarship scholarships grant grants fellowship fellowships award "
+    "awards program programs fund funds funding stipend stipends aid "
+    "assistance financial opportunity opportunities eligible eligibility "
+    "student students applicant applicants apply application applications "
+    "provides provide provided offering offers offer supports support "
+    "supporting helps help designed gives give receive awarded awards "
+    "pursue pursuing education educational school college university "
+    "degree undergraduate graduate tuition ensure ensuring ensures needed "
+    "available open annually annual one-time renewable recipients winner "
+    "winners selected selection dedicated committed".split()
+)
+
+_MIN_EVIDENCE_TOKENS = 12
+_MIN_NOVEL_TOKENS = 2
+
+
+def _content_tokens(text: str) -> set:
+    return {
+        t for t in re.findall(r"[a-z0-9]+", (text or "").casefold())
+        if t not in _ENGLISH_STOPS and len(t) > 2
+    }
+
+
+def description_low_information(
+    description: str | None,
+    *,
+    title: str,
+    provider: str,
+    evidence_text: str,
+) -> str | None:
+    """Return a reason when the narrative adds no meaningful
+    source-supported information, else None.
+
+    Three conservative signals, any of which rejects:
+      sparse_source  — the evidence itself is too thin to support a
+                       meaningful narrative (index/listing fragments).
+      restatement    — the description's content tokens are wholly covered
+                       by the record's title + provider + generic aid
+                       vocabulary; it restates the name, nothing more.
+      unsupported    — the description introduces substantive terms that
+                       mostly cannot be located in the evidence — the
+                       prose layer a numeric-only grounding check cannot see.
+
+    A legitimate concise description needs only ~2 novel tokens supported
+    by the source; numbers are never required.
+    """
+    desc = (description or "").strip()
+    if not desc:
+        return None
+    evidence = _content_tokens(evidence_text)
+    if len(evidence) < _MIN_EVIDENCE_TOKENS:
+        return "sparse_source"
+    novel = _content_tokens(desc) - (
+        _content_tokens(title) | _content_tokens(provider) | _AID_FILLER
+    )
+    if len(novel) < _MIN_NOVEL_TOKENS:
+        return "restatement"
+    supported = novel & evidence
+    if len(supported) < max(_MIN_NOVEL_TOKENS, len(novel) // 2):
+        return "unsupported"
+    return None
+
+
 def verify_extract_against_source(extract: ScholarshipExtract, html: str) -> dict[str, Any]:
     """Return field-level evidence without silently changing extracted values.
 

@@ -233,6 +233,66 @@ def evidence_windows(text: str, titles: List[str], *, max_segment: int = 2000) -
     return [" ".join(w) for w in windows]
 
 
+def isolate_target_evidence(
+    page_text: str,
+    target_title: str,
+    labels: List[str],
+    *,
+    preamble_chars: int = 1500,
+    segment_cap: int = 2000,
+    total_cap: int = 8000,
+) -> Optional[str]:
+    """Bounded source text for ONE known record on a large page.
+
+    For a catalog backfill the target identity is already known (the stored
+    record's title), so an oversized aggregate/listing page never needs to
+    go to the model whole: the target's own segments — delimited by sibling
+    opportunity labels via ``evidence_windows`` — plus a bounded page-level
+    preamble (program prose that precedes the listing) are enough evidence
+    for both extraction and grounding.
+
+    Returns None when the target cannot be confidently isolated:
+      * the title never appears in the text, or
+      * a sibling label normalizes to a super/substring of the target
+        ("Alpha Scholarship" vs "Alpha Scholarship I/II" — the record may
+        correspond to either, so guessing would ground the wrong item).
+    Failing closed to a classified NULL is correct there; an ambiguous
+    window risks cross-opportunity contamination.
+    """
+    tn = normalize_identity_text(target_title)
+    if not tn or not title_on_page(target_title, page_text):
+        return None
+    for lab in labels or []:
+        ln = normalize_identity_text(lab)
+        if ln and ln != tn and (ln in tn or tn in ln):
+            return None
+
+    titles = list(labels or [])
+    idx = next(
+        (i for i, t in enumerate(titles) if normalize_identity_text(t) == tn),
+        None,
+    )
+    if idx is None:
+        titles.append(target_title)
+        idx = len(titles) - 1
+    segment = evidence_windows(
+        page_text, titles, max_segment=segment_cap
+    )[idx].strip()
+    if not segment:
+        return None
+    # Preamble = page-level prose that precedes the FIRST opportunity label —
+    # program context (e.g. "ALA scholarships require an ALA-accredited
+    # degree") without bleeding a neighbouring item's details into the
+    # window, which is precisely how a naive prefix slice cross-contaminates.
+    first_label = min(
+        (m.start() for t in titles for m in _title_pattern(t).finditer(page_text)),
+        default=0,
+    )
+    preamble = page_text[: min(first_label, preamble_chars)].strip()
+    out = f"{preamble}\n\n{segment}" if preamble else segment
+    return out[:total_cap]
+
+
 def _deadline_year_supported(deadline: Optional[str], text: str) -> Optional[str]:
     """Drop a deadline whose year never appears in the evidence (an inferred
     year — C1 forbids it). Invalid dates also become None."""

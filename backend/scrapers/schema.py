@@ -197,6 +197,11 @@ class ScholarshipExtract(BaseModel):
     # against the source text and drops ungrounded text to NULL — persisted
     # descriptions must never contain facts the source didn't state.
     public_description: Optional[str] = None
+    # Diagnostics only (never persisted): the LLM asserted a description but
+    # _sanitize_description dropped it (URL-bearing / trivially short). Lets
+    # backfill reporting distinguish "no narrative asserted" from
+    # "narrative rejected by hygiene".
+    public_description_dropped: bool = False
 
     # Parent-program tracks (C8). Named variants of this one program — never
     # independently persisted opportunities.
